@@ -1,0 +1,103 @@
+[screen]
+id = "density_pressure_comfortable"
+purpose = "Isolate comfortable versus dense local interface rhythm"
+density = "comfortable"
+root = "workspace"
+
+[design]
+character = ["neutral", "legible", "density_pressure"]
+dominant = "content"
+avoid = ["layout_change_between_density_modes", "font_scaling"]
+
+[tokens.spacing]
+sm = 8
+md = 12
+lg = 16
+
+[[region]]
+id = "controls"
+role = "controls"
+importance = "secondary"
+width = "300px"
+
+[[region]]
+id = "content"
+role = "primary_content"
+importance = "primary"
+grow = 1
+
+[[composition]]
+id = "workspace"
+kind = "split"
+axis = "horizontal"
+children = ["controls", "content"]
+gap = "md"
+padding = "md"
+
+[[element]]
+id = "search"
+region = "controls"
+kind = "search"
+importance = "secondary"
+label = "Search"
+
+[[element]]
+id = "run"
+region = "controls"
+kind = "command"
+importance = "primary"
+label = "Run"
+action = "density.run"
+
+[[element]]
+id = "recent"
+region = "controls"
+kind = "collection"
+importance = "secondary"
+label = "Recent items"
+presentation = "list"
+
+[[element]]
+id = "details"
+region = "content"
+kind = "property_sheet"
+importance = "primary"
+label = "Details"
+
+[[element]]
+id = "status"
+region = "content"
+kind = "status"
+importance = "tertiary"
+label = "Status"
+
+[[fixture]]
+id = "populated"
+state = "Representative populated density pressure"
+
+[[fixture.content]]
+element = "recent"
+items = [
+  { id = "one", label = "Item one" },
+  { id = "two", label = "Item two" },
+  { id = "three", label = "Item three" },
+  { id = "four", label = "Item four" },
+  { id = "five", label = "Item five" },
+  { id = "six", label = "Item six" },
+  { id = "seven", label = "Item seven" },
+  { id = "eight", label = "Item eight" },
+]
+selected = "three"
+
+[[fixture.content]]
+element = "details"
+properties = [
+  { name = "Name", value = "Density pressure" },
+  { name = "Mode", value = "Static fixture" },
+  { name = "Items", value = "8" },
+  { name = "State", value = "Ready" },
+]
+
+[[fixture.content]]
+element = "status"
+text = "Ready for density comparison"
