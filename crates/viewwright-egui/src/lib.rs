@@ -1,8 +1,8 @@
 use egui::{CentralPanel, Color32, Context, FontId, Frame, RichText, Stroke, UiBuilder};
 use viewwright_layout::{layout, LayoutPlan, Rect as LayoutRect};
 use viewwright_model::{
-    BorderPolicy, Color, CompositionChild, ElementKind, Importance, ResolvedBlueprint,
-    ResolvedFixtureContent, ResolvedRegion, SurfaceRole,
+    BorderPolicy, CollectionPresentation, Color, CompositionChild, ElementKind, Importance,
+    ResolvedBlueprint, ResolvedFixtureContent, ResolvedRegion, SurfaceRole,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -292,6 +292,22 @@ fn render_collection(
     else {
         return;
     };
+    match element.presentation {
+        Some(CollectionPresentation::List) | None => {
+            render_collection_list(ui, items, selected, visual)
+        }
+        Some(CollectionPresentation::AdaptiveCards) => {
+            render_collection_cards(ui, items, selected, visual)
+        }
+    }
+}
+
+fn render_collection_list(
+    ui: &mut egui::Ui,
+    items: &[viewwright_model::ResolvedCollectionItem],
+    selected: &Option<String>,
+    visual: Option<&viewwright_model::ResolvedVisual>,
+) {
     for item in items {
         let selected_item = selected.as_deref() == Some(item.id.as_str());
         let text = RichText::new(&item.label);
@@ -306,6 +322,69 @@ fn render_collection(
         };
         ui.label(text);
     }
+}
+
+fn render_collection_cards(
+    ui: &mut egui::Ui,
+    items: &[viewwright_model::ResolvedCollectionItem],
+    selected: &Option<String>,
+    visual: Option<&viewwright_model::ResolvedVisual>,
+) {
+    const CARD_WIDTH: f32 = 180.0;
+    const CARD_HEIGHT: f32 = 64.0;
+    ui.horizontal_wrapped(|ui| {
+        for item in items {
+            let selected_item = selected.as_deref() == Some(item.id.as_str());
+            let (fill, stroke) = if let Some(v) = visual {
+                (
+                    if selected_item {
+                        color32(v.palette.accent).gamma_multiply(0.22)
+                    } else {
+                        color32(v.palette.surface)
+                    },
+                    if selected_item || v.border_policy == BorderPolicy::Defined {
+                        Stroke::new(
+                            1.0_f32,
+                            color32(if selected_item {
+                                v.palette.accent
+                            } else {
+                                v.palette.border
+                            }),
+                        )
+                    } else {
+                        Stroke::NONE
+                    },
+                )
+            } else {
+                (
+                    if selected_item {
+                        ui.visuals().selection.bg_fill
+                    } else {
+                        ui.visuals().widgets.inactive.bg_fill
+                    },
+                    if selected_item {
+                        ui.visuals().selection.stroke
+                    } else {
+                        Stroke::NONE
+                    },
+                )
+            };
+            ui.allocate_ui(egui::vec2(CARD_WIDTH, CARD_HEIGHT), |ui| {
+                Frame::new()
+                    .fill(fill)
+                    .stroke(stroke)
+                    .inner_margin(8.0)
+                    .show(ui, |ui| {
+                        let text = if selected_item {
+                            element_text(&item.label, Importance::Primary, visual).strong()
+                        } else {
+                            element_text(&item.label, Importance::Secondary, visual)
+                        };
+                        ui.label(text);
+                    });
+            });
+        }
+    });
 }
 
 fn region_text(

@@ -23,7 +23,14 @@ pub fn render(b: &ResolvedBlueprint) -> String {
     }
     out.push_str("\nImportant semantic elements\n");
     for e in &b.elements {
-        out.push_str(&format!("  {:?}: {}\n", e.kind, e.label));
+        if let Some(presentation) = e.presentation {
+            out.push_str(&format!(
+                "  {:?}: {} (presentation {:?})\n",
+                e.kind, e.label, presentation
+            ));
+        } else {
+            out.push_str(&format!("  {:?}: {}\n", e.kind, e.label));
+        }
     }
     out
 }
@@ -69,5 +76,10 @@ mod tests {
         assert!(first.contains("canvas: #262B33"));
         assert!(first.contains("reader — Canvas, Primary"));
         assert!(first.contains("Document: Document"));
+        let project = render(
+            &parse_and_resolve(include_str!("../../../examples/project-browser.toml")).unwrap(),
+        );
+        assert!(project.contains("Collection: navigation items (presentation List)"));
+        assert!(project.contains("Collection: project collection (presentation AdaptiveCards)"));
     }
 }

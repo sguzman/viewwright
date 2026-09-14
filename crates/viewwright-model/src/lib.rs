@@ -253,6 +253,11 @@ pub enum ElementKind {
     Status,
     Document,
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CollectionPresentation {
+    List,
+    AdaptiveCards,
+}
 fn kind(s: &str, where_: &str, errors: &mut Vec<String>) -> ElementKind {
     match s {
         "text" => ElementKind::Text,
@@ -267,6 +272,31 @@ fn kind(s: &str, where_: &str, errors: &mut Vec<String>) -> ElementKind {
         _ => {
             errors.push(format!("{where_}: unknown element kind '{s}'"));
             ElementKind::Text
+        }
+    }
+}
+fn collection_presentation(
+    value: Option<&str>,
+    element: &str,
+    element_kind: ElementKind,
+    errors: &mut Vec<String>,
+) -> Option<CollectionPresentation> {
+    if element_kind != ElementKind::Collection {
+        if value.is_some() {
+            errors.push(format!(
+                "element '{element}': presentation is only valid for collection elements"
+            ));
+        }
+        return None;
+    }
+    match value.unwrap_or("list") {
+        "list" => Some(CollectionPresentation::List),
+        "adaptive_cards" => Some(CollectionPresentation::AdaptiveCards),
+        other => {
+            errors.push(format!(
+                "element '{element}': unknown collection presentation '{other}'"
+            ));
+            None
         }
     }
 }
@@ -307,7 +337,7 @@ pub struct ResolvedElement {
     pub kind: ElementKind,
     pub importance: Importance,
     pub label: String,
-    pub presentation: Option<String>,
+    pub presentation: Option<CollectionPresentation>,
     pub action: Option<ActionId>,
 }
 #[derive(Debug, Clone)]
@@ -575,6 +605,8 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
             errors.push(format!("element '{}': missing region '{}'", e.id, e.region));
         }
         let element_kind = kind(&e.kind, &format!("element '{}'", e.id), &mut errors);
+        let presentation =
+            collection_presentation(e.presentation.as_deref(), &e.id, element_kind, &mut errors);
         let action = match (element_kind, e.action.as_deref()) {
             (ElementKind::Command, Some(action)) => action_id(action, &e.id, &mut errors),
             (ElementKind::Command, None) => {
@@ -599,7 +631,7 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
             kind: element_kind,
             importance: importance(&e.importance, &format!("element '{}'", e.id), &mut errors),
             label: e.label.clone().unwrap_or_else(|| e.id.replace('_', " ")),
-            presentation: e.presentation.clone(),
+            presentation,
             action,
         });
     }
@@ -1018,13 +1050,16 @@ impl ResolvedBlueprint {
                         ));
                         for e in b.elements.iter().filter(|e| e.region == *region) {
                             out.push_str(&format!(
-                                "{:indent$}element {} ({:?}{})\n",
+                                "{:indent$}element {} ({:?}{}{})\n",
                                 "",
                                 e.id,
                                 e.kind,
                                 e.action
                                     .as_ref()
                                     .map(|action| format!(", action {}", action.as_str()))
+                                    .unwrap_or_default(),
+                                e.presentation
+                                    .map(|presentation| format!(", presentation {presentation:?}"))
                                     .unwrap_or_default(),
                                 indent = indent + 4
                             ));
@@ -1134,6 +1169,69 @@ mod tests {
     #[test]
     fn project_browser_resolves() {
         assert_eq!(parse_and_resolve(project()).unwrap().root, "workspace");
+    }
+    #[test]
+    fn collection_presentations_are_typed_validated_and_defaulted() {
+        let project_blueprint = parse_and_resolve(project()).unwrap();
+        assert_eq!(
+            project_blueprint
+                .elements
+                .iter()
+                .find(|element| element.id == "navigation_items")
+                .unwrap()
+                .presentation,
+            Some(CollectionPresentation::List)
+        );
+        assert_eq!(
+            project_blueprint
+                .elements
+                .iter()
+                .find(|element| element.id == "project_collection")
+                .unwrap()
+                .presentation,
+            Some(CollectionPresentation::AdaptiveCards)
+        );
+        let semantic = project_blueprint.semantic_tree();
+        assert!(semantic.contains("navigation_items (Collection, presentation List)"));
+        assert!(semantic.contains("project_collection (Collection, presentation AdaptiveCards)"));
+        let dependency =
+            parse_and_resolve(include_str!("../../../specimens/dependency-workbench.toml"))
+                .unwrap();
+        assert!(dependency
+            .elements
+            .iter()
+            .filter(|element| element.kind == ElementKind::Collection)
+            .all(|element| element.presentation == Some(CollectionPresentation::List)));
+        let omitted = project()
+            .replace("presentation = \"list\"\n", "")
+            .replace("presentation = \"adaptive_cards\"\n", "");
+        assert!(parse_and_resolve(&omitted)
+            .unwrap()
+            .elements
+            .iter()
+            .filter(|element| element.kind == ElementKind::Collection)
+            .all(|element| element.presentation == Some(CollectionPresentation::List)));
+        let unknown = project().replace("adaptive_cards", "grid");
+        assert!(parse_and_resolve(&unknown)
+            .unwrap_err()
+            .to_string()
+            .contains("unknown collection presentation 'grid'"));
+        let command = reader().replace(
+            "kind = \"command\"\nimportance = \"primary\"",
+            "kind = \"command\"\nimportance = \"primary\"\npresentation = \"list\"",
+        );
+        assert!(parse_and_resolve(&command)
+            .unwrap_err()
+            .to_string()
+            .contains("only valid for collection elements"));
+        let search = project().replace(
+            "kind = \"search\"\nimportance = \"secondary\"",
+            "kind = \"search\"\nimportance = \"secondary\"\npresentation = \"list\"",
+        );
+        assert!(parse_and_resolve(&search)
+            .unwrap_err()
+            .to_string()
+            .contains("only valid for collection elements"));
     }
     #[test]
     fn reader_resolves_nested_tree() {
