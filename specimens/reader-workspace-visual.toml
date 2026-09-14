@@ -143,9 +143,46 @@ region = "transport"
 kind = "status"
 importance = "tertiary"
 label = "Reading status"
+
 [[fixture]]
 id = "reading"
 state = "document_loaded"
+[[fixture.content]]
+element = "document_outline"
+nodes = [
+  { id = "introduction", label = "Introduction" },
+  { id = "part_one", label = "Part I · The City" },
+  { id = "chapter_one", label = "Chapter 1 · Windows", parent = "part_one" },
+  { id = "chapter_two", label = "Chapter 2 · The Quiet Machine", parent = "part_one" },
+  { id = "part_two", label = "Part II · After Midnight" },
+]
+selected = "chapter_two"
+[[fixture.content]]
+element = "document_surface"
+document = { title = "The Quiet Machine", paragraphs = ["Rain gathered against the windows while the city settled into its evening rhythm.", "The machine remained awake beneath the low electrical hum, listening to pipes, elevators, and distant traffic as if the building itself were speaking.", "Nothing dramatic happened. That was the point: attention accumulated in the ordinary spaces between events."] }
+[[fixture.content]]
+element = "reader_settings"
+properties = [
+  { name = "Voice", value = "Narrator" },
+  { name = "Speed", value = "1.0×" },
+  { name = "Display", value = "Comfortable" },
+]
+[[fixture.content]]
+element = "reading_status"
+text = "Chapter 2 · 42% · paused"
+
 [[fixture]]
 id = "empty"
 state = "no_document"
+[[fixture.content]]
+element = "document_outline"
+nodes = []
+[[fixture.content]]
+element = "document_surface"
+document = { title = "No document loaded", paragraphs = [] }
+[[fixture.content]]
+element = "reader_settings"
+properties = []
+[[fixture.content]]
+element = "reading_status"
+text = "Open a document to begin reading"
