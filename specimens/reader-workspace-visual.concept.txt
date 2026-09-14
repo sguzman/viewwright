@@ -1,0 +1,75 @@
+ViewWright concept specification
+
+Screen
+  id: reader_workspace_visual
+  purpose: Read a document in a calm, deliberate workspace
+
+Design character
+  quiet
+  focused
+  crafted
+  reading-first
+  restrained
+
+Avoid
+  toolbar dominance
+  uniform visual weight
+  nested card soup
+  border everything
+  control clutter
+  pill soup
+
+Hierarchy
+  dominant: reader
+  supporting: library, app_commands, transport
+  tertiary: inspector
+
+Composition
+  workspace — vertical
+    app_commands — fixed 52px, transparent
+    reading_body — horizontal
+      library — fixed 250px, panel
+      reader — growing, canvas, primary
+      inspector — fixed 300px, panel, tertiary
+    transport — fixed 68px, raised
+
+Palette
+  canvas: #101216
+  surface: #171A20
+  surface_raised: #1E222A
+  text: #E8EAF0
+  text_muted: #9299A6
+  accent: #8DB7C7
+  border: #2B313B
+
+Typography
+  display: 26
+  heading: 18
+  body: 14
+  caption: 12
+
+Surface policy
+  primary reading surface should feel continuous and calm
+  supporting panels should remain visually subordinate
+  transport may separate from the canvas without becoming a dominant toolbar
+  borders are minimal rather than universal
+  corners use the medium token (7)
+
+Important semantic elements
+  command: Open
+  search: Search library
+  tree: Contents
+  document: Document
+  property sheet: Reading settings
+  primary command: Play / pause
+  commands: Voice, Speed
+  status: Reading status
+
+Concept-art direction
+  Desktop reading workspace with a quiet dark technical aesthetic.
+  The reading surface is visually dominant and spacious.
+  Navigation and inspection remain available but subdued.
+  Controls should look deliberate and integrated, not like a generic dashboard.
+  Avoid excessive cards, pills, borders, gradients, and decorative chrome.
+
+This file is an illustrative target projection, not canonical source.
