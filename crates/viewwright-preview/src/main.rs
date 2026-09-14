@@ -11,6 +11,10 @@ fn main() -> eframe::Result<()> {
             "../../../specimens/reader-workspace-visual.toml"
         ))
         .expect("visual reader specimen must be valid"),
+        parse_and_resolve(include_str!(
+            "../../../specimens/reader-workspace-visual-m6.toml"
+        ))
+        .expect("M6 visual reader pressure specimen must be valid"),
         parse_and_resolve(include_str!("../../../specimens/dependency-workbench.toml"))
             .expect("dependency workbench specimen must be valid"),
     ];
@@ -47,6 +51,14 @@ impl eframe::App for App {
         egui::TopBottomPanel::top("preview-host").show(ctx, |ui| {
             ui.heading("ViewWright Preview");
             ui.label(&self.blueprints[self.screen].screen.purpose);
+            if let Some(audit) = viewwright_audit::audit(&self.blueprints[self.screen]) {
+                ui.collapsing(
+                    format!("Visual audit: {} warning(s)", audit.findings.len()),
+                    |ui| {
+                        ui.monospace(audit.summary());
+                    },
+                );
+            }
         });
         egui::TopBottomPanel::bottom("fixtures").show(ctx, |ui| {
             ui.horizontal(|ui| {

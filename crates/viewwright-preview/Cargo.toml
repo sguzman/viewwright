@@ -8,3 +8,4 @@ viewwright-model = { path = "../viewwright-model" }
 viewwright-egui = { path = "../viewwright-egui" }
 viewwright-ascii = { path = "../viewwright-ascii" }
 viewwright-concept = { path = "../viewwright-concept" }
+viewwright-audit = { path = "../viewwright-audit" }

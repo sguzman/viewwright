@@ -1,0 +1,7 @@
+[package]
+name = "viewwright-audit"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+viewwright-model = { path = "../viewwright-model" }

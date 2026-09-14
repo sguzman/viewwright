@@ -3155,6 +3155,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "viewwright-audit"
+version = "0.1.0"
+dependencies = [
+ "viewwright-model",
+]
+
+[[package]]
 name = "viewwright-concept"
 version = "0.1.0"
 dependencies = [
@@ -3192,6 +3199,7 @@ version = "0.1.0"
 dependencies = [
  "eframe",
  "viewwright-ascii",
+ "viewwright-audit",
  "viewwright-concept",
  "viewwright-egui",
  "viewwright-model",
