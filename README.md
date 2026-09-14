@@ -137,9 +137,7 @@ See:
 
 ## Current design work — M8 collection presentation fidelity
 
-The accepted Project Browser already authors two different collection presentations: navigation is a `list`, while projects are `adaptive_cards`. The resolved model currently keeps `presentation` as an unchecked string and the egui backend ignores it, causing both to collapse into the same vertical-label renderer.
-
-M8 does not add another styling language. It makes this existing semantic distinction truthful:
+The accepted Project Browser authors two different collection presentations: navigation is a `list`, while projects are `adaptive_cards`. M8 now resolves that field into typed collection-presentation semantics, validates compatibility/defaulting, exposes the distinction in semantic/concept projections, and gives egui separate list and wrapping adaptive-card renderers.
 
 ```text
 authored collection presentation
@@ -151,7 +149,7 @@ semantic / concept inspection
 backend honors list vs adaptive cards
 ```
 
-The existing canonical screens provide the pressure cases; no new source field or pressure specimen is required.
+Implementation is complete in `main`; human visual QA of the canonical selectors remains before acceptance/closure.
 
 See:
 
@@ -173,4 +171,4 @@ See:
 - M5 — accepted
 - M6 — accepted
 - M7 — accepted
-- M8 — collection-presentation fidelity formalized; implementation not yet started
+- M8 — implementation complete; human visual QA pending
