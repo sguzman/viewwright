@@ -1,0 +1,6 @@
+[package]
+name = "viewwright-ascii"
+version.workspace = true
+edition.workspace = true
+[dependencies]
+viewwright-model = { path = "../viewwright-model" }

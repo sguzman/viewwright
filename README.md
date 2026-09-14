@@ -72,6 +72,20 @@ M0 succeeds when one real application screen can be described declaratively, und
 
 See [`docs/charter.md`](docs/charter.md) for project boundaries and [`examples/project-browser.toml`](examples/project-browser.toml) for the first design specimen.
 
+## Running the M0 slice
+
+The repository is a Cargo workspace. The example is parsed, validated, and
+resolved before the preview enters its render loop:
+
+    cargo test
+    cargo run -p viewwright-preview
+
+The preview prints the resolved semantic tree and generated ASCII projection
+to stdout, then opens an isolated egui window. Its fixture bar selects the
+named many_projects, selected_project, and empty fixtures.
+
 ## Status
 
-Early architecture / M0 definition.
+M0 vertical slice implemented. The egui projection is intentionally a small,
+recognizable renderer for the specimen, not a production theme or a general
+widget/layout language.

@@ -1,0 +1,13 @@
+[workspace]
+resolver = "2"
+members = ["crates/viewwright-model", "crates/viewwright-ascii", "crates/viewwright-egui", "crates/viewwright-preview"]
+[workspace.package]
+edition = "2021"
+license = "MIT"
+version = "0.1.0"
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+thiserror = "2"
+egui = "0.31"
+eframe = "0.31"
