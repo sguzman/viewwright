@@ -37,7 +37,7 @@ They are separate projects with deliberately opposite authority. In time, ViewWr
 4. **Visual exploration is first-class.** The model should be usable to derive concept-art specifications and visual previews, while keeping generated imagery non-authoritative.
 5. **Backends are projections.** egui is the first renderer, not the ontology of the project.
 6. **Screens should be previewable in isolation.** Real application startup must not be required merely to inspect a screen design.
-7. **Intent survives implementation.** Design hierarchy, dominance, density, composition, and explicit avoidances should remain machine-readable rather than disappearing into widget code.
+7. **Intent survives implementation.** Design hierarchy, dominance, density, composition, geometry, and explicit avoidances should remain machine-readable rather than disappearing into widget code.
 8. **No heavy work on the render thread.** Backends must keep rendering responsive; parsing, resolution, asset work, and other heavy operations belong off the UI/render thread.
 9. **Preview tools clean up after themselves.** QA may launch windows or processes, but automated workers should close what they launch before declaring completion unless explicitly asked to leave it running.
 
@@ -58,7 +58,7 @@ TOML → typed / validated / resolved blueprint
      └── egui preview
 ```
 
-M1 added an explicit composition root, recursive nested compositions, fixed vertical sizing, cycle diagnostics, and a semantic document surface. The Project Browser and Reader Workspace resolve through the same backend-independent composition model.
+M1 added an explicit composition root, recursive nested compositions, fixed vertical sizing, cycle diagnostics, and a semantic document surface.
 
 M2 added semantic visual authoring:
 
@@ -71,7 +71,15 @@ M2 added semantic visual authoring:
 - egui consumption of resolved visual semantics
 - scoped preview styling so authored screen visuals do not contaminate preview-host chrome
 
-The visual Reader Workspace pressure test is accepted. It demonstrated that a coherent authored visual profile can survive canonical TOML → resolution → concept specification + egui without becoming a CSS-like styling system.
+M3 added fixture-backed semantic preview content:
+
+- collection items and authored selection
+- ordered property-sheet values
+- status text
+- validation of fixture-content compatibility
+- migration away from fixture-id substring heuristics for supported content families
+
+The Project Browser, Reader Workspace, visual Reader Workspace, and Dependency Workbench now share the same semantic pipeline.
 
 ## Running the current slice
 
@@ -80,26 +88,38 @@ The repository is a Cargo workspace. Blueprints are parsed, validated, and resol
     cargo test
     cargo run -p viewwright-preview
 
-The preview currently includes the Project Browser, structural Reader Workspace, and visual Reader Workspace specimens.
+## Current design work — M4 layout-slot fidelity
 
-## Current design work — M3 fixture-backed semantic preview content
+Runtime QA of both the Reader Workspace and Dependency Workbench exposed a repeated geometry failure: the semantic model allocates growing major areas, but egui still allows region surfaces to collapse to intrinsic content size and huddle at the upper-left.
 
-The next pressure test targets the point where current backends still invent representative content.
+M4 makes major composition geometry deterministic and backend-independent for a concrete viewport:
 
-ViewWright can already describe a collection, property sheet, status surface, and similar semantic elements, but current preview behavior still fabricates placeholder values and partly infers state from fixture-id strings. M3 introduces a deliberately small fixture-content vocabulary so representative collection items, selection, properties, and status text can be authored canonically and resolved before projection.
+```text
+resolved blueprint + viewport
+        ↓
+major layout-slot projection
+        ↓
+composition / region rectangles
+        ↓
+backend rendering inside exact slots
+```
 
-`specimens/dependency-workbench.toml` is the pressure specimen: a light, dense technical workspace deliberately unlike the dark Reader Workspace. It should be renderable without application-specific dependency logic and without becoming a general data-binding system.
+M4 also adds `composition.grow` so nested compositions can explicitly own remaining space when they are first-class children of another composition.
+
+This is not a responsive-layout milestone and does not introduce breakpoints, percentages, min/max constraints, docking, or a general constraint solver.
 
 See:
 
-- [`docs/m3-fixture-content.md`](docs/m3-fixture-content.md)
-- [`docs/m3-acceptance.md`](docs/m3-acceptance.md)
-- [`specimens/dependency-workbench.toml`](specimens/dependency-workbench.toml)
-- [`specimens/dependency-workbench.ascii.txt`](specimens/dependency-workbench.ascii.txt)
+- [`docs/m4-layout-slots.md`](docs/m4-layout-slots.md)
+- [`docs/m4-acceptance.md`](docs/m4-acceptance.md)
+- [`docs/m4-schema-summary.md`](docs/m4-schema-summary.md)
+- [`docs/m4-implementation-boundary.md`](docs/m4-implementation-boundary.md)
+- [`docs/m4-stop-condition.md`](docs/m4-stop-condition.md)
 
 ## Status
 
 - M0 — accepted
 - M1 — accepted
 - M2 — accepted
-- M3 — fixture-content pressure test formalized; implementation not yet started
+- M3 — accepted
+- M4 — layout-slot pressure test formalized; implementation not yet started
