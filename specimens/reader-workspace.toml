@@ -64,6 +64,7 @@ kind = "split"
 axis = "horizontal"
 children = ["library", "reader", "inspector"]
 gap = "md"
+grow = 1
 
 [[element]]
 id = "open_document"

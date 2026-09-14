@@ -107,6 +107,7 @@ pub struct CompositionSource {
     pub children: Vec<String>,
     pub gap: Option<String>,
     pub padding: Option<String>,
+    pub grow: Option<f32>,
 }
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -270,6 +271,7 @@ pub struct ResolvedComposition {
     pub children: Vec<CompositionChild>,
     pub gap: u32,
     pub padding: u32,
+    pub grow: f32,
 }
 #[derive(Debug, Clone)]
 pub struct ResolvedFixture {
@@ -471,13 +473,24 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
     let mut regions = Vec::new();
     for r in &source.region {
         add_id(&mut ids, &mut errors, &r.id, "region");
+        let grow = r.grow.unwrap_or(0.0);
+        if !grow.is_finite() || grow < 0.0 {
+            errors.push(format!(
+                "region '{}': grow must be finite and non-negative",
+                r.id
+            ));
+        }
         regions.push(ResolvedRegion {
             id: r.id.clone(),
             role: r.role.clone(),
             importance: importance(&r.importance, &format!("region '{}'", r.id), &mut errors),
             width: logical_size(r.width.as_ref(), "region width", &r.id, &mut errors),
             height: logical_size(r.height.as_ref(), "region height", &r.id, &mut errors),
-            grow: r.grow.unwrap_or(0.0),
+            grow: if grow.is_finite() && grow >= 0.0 {
+                grow
+            } else {
+                0.0
+            },
             surface: surface(r.surface.as_ref(), &r.id, &mut errors),
         });
     }
@@ -502,6 +515,13 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
     let mut compositions = Vec::new();
     for c in &source.composition {
         add_id(&mut ids, &mut errors, &c.id, "composition");
+        let grow = c.grow.unwrap_or(0.0);
+        if !grow.is_finite() || grow < 0.0 {
+            errors.push(format!(
+                "composition '{}': grow must be finite and non-negative",
+                c.id
+            ));
+        }
         if !matches!(
             c.kind.as_str(),
             "row" | "column" | "stack" | "split" | "overlay"
@@ -582,6 +602,11 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
             children,
             gap,
             padding,
+            grow: if grow.is_finite() && grow >= 0.0 {
+                grow
+            } else {
+                0.0
+            },
         });
     }
     let root = match source.screen.root.as_deref() {
@@ -1004,5 +1029,36 @@ mod tests {
         );
         let error = parse_and_resolve(&source).unwrap_err().to_string();
         assert!(error.contains("invalid surface role 'glass'"));
+    }
+
+    #[test]
+    fn invalid_growth_is_rejected_for_regions_and_compositions() {
+        let source = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='a'\nrole='a'\nimportance='primary'\ngrow=-1\n[[region]]\nid='b'\nrole='b'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','b']\ngrow=-2";
+        let error = parse_and_resolve(source).unwrap_err().to_string();
+        assert!(error.contains("region 'a': grow must be finite and non-negative"));
+        assert!(error.contains("composition 'root': grow must be finite and non-negative"));
+    }
+
+    #[test]
+    fn non_finite_growth_is_rejected_for_regions_and_compositions() {
+        let source = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='a'\nrole='a'\nimportance='primary'\n[[region]]\nid='b'\nrole='b'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','b']";
+        let mut source: SourceBlueprint = toml::from_str(source).unwrap();
+        source.region[0].grow = Some(f32::NAN);
+        source.composition[0].grow = Some(f32::INFINITY);
+        let error = resolve(source).unwrap_err().to_string();
+        assert!(error.contains("region 'a': grow must be finite and non-negative"));
+        assert!(error.contains("composition 'root': grow must be finite and non-negative"));
+    }
+
+    #[test]
+    fn zero_and_positive_composition_growth_resolve() {
+        let source = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='a'\nrole='a'\nimportance='primary'\n[[region]]\nid='b'\nrole='b'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','b']\ngrow=0";
+        let b = parse_and_resolve(source).unwrap();
+        assert_eq!(b.compositions[0].grow, 0.0);
+        let source = source.replace("grow=0", "grow=2.5");
+        assert_eq!(
+            parse_and_resolve(&source).unwrap().compositions[0].grow,
+            2.5
+        );
     }
 }

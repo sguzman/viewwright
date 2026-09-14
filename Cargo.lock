@@ -3166,6 +3166,14 @@ name = "viewwright-egui"
 version = "0.1.0"
 dependencies = [
  "egui",
+ "viewwright-layout",
+ "viewwright-model",
+]
+
+[[package]]
+name = "viewwright-layout"
+version = "0.1.0"
+dependencies = [
  "viewwright-model",
 ]
 

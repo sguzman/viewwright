@@ -1,149 +1,78 @@
-use egui::{Align, CentralPanel, Color32, Context, FontId, Frame, Layout, RichText, Stroke};
+use egui::{CentralPanel, Color32, Context, FontId, Frame, RichText, Stroke, UiBuilder};
+use viewwright_layout::{layout, LayoutPlan, Rect as LayoutRect};
 use viewwright_model::{
     BorderPolicy, Color, CompositionChild, ElementKind, Importance, ResolvedBlueprint,
-    ResolvedComposition, ResolvedFixtureContent, ResolvedRegion, SurfaceRole,
+    ResolvedFixtureContent, ResolvedRegion, SurfaceRole,
 };
 
 pub fn show(ctx: &Context, blueprint: &ResolvedBlueprint, fixture: &str) {
-    let root_frame = blueprint.visual.as_ref().map(|v| {
-        Frame::new()
-            .fill(color32(v.palette.canvas))
-            .inner_margin(0.0)
-    });
+    let root_fill = blueprint
+        .visual
+        .as_ref()
+        .map(|v| color32(v.palette.canvas))
+        .unwrap_or(Color32::TRANSPARENT);
     CentralPanel::default()
-        .frame(root_frame.unwrap_or_else(|| Frame::new()))
+        .frame(Frame::new().fill(root_fill).inner_margin(0.0))
         .show(ctx, |ui| {
             ui.scope(|ui| {
                 apply_visuals(ui, blueprint);
-                render_composition(ui, &blueprint.root, blueprint, fixture);
+                let plan = layout(blueprint, ui.available_width(), ui.available_height());
+                let origin = ui.min_rect().min;
+                render_composition(ui, &blueprint.root, blueprint, fixture, &plan, origin);
             });
         });
 }
 
-fn render_composition(ui: &mut egui::Ui, id: &str, b: &ResolvedBlueprint, fixture: &str) {
+fn render_composition(
+    ui: &mut egui::Ui,
+    id: &str,
+    b: &ResolvedBlueprint,
+    fixture: &str,
+    plan: &LayoutPlan,
+    origin: egui::Pos2,
+) {
     let Some(c) = b.compositions.iter().find(|c| c.id == id) else {
         return;
     };
-    ui.add_space(c.padding as f32);
-    if c.axis == "horizontal" || c.kind == "row" {
-        let available = ui.available_width();
-        let fixed: f32 = c
-            .children
-            .iter()
-            .filter_map(|child| region(child, b))
-            .filter_map(|r| r.width)
-            .map(|w| w as f32)
-            .sum();
-        let growing: f32 = c
-            .children
-            .iter()
-            .filter_map(|child| region(child, b))
-            .map(|r| r.grow)
-            .sum();
-        ui.horizontal(|ui| {
-            for (index, child) in c.children.iter().enumerate() {
-                let width = child_width(child, b, available, fixed, growing, c);
-                let height = ui.available_height();
-                ui.allocate_ui_with_layout(
-                    egui::vec2(width, height),
-                    Layout::top_down(Align::Min),
-                    |ui| {
-                        render_child(ui, child, b, fixture);
-                    },
-                );
-                if index + 1 < c.children.len() {
-                    ui.add_space(c.gap as f32);
+    for child in &c.children {
+        let child_id = match child {
+            CompositionChild::Region(id) | CompositionChild::Composition(id) => id,
+        };
+        let Some(child_rect) = (match child {
+            CompositionChild::Region(_) => plan.region(child_id),
+            CompositionChild::Composition(_) => plan.composition(child_id),
+        }) else {
+            continue;
+        };
+        let child_egui_rect = to_egui_rect(child_rect, origin);
+        ui.scope_builder(
+            UiBuilder::new()
+                .id_salt((id, child_id))
+                .max_rect(child_egui_rect),
+            |ui| match child {
+                CompositionChild::Composition(id) => {
+                    render_composition(ui, id, b, fixture, plan, origin)
                 }
-            }
-        });
-    } else {
-        let available = ui.available_height();
-        let fixed: f32 = c
-            .children
-            .iter()
-            .filter_map(|child| region(child, b))
-            .filter_map(|r| r.height)
-            .map(|h| h as f32)
-            .sum();
-        let growing: f32 = c
-            .children
-            .iter()
-            .filter_map(|child| region(child, b))
-            .map(|r| r.grow)
-            .sum();
-        for (index, child) in c.children.iter().enumerate() {
-            let height = child_height(child, b, available, fixed, growing, c);
-            ui.allocate_ui_with_layout(
-                egui::vec2(ui.available_width(), height),
-                Layout::top_down(Align::Min),
-                |ui| {
-                    render_child(ui, child, b, fixture);
-                },
-            );
-            if index + 1 < c.children.len() {
-                ui.add_space(c.gap as f32);
-            }
-        }
+                CompositionChild::Region(id) => {
+                    if let Some(region) = b.regions.iter().find(|r| r.id == *id) {
+                        render_region(ui, region, b, fixture, child_rect, origin);
+                    }
+                }
+            },
+        );
     }
 }
 
-fn render_child(ui: &mut egui::Ui, child: &CompositionChild, b: &ResolvedBlueprint, fixture: &str) {
-    match child {
-        CompositionChild::Composition(id) => render_composition(ui, id, b, fixture),
-        CompositionChild::Region(id) => {
-            if let Some(r) = b.regions.iter().find(|r| r.id == *id) {
-                render_region(ui, r, b, fixture);
-            }
-        }
-    }
-}
-fn region<'a>(child: &CompositionChild, b: &'a ResolvedBlueprint) -> Option<&'a ResolvedRegion> {
-    match child {
-        CompositionChild::Region(id) => b.regions.iter().find(|r| r.id == *id),
-        _ => None,
-    }
-}
-fn child_width(
-    child: &CompositionChild,
+fn render_region(
+    ui: &mut egui::Ui,
+    r: &ResolvedRegion,
     b: &ResolvedBlueprint,
-    available: f32,
-    fixed: f32,
-    growing: f32,
-    c: &ResolvedComposition,
-) -> f32 {
-    region(child, b)
-        .and_then(|r| r.width)
-        .map(|w| w as f32)
-        .unwrap_or_else(|| {
-            ((available - fixed - c.gap as f32 * c.children.len().saturating_sub(1) as f32)
-                .max(1.0)
-                * region(child, b).map(|r| r.grow.max(1.0)).unwrap_or(1.0)
-                / growing.max(1.0))
-            .max(1.0)
-        })
-}
-fn child_height(
-    child: &CompositionChild,
-    b: &ResolvedBlueprint,
-    available: f32,
-    fixed: f32,
-    growing: f32,
-    c: &ResolvedComposition,
-) -> f32 {
-    region(child, b)
-        .and_then(|r| r.height)
-        .map(|h| h as f32)
-        .unwrap_or_else(|| {
-            ((available - fixed - c.gap as f32 * c.children.len().saturating_sub(1) as f32)
-                .max(1.0)
-                * region(child, b).map(|r| r.grow.max(1.0)).unwrap_or(1.0)
-                / growing.max(1.0))
-            .max(1.0)
-        })
-}
-
-fn render_region(ui: &mut egui::Ui, r: &ResolvedRegion, b: &ResolvedBlueprint, fixture: &str) {
-    let frame = if let Some(v) = &b.visual {
+    fixture: &str,
+    rect: LayoutRect,
+    origin: egui::Pos2,
+) {
+    let egui_rect = to_egui_rect(rect, origin);
+    if let Some(v) = &b.visual {
         let fill = match r.surface {
             SurfaceRole::Canvas => v.palette.canvas,
             SurfaceRole::Panel => v.palette.surface,
@@ -155,53 +84,58 @@ fn render_region(ui: &mut egui::Ui, r: &ResolvedRegion, b: &ResolvedBlueprint, f
                 a: 0,
             },
         };
-        let separated_surface =
-            !matches!(r.surface, SurfaceRole::Canvas | SurfaceRole::Transparent);
+        let separated_surface = matches!(r.surface, SurfaceRole::Panel | SurfaceRole::Raised);
         let stroke = match v.border_policy {
             BorderPolicy::None => Stroke::NONE,
             BorderPolicy::Minimal if r.surface == SurfaceRole::Raised => {
                 Stroke::new(1.0_f32, color32(v.palette.border))
             }
-            BorderPolicy::Minimal if !separated_surface => Stroke::NONE,
-            BorderPolicy::Minimal => Stroke::new(1.0_f32, color32(v.palette.border)),
             BorderPolicy::Defined if separated_surface => {
                 Stroke::new(2.0_f32, color32(v.palette.border))
             }
-            BorderPolicy::Defined => Stroke::NONE,
+            _ => Stroke::NONE,
         };
-        Frame::new()
-            .fill(color32(fill))
-            .corner_radius((v.corner_radius.min(u8::MAX as u32)) as u8)
-            .stroke(stroke)
-    } else {
-        Frame::group(ui.style())
-    };
-    frame.show(ui, |ui| {
-        ui.label(region_text(&r.id, r.importance, b.visual.as_ref()));
-        ui.label(
-            RichText::new(&r.role)
-                .color(
-                    b.visual
-                        .as_ref()
-                        .map(|v| color32(v.palette.text_muted))
-                        .unwrap_or(Color32::GRAY),
-                )
-                .small(),
+        ui.painter().add(
+            Frame::new()
+                .fill(color32(fill))
+                .corner_radius(v.corner_radius.min(u8::MAX as u32) as u8)
+                .stroke(stroke)
+                .paint(egui_rect),
         );
-        let elements: Vec<_> = b.elements.iter().filter(|e| e.region == r.id).collect();
-        if r.role == "commands" {
-            ui.horizontal_wrapped(|ui| {
+    }
+    let content = egui_rect.shrink(10.0);
+    ui.scope_builder(
+        UiBuilder::new()
+            .id_salt(("region", &r.id))
+            .max_rect(content),
+        |ui| {
+            ui.label(region_text(&r.id, r.importance, b.visual.as_ref()));
+            ui.label(
+                RichText::new(&r.role)
+                    .color(
+                        b.visual
+                            .as_ref()
+                            .map(|v| color32(v.palette.text_muted))
+                            .unwrap_or(Color32::GRAY),
+                    )
+                    .small(),
+            );
+            let elements: Vec<_> = b.elements.iter().filter(|e| e.region == r.id).collect();
+            if r.role == "commands" {
+                ui.horizontal_wrapped(|ui| {
+                    for e in elements {
+                        render_element(ui, e, b, fixture);
+                    }
+                });
+            } else {
                 for e in elements {
                     render_element(ui, e, b, fixture);
                 }
-            });
-        } else {
-            for e in elements {
-                render_element(ui, e, b, fixture);
             }
-        }
-    });
+        },
+    );
 }
+
 fn render_element(
     ui: &mut egui::Ui,
     e: &viewwright_model::ResolvedElement,
@@ -266,6 +200,7 @@ fn render_element(
         }
     }
 }
+
 fn render_collection(
     ui: &mut egui::Ui,
     element: &viewwright_model::ResolvedElement,
@@ -315,6 +250,7 @@ fn region_text(
     }
     value.strong()
 }
+
 fn element_text(
     text: &str,
     importance: Importance,
@@ -336,6 +272,7 @@ fn element_text(
     }
     value
 }
+
 fn kind_name(kind: ElementKind) -> &'static str {
     match kind {
         ElementKind::Text => "text",
@@ -370,6 +307,14 @@ fn content_for<'a>(
 fn color32(c: Color) -> Color32 {
     Color32::from_rgba_unmultiplied(c.r, c.g, c.b, c.a)
 }
+
+fn to_egui_rect(rect: LayoutRect, origin: egui::Pos2) -> egui::Rect {
+    egui::Rect::from_min_size(
+        origin + egui::vec2(rect.x, rect.y),
+        egui::vec2(rect.width, rect.height),
+    )
+}
+
 fn apply_visuals(ui: &mut egui::Ui, b: &ResolvedBlueprint) {
     let Some(v) = &b.visual else { return };
     let style = ui.style_mut();
@@ -381,9 +326,8 @@ fn apply_visuals(ui: &mut egui::Ui, b: &ResolvedBlueprint) {
     style.visuals.selection.bg_fill = color32(v.palette.accent);
     style.visuals.selection.stroke = Stroke::new(1.0_f32, color32(v.palette.accent));
     let boundary = match v.border_policy {
-        BorderPolicy::None => Stroke::NONE,
-        BorderPolicy::Minimal => Stroke::new(1.0_f32, color32(v.palette.border)),
-        BorderPolicy::Defined => Stroke::new(2.0_f32, color32(v.palette.border)),
+        BorderPolicy::None | BorderPolicy::Minimal => Stroke::NONE,
+        BorderPolicy::Defined => Stroke::new(1.0_f32, color32(v.palette.border)),
     };
     for widget in [
         &mut style.visuals.widgets.inactive,

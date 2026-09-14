@@ -94,6 +94,7 @@ kind = "split"
 axis = "horizontal"
 children = ["filters", "packages", "inspector"]
 gap = "md"
+grow = 1
 
 [[element]]
 id = "refresh"

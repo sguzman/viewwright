@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/viewwright-model", "crates/viewwright-ascii", "crates/viewwright-egui", "crates/viewwright-preview", "crates/viewwright-concept"]
+members = ["crates/viewwright-model", "crates/viewwright-layout", "crates/viewwright-ascii", "crates/viewwright-egui", "crates/viewwright-preview", "crates/viewwright-concept"]
 [workspace.package]
 edition = "2021"
 license = "MIT"

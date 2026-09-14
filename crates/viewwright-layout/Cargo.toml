@@ -1,8 +1,7 @@
 [package]
-name = "viewwright-egui"
+name = "viewwright-layout"
 version.workspace = true
 edition.workspace = true
+
 [dependencies]
-egui.workspace = true
 viewwright-model = { path = "../viewwright-model" }
-viewwright-layout = { path = "../viewwright-layout" }
