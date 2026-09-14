@@ -1,0 +1,31 @@
+READER WORKSPACE — TARGET COMPOSITION
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ APP COMMANDS                                                                │
+│ [Open]                                                                      │
+├───────────────┬───────────────────────────────────────────────┬──────────────┤
+│ LIBRARY       │ READER                                        │ INSPECTOR    │
+│               │                                               │              │
+│ [Search]      │                                               │ Reading      │
+│               │              DOCUMENT SURFACE                 │ settings     │
+│ Contents      │                                               │              │
+│  Chapter 1    │                                               │              │
+│  Chapter 2    │                                               │              │
+│  Chapter 3    │                                               │              │
+│               │                                               │              │
+├───────────────┴───────────────────────────────────────────────┴──────────────┤
+│ TRANSPORT                                                                   │
+│ [Play / pause]   [Voice]   [Speed]                         Reading status    │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Structural intent:
+
+workspace (column)
+├── app_commands (region)
+├── reading_body (composition: horizontal split)
+│   ├── library (region)
+│   ├── reader (region, dominant/growing)
+│   └── inspector (region, tertiary)
+└── transport (region)
+
+This ASCII file is illustrative only. The TOML/semantic blueprint remains authoritative.
