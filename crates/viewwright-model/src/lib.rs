@@ -135,6 +135,8 @@ pub struct FixtureContentSource {
     pub selected: Option<String>,
     pub properties: Option<Vec<PropertySource>>,
     pub text: Option<String>,
+    pub nodes: Option<Vec<TreeNodeSource>>,
+    pub document: Option<DocumentSource>,
 }
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -147,6 +149,19 @@ pub struct CollectionItemSource {
 pub struct PropertySource {
     pub name: String,
     pub value: String,
+}
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TreeNodeSource {
+    pub id: String,
+    pub label: String,
+    pub parent: Option<String>,
+}
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DocumentSource {
+    pub title: String,
+    pub paragraphs: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -294,6 +309,16 @@ pub enum ResolvedFixtureContent {
         element: String,
         text: String,
     },
+    Tree {
+        element: String,
+        nodes: Vec<ResolvedTreeNode>,
+        selected: Option<String>,
+    },
+    Document {
+        element: String,
+        title: String,
+        paragraphs: Vec<String>,
+    },
 }
 #[derive(Debug, Clone)]
 pub struct ResolvedCollectionItem {
@@ -304,6 +329,12 @@ pub struct ResolvedCollectionItem {
 pub struct ResolvedProperty {
     pub name: String,
     pub value: String,
+}
+#[derive(Debug, Clone)]
+pub struct ResolvedTreeNode {
+    pub id: String,
+    pub label: String,
+    pub parent: Option<String>,
 }
 #[derive(Debug, Clone)]
 pub struct ResolvedBlueprint {
@@ -672,7 +703,9 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
             };
             let families = usize::from(record.items.is_some())
                 + usize::from(record.properties.is_some())
-                + usize::from(record.text.is_some());
+                + usize::from(record.text.is_some())
+                + usize::from(record.nodes.is_some())
+                + usize::from(record.document.is_some());
             if families != 1 {
                 errors.push(format!(
                     "fixture '{}': content for '{}' must contain exactly one payload family",
@@ -680,9 +713,9 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
                 ));
                 continue;
             }
-            if record.selected.is_some() && record.items.is_none() {
+            if record.selected.is_some() && record.items.is_none() && record.nodes.is_none() {
                 errors.push(format!(
-                    "fixture '{}': selected is only valid with collection content for '{}'",
+                    "fixture '{}': selected is only valid with collection or tree content for '{}'",
                     f.id, record.element
                 ));
                 continue;
@@ -755,6 +788,93 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
                 content.push(ResolvedFixtureContent::Text {
                     element: record.element.clone(),
                     text: text.clone(),
+                });
+            } else if let Some(nodes) = &record.nodes {
+                if element.kind != ElementKind::Tree {
+                    errors.push(format!(
+                        "fixture '{}': tree content on '{}' requires a tree element",
+                        f.id, record.element
+                    ));
+                    continue;
+                }
+                let mut node_ids = HashSet::new();
+                let resolved_nodes: Vec<_> = nodes
+                    .iter()
+                    .filter_map(|node| {
+                        if !node_ids.insert(node.id.clone()) {
+                            errors.push(format!(
+                                "fixture '{}': duplicate tree node id '{}' for '{}'",
+                                f.id, node.id, record.element
+                            ));
+                            None
+                        } else {
+                            Some(ResolvedTreeNode {
+                                id: node.id.clone(),
+                                label: node.label.clone(),
+                                parent: node.parent.clone(),
+                            })
+                        }
+                    })
+                    .collect();
+                for node in &resolved_nodes {
+                    if let Some(parent) = &node.parent {
+                        if !node_ids.contains(parent) {
+                            errors.push(format!(
+                                "fixture '{}': tree node '{}' references missing parent '{}' for '{}'",
+                                f.id, node.id, parent, record.element
+                            ));
+                        }
+                        if parent == &node.id {
+                            errors.push(format!(
+                                "fixture '{}': tree node '{}' cannot parent itself for '{}'",
+                                f.id, node.id, record.element
+                            ));
+                        }
+                    }
+                }
+                if let Some(selected) = &record.selected {
+                    if !node_ids.contains(selected) {
+                        errors.push(format!(
+                            "fixture '{}': selected tree node '{}' is absent from '{}'",
+                            f.id, selected, record.element
+                        ));
+                    }
+                }
+                let parents: HashMap<_, _> = resolved_nodes
+                    .iter()
+                    .map(|node| (node.id.as_str(), node.parent.as_deref()))
+                    .collect();
+                for node in &resolved_nodes {
+                    let mut seen = HashSet::new();
+                    let mut current = Some(node.id.as_str());
+                    while let Some(id) = current {
+                        if !seen.insert(id) {
+                            errors.push(format!(
+                                "fixture '{}': tree parent cycle includes node '{}' for '{}'",
+                                f.id, id, record.element
+                            ));
+                            break;
+                        }
+                        current = parents.get(id).copied().flatten();
+                    }
+                }
+                content.push(ResolvedFixtureContent::Tree {
+                    element: record.element.clone(),
+                    nodes: resolved_nodes,
+                    selected: record.selected.clone(),
+                });
+            } else if let Some(document) = &record.document {
+                if element.kind != ElementKind::Document {
+                    errors.push(format!(
+                        "fixture '{}': document content on '{}' requires a document element",
+                        f.id, record.element
+                    ));
+                    continue;
+                }
+                content.push(ResolvedFixtureContent::Document {
+                    element: record.element.clone(),
+                    title: document.title.clone(),
+                    paragraphs: document.paragraphs.clone(),
                 });
             }
         }
@@ -858,6 +978,23 @@ impl ResolvedBlueprint {
                     ResolvedFixtureContent::Text { element, text } => {
                         out.push_str(&format!("    content {element}: {text}\n"))
                     }
+                    ResolvedFixtureContent::Tree {
+                        element,
+                        nodes,
+                        selected,
+                    } => out.push_str(&format!(
+                        "    content {element}: tree {} nodes, selected {:?}\n",
+                        nodes.len(),
+                        selected
+                    )),
+                    ResolvedFixtureContent::Document {
+                        element,
+                        title,
+                        paragraphs,
+                    } => out.push_str(&format!(
+                        "    content {element}: document '{title}', {} paragraphs\n",
+                        paragraphs.len()
+                    )),
                 }
             }
         }
@@ -1029,6 +1166,115 @@ mod tests {
         );
         let error = parse_and_resolve(&source).unwrap_err().to_string();
         assert!(error.contains("invalid surface role 'glass'"));
+    }
+
+    #[test]
+    fn reader_fixtures_resolve_typed_tree_document_and_existing_content() {
+        let b = parse_and_resolve(include_str!(
+            "../../../specimens/reader-workspace-visual.toml"
+        ))
+        .unwrap();
+        let reading = b.fixtures.iter().find(|f| f.id == "reading").unwrap();
+        assert!(reading.content.iter().any(|content| matches!(
+            content,
+            ResolvedFixtureContent::Tree { nodes, selected, .. }
+                if nodes.len() == 5 && selected.as_deref() == Some("chapter_two")
+        )));
+        assert!(reading.content.iter().any(|content| matches!(
+            content,
+            ResolvedFixtureContent::Document { title, paragraphs, .. }
+                if title == "The Quiet Machine" && paragraphs.len() == 3
+        )));
+        assert!(reading.content.iter().any(|content| matches!(
+            content,
+            ResolvedFixtureContent::Properties { properties, .. } if properties.len() == 3
+        )));
+        assert!(reading.content.iter().any(|content| matches!(
+            content,
+            ResolvedFixtureContent::Text { text, .. } if text.contains("Ready to read")
+        )));
+        let empty = b.fixtures.iter().find(|f| f.id == "empty").unwrap();
+        assert!(empty.content.iter().any(|content| matches!(
+            content,
+            ResolvedFixtureContent::Tree { nodes, .. } if nodes.is_empty()
+        )));
+        assert!(empty.content.iter().any(|content| matches!(
+            content,
+            ResolvedFixtureContent::Document { title, paragraphs, .. }
+                if title == "No document loaded" && paragraphs.is_empty()
+        )));
+        let debug = b.semantic_tree();
+        assert!(debug.contains("document_outline: tree 5 nodes"));
+        assert!(debug.contains("document_surface: document 'The Quiet Machine', 3 paragraphs"));
+    }
+
+    #[test]
+    fn m5_pressure_specimens_parse_and_resolve() {
+        for source in [
+            include_str!("../../../specimens/reader-workspace-m5.toml"),
+            include_str!("../../../specimens/reader-workspace-visual-m5.toml"),
+        ] {
+            let blueprint = parse_and_resolve(source).unwrap();
+            assert!(blueprint.fixtures.iter().any(|fixture| fixture
+                .content
+                .iter()
+                .any(|content| matches!(content, ResolvedFixtureContent::Tree { .. }))));
+            assert!(blueprint.fixtures.iter().any(|fixture| fixture
+                .content
+                .iter()
+                .any(|content| matches!(content, ResolvedFixtureContent::Document { .. }))));
+        }
+    }
+
+    #[test]
+    fn tree_and_document_fixture_validation_is_actionable() {
+        let base = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='r'\nrole='content'\nimportance='primary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['r','r']\n[[element]]\nid='tree'\nregion='r'\nkind='tree'\nimportance='primary'\n[[element]]\nid='document'\nregion='r'\nkind='document'\nimportance='primary'\n[[fixture]]\nid='f'\nstate='x'\n";
+        let check = |suffix: &str, expected: &str| {
+            assert!(parse_and_resolve(&(base.to_owned() + suffix))
+                .unwrap_err()
+                .to_string()
+                .contains(expected));
+        };
+        check(
+            "[[fixture.content]]\nelement='tree'\nnodes=[{id='a',label='A'},{id='a',label='A2'}]",
+            "duplicate tree node id",
+        );
+        check(
+            "[[fixture.content]]\nelement='tree'\nnodes=[{id='a',label='A',parent='missing'}]",
+            "missing parent",
+        );
+        check(
+            "[[fixture.content]]\nelement='tree'\nnodes=[{id='a',label='A',parent='a'}]",
+            "cannot parent itself",
+        );
+        check(
+            "[[fixture.content]]\nelement='tree'\nnodes=[{id='a',label='A',parent='b'},{id='b',label='B',parent='a'}]",
+            "parent cycle",
+        );
+        check(
+            "[[fixture.content]]\nelement='tree'\nnodes=[]\nselected='missing'",
+            "selected tree node",
+        );
+        check(
+            "[[fixture.content]]\nelement='tree'\ndocument={title='x',paragraphs=[]}",
+            "document content",
+        );
+        check(
+            "[[fixture.content]]\nelement='document'\nnodes=[]",
+            "tree content",
+        );
+        check(
+            "[[fixture.content]]\nelement='tree'\nnodes=[]\ntext='x'",
+            "exactly one payload",
+        );
+        check(
+            "[[fixture.content]]\nelement='document'\ndocument={title='x',paragraphs=[]}\nwat='x'",
+            "unknown field",
+        );
+        check(
+            "[[fixture.content]]\nelement='tree'\nnodes=[{id='a',label='A',wat='x'}]",
+            "unknown field",
+        );
     }
 
     #[test]

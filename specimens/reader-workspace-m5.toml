@@ -1,77 +1,36 @@
 [screen]
-id = "reader_workspace_visual"
-purpose = "Read a document in a calm, deliberate workspace"
-density = "comfortable"
+id = "reader_workspace_m5"
+purpose = "Read a document while controlling navigation and narration"
 root = "workspace"
 
-[design]
-character = ["quiet", "focused", "crafted", "reading_first", "restrained"]
-dominant = "reader"
-avoid = ["toolbar_dominance", "uniform_visual_weight", "nested_card_soup", "border_everything", "control_clutter", "pill_soup"]
-
 [tokens.spacing]
-xs = 4
 sm = 8
 md = 12
-lg = 16
-xl = 24
-[tokens.corners]
-small = 4
-medium = 7
-[tokens.color]
-canvas = "#101216"
-surface = "#171A20"
-surface_raised = "#1E222A"
-text = "#E8EAF0"
-text_muted = "#9299A6"
-accent = "#8DB7C7"
-border = "#2B313B"
-[tokens.type]
-display = 26
-heading = 18
-body = 14
-caption = 12
-
-[visual]
-canvas = "canvas"
-surface = "surface"
-surface_raised = "surface_raised"
-text = "text"
-text_muted = "text_muted"
-accent = "accent"
-border = "border"
-corner = "medium"
-border_policy = "minimal"
 
 [[region]]
 id = "app_commands"
 role = "commands"
 importance = "secondary"
-surface = "transparent"
 height = "52px"
 [[region]]
 id = "library"
 role = "navigation"
 importance = "secondary"
-surface = "panel"
 width = "250px"
 [[region]]
 id = "reader"
 role = "primary_content"
 importance = "primary"
-surface = "canvas"
 grow = 1
 [[region]]
 id = "inspector"
 role = "inspector"
 importance = "tertiary"
-surface = "panel"
 width = "300px"
 [[region]]
 id = "transport"
 role = "commands"
 importance = "secondary"
-surface = "raised"
 height = "68px"
 
 [[composition]]
@@ -132,17 +91,12 @@ kind = "command"
 importance = "secondary"
 label = "Voice"
 [[element]]
-id = "speed"
-region = "transport"
-kind = "command"
-importance = "secondary"
-label = "Speed"
-[[element]]
 id = "reading_status"
 region = "transport"
 kind = "status"
 importance = "tertiary"
 label = "Reading status"
+
 [[fixture]]
 id = "reading"
 state = "document_loaded"
@@ -158,17 +112,14 @@ nodes = [
 selected = "chapter_two"
 [[fixture.content]]
 element = "document_surface"
-document = { title = "The Quiet Machine", paragraphs = ["Rain gathered against the windows while the city settled into its evening rhythm.", "The machine remained awake beneath the low electrical hum, listening to the rooms around it.", "By morning, every quiet signal had found its way home."] }
+document = { title = "The Quiet Machine", paragraphs = ["Rain gathered against the windows.", "The machine remained awake beneath the low electrical hum."] }
 [[fixture.content]]
 element = "reader_settings"
-properties = [
-  { name = "Voice", value = "Avery" },
-  { name = "Speed", value = "1.0×" },
-  { name = "Display", value = "Focused" },
-]
+properties = [{ name = "Voice", value = "Avery" }]
 [[fixture.content]]
 element = "reading_status"
-text = "Ready to read · 12 min remaining"
+text = "Ready to read"
+
 [[fixture]]
 id = "empty"
 state = "no_document"

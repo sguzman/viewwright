@@ -151,16 +151,16 @@ fn render_element(
         }
         ElementKind::Collection => render_collection(ui, e, b, fixture, b.visual.as_ref()),
         ElementKind::Document => {
-            ui.label(element_text(
-                "Document surface",
-                e.importance,
-                b.visual.as_ref(),
-            ));
-            ui.label(if fixture.contains("no_document") {
-                "No document loaded"
-            } else {
-                "Reading content"
-            });
+            if let Some(ResolvedFixtureContent::Document {
+                title, paragraphs, ..
+            }) = content_for(b, fixture, &e.id)
+            {
+                ui.label(element_text(title, e.importance, b.visual.as_ref()).strong());
+                for paragraph in paragraphs {
+                    ui.add_space(6.0);
+                    ui.label(element_text(paragraph, e.importance, b.visual.as_ref()));
+                }
+            }
         }
         ElementKind::PropertySheet => {
             if let Some(ResolvedFixtureContent::Properties { properties, .. }) =
@@ -195,9 +195,50 @@ fn render_element(
                 ui.label(text);
             }
         }
+        ElementKind::Tree => render_tree(ui, e, b, fixture, b.visual.as_ref()),
         _ => {
             ui.label(format!("{} element", kind_name(e.kind)));
         }
+    }
+}
+
+fn render_tree(
+    ui: &mut egui::Ui,
+    element: &viewwright_model::ResolvedElement,
+    b: &ResolvedBlueprint,
+    fixture: &str,
+    visual: Option<&viewwright_model::ResolvedVisual>,
+) {
+    let Some(ResolvedFixtureContent::Tree {
+        nodes, selected, ..
+    }) = content_for(b, fixture, &element.id)
+    else {
+        return;
+    };
+    for node in nodes {
+        let mut depth = 0;
+        let mut parent = node.parent.as_deref();
+        while let Some(parent_id) = parent {
+            depth += 1;
+            parent = nodes
+                .iter()
+                .find(|candidate| candidate.id == parent_id)
+                .and_then(|candidate| candidate.parent.as_deref());
+        }
+        let text = RichText::new(&node.label);
+        let text = if selected.as_deref() == Some(node.id.as_str()) {
+            if let Some(v) = visual {
+                text.color(color32(v.palette.accent)).strong()
+            } else {
+                text.strong()
+            }
+        } else {
+            text
+        };
+        ui.horizontal(|ui| {
+            ui.add_space(depth as f32 * 12.0);
+            ui.label(text);
+        });
     }
 }
 
@@ -300,7 +341,9 @@ fn content_for<'a>(
         .find(|content| match content {
             ResolvedFixtureContent::Collection { element: id, .. }
             | ResolvedFixtureContent::Properties { element: id, .. }
-            | ResolvedFixtureContent::Text { element: id, .. } => id == element,
+            | ResolvedFixtureContent::Text { element: id, .. }
+            | ResolvedFixtureContent::Tree { element: id, .. }
+            | ResolvedFixtureContent::Document { element: id, .. } => id == element,
         })
 }
 
