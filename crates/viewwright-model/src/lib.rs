@@ -272,6 +272,7 @@ fn kind(s: &str, where_: &str, errors: &mut Vec<String>) -> ElementKind {
 }
 fn action_id(value: &str, element: &str, errors: &mut Vec<String>) -> Option<ActionId> {
     let valid = !value.is_empty()
+        && value.contains('.')
         && !value.starts_with('.')
         && !value.ends_with('.')
         && value.split('.').all(|segment| {
@@ -1384,14 +1385,22 @@ mod tests {
     #[test]
     fn action_identifier_and_command_fixture_validation_are_strict() {
         let base = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='r'\nrole='commands'\nimportance='primary'\n[[region]]\nid='other'\nrole='content'\nimportance='secondary'\n[[element]]\nid='command'\nregion='r'\nkind='command'\nimportance='primary'\nlabel='Run'\naction='run.now'\n[[element]]\nid='text'\nregion='r'\nkind='text'\nimportance='secondary'\nlabel='Text'\n[[composition]]\nid='root'\nkind='split'\nchildren=['r','other']\n[[fixture]]\nid='f'\nstate='x'\n";
-        for action in ["", ".foo", "foo.", "foo..bar", "foo bar", "foo/$bar"] {
-            let source = base.replace("label='Run'", &format!("label='Run'\naction='{action}'"));
+        let valid = base;
+        let malformed_base = valid.replace("\naction='run.now'", "");
+        assert!(
+            parse_and_resolve(&valid).is_ok(),
+            "valid action fixture failed: {:?}",
+            parse_and_resolve(&valid).unwrap_err()
+        );
+        for action in ["run", "", ".foo", "foo.", "foo..bar", "foo bar", "foo/$bar"] {
+            let source =
+                malformed_base.replace("label='Run'", &format!("label='Run'\naction='{action}'"));
             assert!(
                 parse_and_resolve(&source).is_err(),
                 "accepted invalid action {action:?}"
             );
         }
-        assert!(parse_and_resolve(&base.replace("\naction='run.now'", ""))
+        assert!(parse_and_resolve(&malformed_base)
             .unwrap_err()
             .to_string()
             .contains("require an action"));
@@ -1400,7 +1409,7 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("only valid for command"));
-        let disabled = base.replace(
+        let disabled = valid.replace(
             "[[fixture]]\nid='f'\nstate='x'\n",
             "[[fixture]]\nid='f'\nstate='x'\n[[fixture.content]]\nelement='command'\ncommand={enabled=false,reason='Not ready'}\n",
         );
@@ -1410,7 +1419,7 @@ mod tests {
             resolved.command_state("f", "command").reason,
             Some("Not ready")
         );
-        let wrong_element = base.replace(
+        let wrong_element = valid.replace(
             "[[fixture]]\nid='f'\nstate='x'\n",
             "[[fixture]]\nid='f'\nstate='x'\n[[fixture.content]]\nelement='text'\ncommand={enabled=true}\n",
         );
@@ -1418,7 +1427,7 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("requires a command element"));
-        let mixed = base.replace(
+        let mixed = valid.replace(
             "[[fixture]]\nid='f'\nstate='x'\n",
             "[[fixture]]\nid='f'\nstate='x'\n[[fixture.content]]\nelement='command'\ntext='bad'\ncommand={enabled=true}\n",
         );
