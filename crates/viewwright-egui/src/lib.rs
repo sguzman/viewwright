@@ -5,14 +5,19 @@ use viewwright_model::{
 };
 
 pub fn show(ctx: &Context, blueprint: &ResolvedBlueprint, fixture: &str) {
-    apply_visuals(ctx, blueprint);
-    egui::TopBottomPanel::top("viewwright-title").show(ctx, |ui| {
-        ui.heading(&blueprint.screen.purpose);
-        ui.label(format!("Fixture: {fixture}"));
+    let root_frame = blueprint.visual.as_ref().map(|v| {
+        Frame::new()
+            .fill(color32(v.palette.canvas))
+            .inner_margin(0.0)
     });
-    CentralPanel::default().show(ctx, |ui| {
-        render_composition(ui, &blueprint.root, blueprint, fixture)
-    });
+    CentralPanel::default()
+        .frame(root_frame.unwrap_or_else(|| Frame::new()))
+        .show(ctx, |ui| {
+            ui.scope(|ui| {
+                apply_visuals(ui, blueprint);
+                render_composition(ui, &blueprint.root, blueprint, fixture);
+            });
+        });
 }
 
 fn render_composition(ui: &mut egui::Ui, id: &str, b: &ResolvedBlueprint, fixture: &str) {
@@ -183,53 +188,73 @@ fn render_region(ui: &mut egui::Ui, r: &ResolvedRegion, b: &ResolvedBlueprint, f
                 )
                 .small(),
         );
-        for e in b.elements.iter().filter(|e| e.region == r.id) {
-            ui.separator();
-            ui.label(element_text(&e.label, e.importance, b.visual.as_ref()));
-            match e.kind {
-                ElementKind::Search => {
-                    let mut query = String::new();
-                    ui.text_edit_singleline(&mut query);
+        let elements: Vec<_> = b.elements.iter().filter(|e| e.region == r.id).collect();
+        if r.role == "commands" {
+            ui.horizontal_wrapped(|ui| {
+                for e in elements {
+                    render_element(ui, e, b, fixture);
                 }
-                ElementKind::Collection => {
-                    render_collection(ui, &e.label, fixture, b.visual.as_ref())
-                }
-                ElementKind::Document => {
-                    ui.label(element_text(
-                        "Document surface",
-                        e.importance,
-                        b.visual.as_ref(),
-                    ));
-                    ui.label(if fixture.contains("no_document") {
-                        "No document loaded"
-                    } else {
-                        "Reading content"
-                    });
-                }
-                ElementKind::PropertySheet => {
-                    ui.label("Representative properties");
-                }
-                ElementKind::Command => {
-                    let label = if e.importance == Importance::Primary {
-                        if let Some(v) = &b.visual {
-                            RichText::new(&e.label)
-                                .size(v.type_scale.body as f32)
-                                .color(color32(v.palette.accent))
-                                .strong()
-                        } else {
-                            element_text(&e.label, e.importance, b.visual.as_ref())
-                        }
-                    } else {
-                        RichText::new(&e.label)
-                    };
-                    let _ = ui.button(label);
-                }
-                _ => {
-                    ui.label(format!("{} element", kind_name(e.kind)));
-                }
+            });
+        } else {
+            for e in elements {
+                render_element(ui, e, b, fixture);
             }
         }
     });
+}
+fn render_element(
+    ui: &mut egui::Ui,
+    e: &viewwright_model::ResolvedElement,
+    b: &ResolvedBlueprint,
+    fixture: &str,
+) {
+    ui.add_space(4.0);
+    ui.label(element_text(&e.label, e.importance, b.visual.as_ref()));
+    match e.kind {
+        ElementKind::Search => {
+            let mut query = String::new();
+            ui.text_edit_singleline(&mut query);
+        }
+        ElementKind::Collection => render_collection(ui, &e.label, fixture, b.visual.as_ref()),
+        ElementKind::Document => {
+            ui.label(element_text(
+                "Document surface",
+                e.importance,
+                b.visual.as_ref(),
+            ));
+            ui.label(if fixture.contains("no_document") {
+                "No document loaded"
+            } else {
+                "Reading content"
+            });
+        }
+        ElementKind::PropertySheet => {
+            let text = RichText::new("Representative properties");
+            ui.label(if let Some(v) = &b.visual {
+                text.color(color32(v.palette.text_muted))
+            } else {
+                text
+            });
+        }
+        ElementKind::Command => {
+            let label = if e.importance == Importance::Primary {
+                if let Some(v) = &b.visual {
+                    RichText::new(&e.label)
+                        .size(v.type_scale.body as f32)
+                        .color(color32(v.palette.accent))
+                        .strong()
+                } else {
+                    element_text(&e.label, e.importance, b.visual.as_ref())
+                }
+            } else {
+                RichText::new(&e.label)
+            };
+            let _ = ui.button(label);
+        }
+        _ => {
+            ui.label(format!("{} element", kind_name(e.kind)));
+        }
+    }
 }
 fn render_collection(
     ui: &mut egui::Ui,
@@ -325,10 +350,33 @@ fn kind_name(kind: ElementKind) -> &'static str {
 fn color32(c: Color) -> Color32 {
     Color32::from_rgba_unmultiplied(c.r, c.g, c.b, c.a)
 }
-fn apply_visuals(ctx: &Context, b: &ResolvedBlueprint) {
+fn apply_visuals(ui: &mut egui::Ui, b: &ResolvedBlueprint) {
     let Some(v) = &b.visual else { return };
-    let mut style = (*ctx.style()).clone();
+    let style = ui.style_mut();
     style.visuals.override_text_color = Some(color32(v.palette.text));
+    style.visuals.window_fill = color32(v.palette.canvas);
+    style.visuals.panel_fill = color32(v.palette.canvas);
+    style.visuals.extreme_bg_color = color32(v.palette.surface);
+    style.visuals.faint_bg_color = color32(v.palette.surface);
+    style.visuals.selection.bg_fill = color32(v.palette.accent);
+    style.visuals.selection.stroke = Stroke::new(1.0_f32, color32(v.palette.accent));
+    let boundary = match v.border_policy {
+        BorderPolicy::None => Stroke::NONE,
+        BorderPolicy::Minimal => Stroke::new(1.0_f32, color32(v.palette.border)),
+        BorderPolicy::Defined => Stroke::new(2.0_f32, color32(v.palette.border)),
+    };
+    for widget in [
+        &mut style.visuals.widgets.inactive,
+        &mut style.visuals.widgets.hovered,
+        &mut style.visuals.widgets.active,
+        &mut style.visuals.widgets.open,
+    ] {
+        widget.bg_fill = color32(v.palette.surface);
+        widget.fg_stroke.color = color32(v.palette.text);
+        widget.bg_stroke = boundary;
+    }
+    style.visuals.widgets.hovered.bg_fill = color32(v.palette.surface_raised);
+    style.visuals.widgets.active.bg_fill = color32(v.palette.accent);
     style.text_styles.insert(
         egui::TextStyle::Heading,
         FontId::proportional(v.type_scale.heading as f32),
@@ -341,5 +389,4 @@ fn apply_visuals(ctx: &Context, b: &ResolvedBlueprint) {
         egui::TextStyle::Small,
         FontId::proportional(v.type_scale.caption as f32),
     );
-    ctx.set_style(style);
 }

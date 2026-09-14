@@ -18,13 +18,17 @@ fn main() -> eframe::Result<()> {
             println!("{}", viewwright_concept::render(b));
         }
     }
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default().with_inner_size([1440.0, 900.0]),
+        ..Default::default()
+    };
     eframe::run_native(
         "ViewWright Preview",
-        eframe::NativeOptions::default(),
+        options,
         Box::new(move |_| {
             Ok(Box::new(App {
                 blueprints,
-                screen: 0,
+                screen: 2,
                 fixture: 0,
             }))
         }),
@@ -38,6 +42,10 @@ struct App {
 }
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
+        egui::TopBottomPanel::top("preview-host").show(ctx, |ui| {
+            ui.heading("ViewWright Preview");
+            ui.label(&self.blueprints[self.screen].screen.purpose);
+        });
         egui::TopBottomPanel::bottom("fixtures").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.label("Specimen:");
