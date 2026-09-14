@@ -2,6 +2,7 @@
 id = "project_browser"
 purpose = "Browse projects and inspect the selected project"
 density = "comfortable"
+root = "workspace"
 
 [design]
 character = ["quiet", "technical", "crafted"]

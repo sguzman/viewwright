@@ -9,6 +9,7 @@ pub enum BlueprintError {
     #[error("blueprint validation failed:\n{0}")]
     Validation(String),
 }
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct SourceBlueprint {
     pub screen: ScreenSource,
@@ -31,6 +32,7 @@ pub struct ScreenSource {
     pub purpose: String,
     #[serde(default = "default_density")]
     pub density: String,
+    pub root: Option<String>,
 }
 fn default_density() -> String {
     "comfortable".into()
@@ -56,6 +58,7 @@ pub struct RegionSource {
     pub role: String,
     pub importance: String,
     pub width: Option<String>,
+    pub height: Option<String>,
     pub grow: Option<f32>,
 }
 #[derive(Debug, Clone, Deserialize)]
@@ -88,13 +91,13 @@ pub enum Importance {
     Secondary,
     Tertiary,
 }
-fn importance(s: &str, w: &str, e: &mut Vec<String>) -> Importance {
+fn importance(s: &str, where_: &str, errors: &mut Vec<String>) -> Importance {
     match s {
         "primary" => Importance::Primary,
         "secondary" => Importance::Secondary,
         "tertiary" => Importance::Tertiary,
         _ => {
-            e.push(format!("{w}: unknown importance '{s}'"));
+            errors.push(format!("{where_}: unknown importance '{s}'"));
             Importance::Tertiary
         }
     }
@@ -109,8 +112,9 @@ pub enum ElementKind {
     Tree,
     Preview,
     Status,
+    Document,
 }
-fn kind(s: &str, w: &str, e: &mut Vec<String>) -> ElementKind {
+fn kind(s: &str, where_: &str, errors: &mut Vec<String>) -> ElementKind {
     match s {
         "text" => ElementKind::Text,
         "command" => ElementKind::Command,
@@ -120,8 +124,9 @@ fn kind(s: &str, w: &str, e: &mut Vec<String>) -> ElementKind {
         "tree" => ElementKind::Tree,
         "preview" => ElementKind::Preview,
         "status" => ElementKind::Status,
+        "document" => ElementKind::Document,
         _ => {
-            e.push(format!("{w}: unknown element kind '{s}'"));
+            errors.push(format!("{where_}: unknown element kind '{s}'"));
             ElementKind::Text
         }
     }
@@ -132,6 +137,7 @@ pub struct ResolvedRegion {
     pub role: String,
     pub importance: Importance,
     pub width: Option<u32>,
+    pub height: Option<u32>,
     pub grow: f32,
 }
 #[derive(Debug, Clone)]
@@ -144,11 +150,16 @@ pub struct ResolvedElement {
     pub presentation: Option<String>,
 }
 #[derive(Debug, Clone)]
+pub enum CompositionChild {
+    Region(String),
+    Composition(String),
+}
+#[derive(Debug, Clone)]
 pub struct ResolvedComposition {
     pub id: String,
     pub kind: String,
     pub axis: String,
-    pub children: Vec<String>,
+    pub children: Vec<CompositionChild>,
     pub gap: u32,
     pub padding: u32,
 }
@@ -161,215 +172,335 @@ pub struct ResolvedFixture {
 pub struct ResolvedBlueprint {
     pub screen: ScreenSource,
     pub design: DesignSource,
+    pub root: String,
     pub regions: Vec<ResolvedRegion>,
     pub compositions: Vec<ResolvedComposition>,
     pub elements: Vec<ResolvedElement>,
     pub fixtures: Vec<ResolvedFixture>,
 }
 
-pub fn parse_and_resolve(s: &str) -> Result<ResolvedBlueprint, BlueprintError> {
-    resolve(toml::from_str(s)?)
+pub fn parse_and_resolve(source: &str) -> Result<ResolvedBlueprint, BlueprintError> {
+    resolve(toml::from_str(source)?)
 }
 fn add_id(ids: &mut HashSet<String>, errors: &mut Vec<String>, id: &str, kind: &str) {
     if !ids.insert(id.to_owned()) {
         errors.push(format!("duplicate id '{id}' ({kind})"));
     }
 }
-pub fn resolve(s: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintError> {
-    let mut errs = Vec::new();
+fn logical_size(
+    value: Option<&String>,
+    label: &str,
+    id: &str,
+    errors: &mut Vec<String>,
+) -> Option<u32> {
+    let Some(value) = value else { return None };
+    match value.strip_suffix("px").and_then(|n| n.parse().ok()) {
+        Some(size) => Some(size),
+        None => {
+            errors.push(format!(
+                "{label} '{id}': size must be a pixel value such as 52px"
+            ));
+            None
+        }
+    }
+}
+
+pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintError> {
+    let mut errors = Vec::new();
     let mut ids = HashSet::new();
-    let spacing = &s.tokens.spacing;
-    let regions = s
-        .region
-        .iter()
-        .map(|r| {
-            add_id(&mut ids, &mut errs, &r.id, "region");
-            let width = r
-                .width
-                .as_deref()
-                .and_then(|w| w.strip_suffix("px").and_then(|n| n.parse().ok()));
-            if r.width.is_some() && width.is_none() {
-                errs.push(format!("region '{}': width must be pixels", r.id));
-            }
-            ResolvedRegion {
-                id: r.id.clone(),
-                role: r.role.clone(),
-                importance: importance(&r.importance, &format!("region '{}'", r.id), &mut errs),
-                width,
-                grow: r.grow.unwrap_or(0.0),
-            }
-        })
-        .collect::<Vec<_>>();
-    let rids: HashSet<_> = regions.iter().map(|r| r.id.as_str()).collect();
-    let elements = s
-        .element
-        .iter()
-        .map(|x| {
-            add_id(&mut ids, &mut errs, &x.id, "element");
-            if !rids.contains(x.region.as_str()) {
-                errs.push(format!("element '{}': missing region '{}'", x.id, x.region));
-            }
-            ResolvedElement {
-                id: x.id.clone(),
-                region: x.region.clone(),
-                kind: kind(&x.kind, &format!("element '{}'", x.id), &mut errs),
-                importance: importance(&x.importance, &format!("element '{}'", x.id), &mut errs),
-                label: x.label.clone().unwrap_or_else(|| x.id.replace('_', " ")),
-                presentation: x.presentation.clone(),
-            }
-        })
-        .collect::<Vec<_>>();
-    let eids: HashSet<_> = elements.iter().map(|x| x.id.as_str()).collect();
-    let compositions = s
-        .composition
-        .iter()
-        .map(|c| {
-            add_id(&mut ids, &mut errs, &c.id, "composition");
-            if c.kind != "row"
-                && c.kind != "column"
-                && c.kind != "stack"
-                && c.kind != "split"
-                && c.kind != "overlay"
-            {
-                errs.push(format!(
-                    "composition '{}': unknown composition kind '{}'",
-                    c.id, c.kind
+    let spacing = &source.tokens.spacing;
+    let mut regions = Vec::new();
+    for r in &source.region {
+        add_id(&mut ids, &mut errors, &r.id, "region");
+        regions.push(ResolvedRegion {
+            id: r.id.clone(),
+            role: r.role.clone(),
+            importance: importance(&r.importance, &format!("region '{}'", r.id), &mut errors),
+            width: logical_size(r.width.as_ref(), "region width", &r.id, &mut errors),
+            height: logical_size(r.height.as_ref(), "region height", &r.id, &mut errors),
+            grow: r.grow.unwrap_or(0.0),
+        });
+    }
+    let region_ids: HashSet<_> = regions.iter().map(|r| r.id.as_str()).collect();
+    let mut elements = Vec::new();
+    for e in &source.element {
+        add_id(&mut ids, &mut errors, &e.id, "element");
+        if !region_ids.contains(e.region.as_str()) {
+            errors.push(format!("element '{}': missing region '{}'", e.id, e.region));
+        }
+        elements.push(ResolvedElement {
+            id: e.id.clone(),
+            region: e.region.clone(),
+            kind: kind(&e.kind, &format!("element '{}'", e.id), &mut errors),
+            importance: importance(&e.importance, &format!("element '{}'", e.id), &mut errors),
+            label: e.label.clone().unwrap_or_else(|| e.id.replace('_', " ")),
+            presentation: e.presentation.clone(),
+        });
+    }
+    let composition_ids: HashSet<_> = source.composition.iter().map(|c| c.id.as_str()).collect();
+    let element_ids: HashSet<_> = elements.iter().map(|e| e.id.as_str()).collect();
+    let mut compositions = Vec::new();
+    for c in &source.composition {
+        add_id(&mut ids, &mut errors, &c.id, "composition");
+        if !matches!(
+            c.kind.as_str(),
+            "row" | "column" | "stack" | "split" | "overlay"
+        ) {
+            errors.push(format!(
+                "composition '{}': unknown composition kind '{}'",
+                c.id, c.kind
+            ));
+        }
+        if let Some(axis) = &c.axis {
+            if axis != "horizontal" && axis != "vertical" {
+                errors.push(format!(
+                    "composition '{}': axis must be horizontal or vertical",
+                    c.id
                 ));
             }
-            if let Some(axis) = &c.axis {
-                if axis != "horizontal" && axis != "vertical" {
-                    errs.push(format!(
-                        "composition '{}': axis must be horizontal or vertical",
-                        c.id
-                    ));
-                }
+        }
+        let mut children = Vec::new();
+        for child in &c.children {
+            if region_ids.contains(child.as_str()) {
+                children.push(CompositionChild::Region(child.clone()));
+            } else if composition_ids.contains(child.as_str()) {
+                children.push(CompositionChild::Composition(child.clone()));
+            } else if element_ids.contains(child.as_str()) {
+                errors.push(format!(
+                    "composition '{}': child '{}' is an element; expected a region or composition",
+                    c.id, child
+                ));
+            } else {
+                errors.push(format!(
+                    "composition '{}': missing child reference '{}'",
+                    c.id, child
+                ));
             }
+        }
+        let gap = c
+            .gap
+            .as_ref()
+            .and_then(|g| spacing.get(g))
+            .copied()
+            .unwrap_or(0);
+        if c.gap.is_some() && !spacing.contains_key(c.gap.as_ref().unwrap()) {
+            errors.push(format!(
+                "composition '{}': missing spacing token '{}'",
+                c.id,
+                c.gap.as_ref().unwrap()
+            ));
+        }
+        let padding = c
+            .padding
+            .as_ref()
+            .and_then(|g| spacing.get(g))
+            .copied()
+            .unwrap_or(0);
+        if c.padding.is_some() && !spacing.contains_key(c.padding.as_ref().unwrap()) {
+            errors.push(format!(
+                "composition '{}': missing spacing token '{}'",
+                c.id,
+                c.padding.as_ref().unwrap()
+            ));
+        }
+        if children.len() < 2 {
+            errors.push(format!(
+                "composition '{}': requires at least two children",
+                c.id
+            ));
+        }
+        compositions.push(ResolvedComposition {
+            id: c.id.clone(),
+            kind: c.kind.clone(),
+            axis: c.axis.clone().unwrap_or_else(|| {
+                if c.kind == "column" {
+                    "vertical".into()
+                } else {
+                    "horizontal".into()
+                }
+            }),
+            children,
+            gap,
+            padding,
+        });
+    }
+    let root = match source.screen.root.as_deref() {
+        None => {
+            errors.push("screen.root: missing explicit composition reference".into());
+            String::new()
+        }
+        Some(root) if !composition_ids.contains(root) => {
+            errors.push(format!("screen.root: '{root}' is not a composition"));
+            String::new()
+        }
+        Some(root) => root.to_owned(),
+    };
+    let mut visiting = HashSet::new();
+    let mut visited = HashSet::new();
+    fn visit(
+        id: &str,
+        all: &HashMap<&str, &ResolvedComposition>,
+        visiting: &mut HashSet<String>,
+        visited: &mut HashSet<String>,
+        errors: &mut Vec<String>,
+    ) {
+        if visiting.contains(id) {
+            errors.push(format!("composition cycle detected at '{id}'"));
+            return;
+        }
+        if !visited.insert(id.to_owned()) {
+            return;
+        }
+        visiting.insert(id.to_owned());
+        if let Some(c) = all.get(id) {
             for child in &c.children {
-                if !rids.contains(child.as_str()) && !eids.contains(child.as_str()) {
-                    errs.push(format!(
-                        "composition '{}': missing child reference '{}'",
-                        c.id, child
-                    ));
+                if let CompositionChild::Composition(child) = child {
+                    visit(child, all, visiting, visited, errors);
                 }
             }
-            let gap = c
-                .gap
-                .as_deref()
-                .and_then(|g| spacing.get(g))
-                .copied()
-                .unwrap_or(0);
-            if c.gap.is_some() && !spacing.contains_key(c.gap.as_ref().unwrap()) {
-                errs.push(format!("composition '{}': missing spacing token", c.id));
-            }
-            let padding = c
-                .padding
-                .as_deref()
-                .and_then(|g| spacing.get(g))
-                .copied()
-                .unwrap_or(0);
-            if c.padding.is_some() && !spacing.contains_key(c.padding.as_ref().unwrap()) {
-                errs.push(format!("composition '{}': missing spacing token", c.id));
-            }
-            ResolvedComposition {
-                id: c.id.clone(),
-                kind: c.kind.clone(),
-                axis: c.axis.clone().unwrap_or_else(|| "horizontal".into()),
-                children: c.children.clone(),
-                gap,
-                padding,
-            }
-        })
-        .collect::<Vec<_>>();
-    for c in &compositions {
-        if c.children.len() < 2 {
-            errs.push(format!("composition '{}': requires two children", c.id));
+        }
+        visiting.remove(id);
+    }
+    let by_id: HashMap<_, _> = compositions.iter().map(|c| (c.id.as_str(), c)).collect();
+    if !root.is_empty() {
+        visit(&root, &by_id, &mut visiting, &mut visited, &mut errors);
+    }
+    for f in &source.fixture {
+        add_id(&mut ids, &mut errors, &f.id, "fixture");
+    }
+    if let Some(d) = &source.design.dominant {
+        if !region_ids.contains(d.as_str()) && !element_ids.contains(d.as_str()) {
+            errors.push(format!("design.dominant: missing reference '{d}'"));
         }
     }
-    let fixtures = s
-        .fixture
-        .iter()
-        .map(|f| {
-            add_id(&mut ids, &mut errs, &f.id, "fixture");
-            ResolvedFixture {
-                id: f.id.clone(),
-                state: f.state.clone(),
-            }
-        })
-        .collect();
-    if let Some(d) = &s.design.dominant {
-        if !rids.contains(d.as_str()) && !eids.contains(d.as_str()) {
-            errs.push(format!("design.dominant: missing reference '{d}'"));
-        }
-    }
-    if !errs.is_empty() {
-        return Err(BlueprintError::Validation(errs.join("\n")));
+    if !errors.is_empty() {
+        return Err(BlueprintError::Validation(errors.join("\n")));
     }
     Ok(ResolvedBlueprint {
-        screen: s.screen,
-        design: s.design,
+        screen: source.screen,
+        design: source.design,
+        root,
         regions,
         compositions,
         elements,
-        fixtures,
+        fixtures: source
+            .fixture
+            .into_iter()
+            .map(|f| ResolvedFixture {
+                id: f.id,
+                state: f.state,
+            })
+            .collect(),
     })
 }
+
 impl ResolvedBlueprint {
     pub fn semantic_tree(&self) -> String {
-        let mut o = format!("screen {} — {}\n", self.screen.id, self.screen.purpose);
-        for r in &self.regions {
-            o.push_str(&format!(
-                "  region {} [{}] {:?}\n",
-                r.id, r.role, r.importance
+        fn walk(
+            id: &str,
+            b: &ResolvedBlueprint,
+            out: &mut String,
+            indent: usize,
+            seen: &mut HashSet<String>,
+        ) {
+            if !seen.insert(id.to_owned()) {
+                out.push_str(&format!("{:indent$}↻ {id}\n", "", indent = indent));
+                return;
+            }
+            let c = b.compositions.iter().find(|c| c.id == id).unwrap();
+            out.push_str(&format!(
+                "{:indent$}composition {} ({}, {})\n",
+                "",
+                c.id,
+                c.kind,
+                c.axis,
+                indent = indent
             ));
-            for e in self.elements.iter().filter(|e| e.region == r.id) {
-                o.push_str(&format!("    element {} ({:?})\n", e.id, e.kind));
+            for child in &c.children {
+                match child {
+                    CompositionChild::Composition(child) => walk(child, b, out, indent + 2, seen),
+                    CompositionChild::Region(region) => {
+                        out.push_str(&format!(
+                            "{:indent$}region {}\n",
+                            "",
+                            region,
+                            indent = indent + 2
+                        ));
+                        for e in b.elements.iter().filter(|e| e.region == *region) {
+                            out.push_str(&format!(
+                                "{:indent$}element {} ({:?})\n",
+                                "",
+                                e.id,
+                                e.kind,
+                                indent = indent + 4
+                            ));
+                        }
+                    }
+                }
             }
         }
+        let mut out = format!("screen {} — {}\n", self.screen.id, self.screen.purpose);
+        walk(&self.root, self, &mut out, 2, &mut HashSet::new());
         for f in &self.fixtures {
-            o.push_str(&format!("  fixture {} [{}]\n", f.id, f.state));
+            out.push_str(&format!("  fixture {} [{}]\n", f.id, f.state));
         }
-        o
+        out
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn specimen() {
-        let b = parse_and_resolve(include_str!("../../../examples/project-browser.toml")).unwrap();
-        assert_eq!(b.compositions[0].gap, 12);
+    fn project() -> &'static str {
+        include_str!("../../../examples/project-browser.toml")
+    }
+    fn reader() -> &'static str {
+        include_str!("../../../specimens/reader-workspace.toml")
     }
     #[test]
-    fn bad_ref() {
-        let e=parse_and_resolve("[screen]\nid='x'\npurpose='x'\n[[element]]\nid='a'\nregion='nope'\nkind='search'\nimportance='secondary'").unwrap_err().to_string();
-        assert!(e.contains("missing region"));
+    fn project_browser_resolves() {
+        assert_eq!(parse_and_resolve(project()).unwrap().root, "workspace");
     }
-
     #[test]
-    fn duplicate_and_missing_token_are_reported_together() {
-        let e = parse_and_resolve(
-            "[screen]\nid='x'\npurpose='x'\n\
-             [[region]]\nid='same'\nrole='navigation'\nimportance='secondary'\n\
-             [[region]]\nid='same'\nrole='inspector'\nimportance='secondary'\n\
-             [[composition]]\nid='root'\nkind='split'\nchildren=['same','nope']\ngap='md'",
-        )
-        .unwrap_err()
-        .to_string();
-        assert!(e.contains("duplicate id 'same'"));
-        assert!(e.contains("missing child reference 'nope'"));
-        assert!(e.contains("missing spacing token"));
+    fn reader_resolves_nested_tree() {
+        let b = parse_and_resolve(reader()).unwrap();
+        assert_eq!(b.root, "workspace");
+        assert!(matches!(
+            b.compositions[0].children[1],
+            CompositionChild::Composition(_)
+        ));
+        assert_eq!(
+            b.regions
+                .iter()
+                .find(|r| r.id == "app_commands")
+                .unwrap()
+                .height,
+            Some(52)
+        );
+        assert!(b.elements.iter().any(|e| e.kind == ElementKind::Document));
     }
-
     #[test]
-    fn missing_padding_token_is_reported() {
-        let e = parse_and_resolve(
-            "[screen]\nid='x'\npurpose='x'\n\
-             [[region]]\nid='a'\nrole='navigation'\nimportance='secondary'\n\
-             [[region]]\nid='b'\nrole='inspector'\nimportance='secondary'\n\
-             [[composition]]\nid='root'\nkind='split'\nchildren=['a','b']\npadding='xl'",
-        )
-        .unwrap_err()
-        .to_string();
-        assert!(e.contains("composition 'root': missing spacing token"));
+    fn invalid_root_and_missing_child_are_reported() {
+        let e = parse_and_resolve("[screen]\nid='x'\npurpose='x'\nroot='bad'\n[[composition]]\nid='root'\nkind='split'\nchildren=['missing','also_missing']").unwrap_err().to_string();
+        assert!(e.contains("screen.root") && e.contains("missing child"));
+    }
+    #[test]
+    fn cycle_is_rejected() {
+        let e = parse_and_resolve("[screen]\nid='x'\npurpose='x'\nroot='a'\n[[composition]]\nid='a'\nkind='split'\nchildren=['b','r']\n[[composition]]\nid='b'\nkind='split'\nchildren=['a','r']\n[[region]]\nid='r'\nrole='content'\nimportance='primary'").unwrap_err().to_string();
+        assert!(e.contains("composition cycle detected"));
+    }
+    #[test]
+    fn malformed_height_is_rejected() {
+        let e = parse_and_resolve("[screen]\nid='x'\npurpose='x'\nroot='root'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','b']\n[[region]]\nid='a'\nrole='a'\nimportance='primary'\nheight='tall'\n[[region]]\nid='b'\nrole='b'\nimportance='secondary'").unwrap_err().to_string();
+        assert!(e.contains("height 'a': size must be"));
+    }
+    #[test]
+    fn existing_bad_diagnostics_remain() {
+        let e = parse_and_resolve("[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='same'\nrole='a'\nimportance='primary'\n[[region]]\nid='same'\nrole='b'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['same','nope']\ngap='md'").unwrap_err().to_string();
+        assert!(
+            e.contains("duplicate id")
+                && e.contains("missing child")
+                && e.contains("missing spacing token")
+        );
     }
 }
