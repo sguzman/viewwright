@@ -92,6 +92,8 @@ M5 made the Reader fixture state representative and canonical:
 - removal of the remaining Reader document fixture-name heuristic
 - semantic/debug summaries for the new fixture families
 
+M6 added a backend-independent visual audit for palette luminance, foreground contrast, structural-surface separation, and compressed-darkness warnings. Human QA selected the less-compressed dark Reader palette, which is now canonical; the old crushed palette remains only as audit regression evidence.
+
 The Project Browser, Reader Workspace, visual Reader Workspace, and Dependency Workbench now share the same semantic pipeline and layout projection.
 
 ## Running the current slice
@@ -101,36 +103,37 @@ The repository is a Cargo workspace. Blueprints are parsed, validated, and resol
     cargo test
     cargo run -p viewwright-preview
 
-## M6 — visual legibility audit accepted
+## Current design work — M7 command affordance contracts
 
-Human QA after M5 removed the remaining Reader-content ambiguity: the populated Reader is structurally sane and representative, but the original dark palette still felt excessively dark.
+Accepted screens now contain real command affordances such as Open, Play / pause, Voice, Speed, and Refresh. The renderer detects button clicks, but command meaning is still label-only and click results are discarded.
 
-The key pressure is not ordinary text contrast. The current palette gives text strong foreground/background contrast while clustering canvas, panel, and raised surfaces in a very-low-luminance range with weak separation.
-
-M6 therefore adds a backend-independent **visual audit** over the existing resolved visual model:
+M7 closes that semantic gap without making ViewWright an application runtime:
 
 ```text
-resolved visual blueprint
+command element
     ↓
-visual audit
-    ├── palette luminance
-    ├── foreground contrast
-    ├── structural surface separation
-    └── advisory findings
+stable action id
+    ↓
+resolved affordance contract
+    ↓
+backend reports activation
+    ↓
+host application may decide what to do
 ```
 
-M6 adds no new canonical authoring syntax. Audit findings are warnings, not validation errors, and never silently rewrite authored colors.
+M7 also adds a tiny fixture-backed command enabled/disabled state for honest isolated previews. It does not add callbacks, action execution, condition expressions, event routing, navigation, or application state graphs.
 
-The audit confirmed that distinction, and human QA selected the less-compressed dark palette. That palette is now canonical for `reader_workspace_visual`; the previous crushed palette remains only as `specimens/reader-workspace-visual-crushed.toml` for audit regression coverage.
+The aspirational pressure specimen is kept separate until parser/model support exists:
+
+- [`specimens/reader-workspace-visual-m7.toml`](specimens/reader-workspace-visual-m7.toml)
 
 See:
 
-- [`docs/m6-visual-legibility.md`](docs/m6-visual-legibility.md)
-- [`docs/m6-acceptance.md`](docs/m6-acceptance.md)
-- [`docs/m6-schema-summary.md`](docs/m6-schema-summary.md)
-- [`docs/m6-implementation-boundary.md`](docs/m6-implementation-boundary.md)
-- [`docs/m6-stop-condition.md`](docs/m6-stop-condition.md)
-- [`specimens/reader-workspace-visual-crushed.toml`](specimens/reader-workspace-visual-crushed.toml)
+- [`docs/m7-command-affordances.md`](docs/m7-command-affordances.md)
+- [`docs/m7-acceptance.md`](docs/m7-acceptance.md)
+- [`docs/m7-schema-summary.md`](docs/m7-schema-summary.md)
+- [`docs/m7-implementation-boundary.md`](docs/m7-implementation-boundary.md)
+- [`docs/m7-stop-condition.md`](docs/m7-stop-condition.md)
 
 ## Status
 
@@ -140,4 +143,5 @@ See:
 - M3 — accepted
 - M4 — accepted
 - M5 — accepted
-- M6 — accepted (visual audit implemented; less-compressed dark palette promoted to the canonical visual Reader)
+- M6 — accepted
+- M7 — command-affordance pressure test formalized; implementation not yet started
