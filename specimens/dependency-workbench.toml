@@ -1,0 +1,211 @@
+[screen]
+id = "dependency_workbench"
+purpose = "Inspect dependency health and package metadata"
+density = "dense"
+root = "workspace"
+
+[design]
+character = ["technical", "dense_but_legible", "analytical", "quiet"]
+dominant = "packages"
+avoid = ["card_grid", "oversized_controls", "decorative_chrome", "uniform_visual_weight", "pill_soup"]
+
+[tokens.spacing]
+xs = 3
+sm = 6
+md = 10
+lg = 14
+
+[tokens.corners]
+small = 3
+medium = 6
+
+[tokens.color]
+canvas = "#F4F5F7"
+surface = "#FFFFFF"
+surface_raised = "#EEF1F4"
+text = "#20242B"
+text_muted = "#6B7280"
+accent = "#2F6FEB"
+border = "#D0D7DE"
+
+[tokens.type]
+display = 22
+heading = 16
+body = 13
+caption = 11
+
+[visual]
+canvas = "canvas"
+surface = "surface"
+surface_raised = "surface_raised"
+text = "text"
+text_muted = "text_muted"
+accent = "accent"
+border = "border"
+corner = "small"
+border_policy = "minimal"
+
+[[region]]
+id = "commands"
+role = "commands"
+importance = "secondary"
+surface = "transparent"
+height = "44px"
+
+[[region]]
+id = "filters"
+role = "navigation"
+importance = "secondary"
+surface = "panel"
+width = "220px"
+
+[[region]]
+id = "packages"
+role = "primary_content"
+importance = "primary"
+surface = "canvas"
+grow = 1
+
+[[region]]
+id = "inspector"
+role = "inspector"
+importance = "tertiary"
+surface = "panel"
+width = "300px"
+
+[[region]]
+id = "status"
+role = "status"
+importance = "tertiary"
+surface = "raised"
+height = "30px"
+
+[[composition]]
+id = "workspace"
+kind = "column"
+axis = "vertical"
+children = ["commands", "body", "status"]
+gap = "sm"
+padding = "md"
+
+[[composition]]
+id = "body"
+kind = "split"
+axis = "horizontal"
+children = ["filters", "packages", "inspector"]
+gap = "md"
+
+[[element]]
+id = "refresh"
+region = "commands"
+kind = "command"
+importance = "secondary"
+label = "Refresh"
+
+[[element]]
+id = "package_search"
+region = "filters"
+kind = "search"
+importance = "secondary"
+label = "Search dependencies"
+
+[[element]]
+id = "package_scope"
+region = "filters"
+kind = "collection"
+importance = "secondary"
+label = "Scope"
+presentation = "list"
+
+[[element]]
+id = "package_list"
+region = "packages"
+kind = "collection"
+importance = "primary"
+label = "Dependencies"
+presentation = "list"
+
+[[element]]
+id = "package_details"
+region = "inspector"
+kind = "property_sheet"
+importance = "tertiary"
+label = "Package details"
+
+[[element]]
+id = "workspace_status"
+region = "status"
+kind = "status"
+importance = "tertiary"
+label = "Dependency status"
+
+[[fixture]]
+id = "healthy"
+state = "ready"
+
+[[fixture.content]]
+element = "package_scope"
+items = [
+  { id = "all", label = "All" },
+  { id = "direct", label = "Direct" },
+  { id = "transitive", label = "Transitive" },
+]
+selected = "all"
+
+[[fixture.content]]
+element = "package_list"
+items = [
+  { id = "serde", label = "serde 1.0.210 · direct · healthy" },
+  { id = "toml", label = "toml 0.8.19 · direct · healthy" },
+  { id = "thiserror", label = "thiserror 1.0.69 · direct · healthy" },
+  { id = "syn", label = "syn 2.0.87 · transitive · healthy" },
+]
+selected = "serde"
+
+[[fixture.content]]
+element = "package_details"
+properties = [
+  { name = "Name", value = "serde" },
+  { name = "Version", value = "1.0.210" },
+  { name = "Scope", value = "direct" },
+  { name = "Source", value = "registry" },
+]
+
+[[fixture.content]]
+element = "workspace_status"
+text = "24 packages · 8 direct · 0 advisories"
+
+[[fixture]]
+id = "advisory"
+state = "attention"
+
+[[fixture.content]]
+element = "package_scope"
+items = [
+  { id = "all", label = "All" },
+  { id = "direct", label = "Direct" },
+  { id = "transitive", label = "Transitive" },
+]
+selected = "all"
+
+[[fixture.content]]
+element = "package_list"
+items = [
+  { id = "serde", label = "serde 1.0.210 · direct · healthy" },
+  { id = "sample_tls", label = "sample-tls 0.4.2 · transitive · advisory" },
+  { id = "toml", label = "toml 0.8.19 · direct · healthy" },
+]
+selected = "sample_tls"
+
+[[fixture.content]]
+element = "package_details"
+properties = [
+  { name = "Name", value = "sample-tls" },
+  { name = "Version", value = "0.4.2" },
+  { name = "Scope", value = "transitive" },
+  { name = "Health", value = "advisory" },
+]
+
+[[fixture.content]]
+element = "workspace_status"
+text = "24 packages · 1 advisory requires review"
