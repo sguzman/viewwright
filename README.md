@@ -135,6 +135,34 @@ See:
 - [`docs/m7-implementation-boundary.md`](docs/m7-implementation-boundary.md)
 - [`docs/m7-stop-condition.md`](docs/m7-stop-condition.md)
 
+## Current design work — M8 collection presentation fidelity
+
+The accepted Project Browser already authors two different collection presentations: navigation is a `list`, while projects are `adaptive_cards`. The resolved model currently keeps `presentation` as an unchecked string and the egui backend ignores it, causing both to collapse into the same vertical-label renderer.
+
+M8 does not add another styling language. It makes this existing semantic distinction truthful:
+
+```text
+authored collection presentation
+    ↓
+typed resolved presentation
+    ↓
+semantic / concept inspection
+    ↓
+backend honors list vs adaptive cards
+```
+
+The existing canonical screens provide the pressure cases; no new source field or pressure specimen is required.
+
+See:
+
+- [`docs/m8-collection-presentation.md`](docs/m8-collection-presentation.md)
+- [`docs/m8-acceptance.md`](docs/m8-acceptance.md)
+- [`docs/m8-schema-summary.md`](docs/m8-schema-summary.md)
+- [`docs/m8-implementation-boundary.md`](docs/m8-implementation-boundary.md)
+- [`docs/m8-stop-condition.md`](docs/m8-stop-condition.md)
+- [`docs/m8-pressure-evidence.md`](docs/m8-pressure-evidence.md)
+- [`docs/m8-acceptance-matrix.md`](docs/m8-acceptance-matrix.md)
+
 ## Status
 
 - M0 — accepted
@@ -145,3 +173,4 @@ See:
 - M5 — accepted
 - M6 — accepted
 - M7 — accepted
+- M8 — collection-presentation fidelity formalized; implementation not yet started
