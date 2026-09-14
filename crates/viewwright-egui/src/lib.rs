@@ -182,17 +182,6 @@ fn render_region(
             .id_salt(("region", &r.id))
             .max_rect(content),
         |ui| {
-            ui.label(region_text(&r.id, r.importance, b.visual.as_ref()));
-            ui.label(
-                RichText::new(&r.role)
-                    .color(
-                        b.visual
-                            .as_ref()
-                            .map(|v| color32(v.palette.text_muted))
-                            .unwrap_or(Color32::GRAY),
-                    )
-                    .small(),
-            );
             let elements: Vec<_> = b.elements.iter().filter(|e| e.region == r.id).collect();
             if r.role == "commands" {
                 ui.horizontal_wrapped(|ui| {
@@ -218,14 +207,18 @@ fn render_element(
     density: DensityPolicy,
 ) {
     ui.add_space(density.element_gap);
-    ui.label(element_text(&e.label, e.importance, b.visual.as_ref()));
     match e.kind {
         ElementKind::Search => {
+            ui.label(element_text(&e.label, e.importance, b.visual.as_ref()));
             let mut query = String::new();
             ui.text_edit_singleline(&mut query);
         }
-        ElementKind::Collection => render_collection(ui, e, b, fixture, b.visual.as_ref(), density),
+        ElementKind::Collection => {
+            ui.label(element_text(&e.label, e.importance, b.visual.as_ref()));
+            render_collection(ui, e, b, fixture, b.visual.as_ref(), density)
+        }
         ElementKind::Document => {
+            ui.label(element_text(&e.label, e.importance, b.visual.as_ref()));
             if let Some(ResolvedFixtureContent::Document {
                 title, paragraphs, ..
             }) = content_for(b, fixture, &e.id)
@@ -238,6 +231,7 @@ fn render_element(
             }
         }
         ElementKind::PropertySheet => {
+            ui.label(element_text(&e.label, e.importance, b.visual.as_ref()));
             if let Some(ResolvedFixtureContent::Properties { properties, .. }) =
                 content_for(b, fixture, &e.id)
             {
@@ -278,14 +272,18 @@ fn render_element(
             }
         }
         ElementKind::Status => {
+            ui.label(element_text(&e.label, e.importance, b.visual.as_ref()));
             if let Some(ResolvedFixtureContent::Text { text, .. }) = content_for(b, fixture, &e.id)
             {
                 ui.label(text);
             }
         }
-        ElementKind::Tree => render_tree(ui, e, b, fixture, b.visual.as_ref()),
-        _ => {
-            ui.label(format!("{} element", kind_name(e.kind)));
+        ElementKind::Tree => {
+            ui.label(element_text(&e.label, e.importance, b.visual.as_ref()));
+            render_tree(ui, e, b, fixture, b.visual.as_ref())
+        }
+        ElementKind::Text | ElementKind::Preview => {
+            ui.label(element_text(&e.label, e.importance, b.visual.as_ref()));
         }
     }
 }
@@ -439,27 +437,6 @@ fn render_collection_cards(
     });
 }
 
-fn region_text(
-    text: &str,
-    importance: Importance,
-    visual: Option<&viewwright_model::ResolvedVisual>,
-) -> RichText {
-    let mut value = RichText::new(text);
-    if let Some(v) = visual {
-        value = value
-            .size(match importance {
-                Importance::Primary => v.type_scale.heading as f32,
-                _ => v.type_scale.body as f32,
-            })
-            .color(if importance == Importance::Tertiary {
-                color32(v.palette.text_muted)
-            } else {
-                color32(v.palette.text)
-            });
-    }
-    value.strong()
-}
-
 fn element_text(
     text: &str,
     importance: Importance,
@@ -480,20 +457,6 @@ fn element_text(
             });
     }
     value
-}
-
-fn kind_name(kind: ElementKind) -> &'static str {
-    match kind {
-        ElementKind::Text => "text",
-        ElementKind::Command => "command",
-        ElementKind::Search => "search",
-        ElementKind::Collection => "collection",
-        ElementKind::PropertySheet => "property sheet",
-        ElementKind::Tree => "tree",
-        ElementKind::Preview => "preview",
-        ElementKind::Status => "status",
-        ElementKind::Document => "document",
-    }
 }
 
 fn content_for<'a>(
