@@ -195,6 +195,28 @@ See:
 - [`docs/m9-pressure-pair.md`](docs/m9-pressure-pair.md)
 - [`docs/m9-acceptance-matrix.md`](docs/m9-acceptance-matrix.md)
 
+## Current design work — M10 authored chrome fidelity
+
+Accepted previews still leak internal semantic scaffolding into authored UI. Region ids and ontology roles are painted as visible text, and command labels are duplicated because the renderer adds a generic element pre-label before rendering the button itself.
+
+M10 makes the projection cleaner without adding new authoring syntax:
+
+```text
+internal semantic metadata ──→ semantic / concept inspection
+
+authored element label ──→ kind-appropriate visible presentation
+```
+
+Region ids/roles must remain inspectable but stop masquerading as product chrome. Command labels belong on the command control exactly once. If visible region titles are needed later, they will require explicit authoring rather than inference from technical identifiers.
+
+See:
+
+- [`docs/m10-authored-chrome-fidelity.md`](docs/m10-authored-chrome-fidelity.md)
+- [`docs/m10-acceptance.md`](docs/m10-acceptance.md)
+- [`docs/m10-implementation-boundary.md`](docs/m10-implementation-boundary.md)
+- [`docs/m10-pressure-evidence.md`](docs/m10-pressure-evidence.md)
+- [`docs/m10-stop-condition.md`](docs/m10-stop-condition.md)
+
 ## Status
 
 - M0 — accepted
@@ -207,3 +229,4 @@ See:
 - M7 — accepted
 - M8 — accepted
 - M9 — accepted
+- M10 — authored chrome fidelity formalized; implementation not yet started
