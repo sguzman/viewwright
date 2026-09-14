@@ -11,10 +11,6 @@ fn main() -> eframe::Result<()> {
             "../../../specimens/reader-workspace-visual.toml"
         ))
         .expect("visual reader specimen must be valid"),
-        parse_and_resolve(include_str!(
-            "../../../specimens/reader-workspace-visual-m6.toml"
-        ))
-        .expect("M6 visual reader pressure specimen must be valid"),
         parse_and_resolve(include_str!("../../../specimens/dependency-workbench.toml"))
             .expect("dependency workbench specimen must be valid"),
     ];

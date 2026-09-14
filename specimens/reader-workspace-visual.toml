@@ -7,7 +7,7 @@ root = "workspace"
 [design]
 character = ["quiet", "focused", "crafted", "reading_first", "restrained"]
 dominant = "reader"
-avoid = ["toolbar_dominance", "uniform_visual_weight", "nested_card_soup", "border_everything", "control_clutter", "pill_soup"]
+avoid = ["toolbar_dominance", "uniform_visual_weight", "nested_card_soup", "border_everything", "control_clutter", "pill_soup", "crushed_darkness"]
 
 [tokens.spacing]
 xs = 4
@@ -19,13 +19,13 @@ xl = 24
 small = 4
 medium = 7
 [tokens.color]
-canvas = "#101216"
-surface = "#171A20"
-surface_raised = "#1E222A"
-text = "#E8EAF0"
-text_muted = "#9299A6"
-accent = "#8DB7C7"
-border = "#2B313B"
+canvas = "#262B33"
+surface = "#313844"
+surface_raised = "#3E4856"
+text = "#F2F4F7"
+text_muted = "#B9C0CA"
+accent = "#9BCBE0"
+border = "#566172"
 [tokens.type]
 display = 26
 heading = 18

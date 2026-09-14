@@ -66,7 +66,7 @@ mod tests {
         let first = render(&blueprint);
         assert_eq!(first, render(&blueprint));
         assert!(first.contains("dominant: reader"));
-        assert!(first.contains("canvas: #101216"));
+        assert!(first.contains("canvas: #262B33"));
         assert!(first.contains("reader — Canvas, Primary"));
         assert!(first.contains("Document: Document"));
     }

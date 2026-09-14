@@ -2,7 +2,7 @@
 
 This document records the human-QA pressure that motivated M6 using deterministic sRGB relative-luminance/contrast calculations.
 
-## Canonical M5 visual Reader palette
+## Retired crushed visual Reader regression palette
 
 ```text
 canvas          #101216
@@ -44,13 +44,13 @@ panel / raised           1.09 : 1
 canvas / raised          1.18 : 1
 ```
 
-Human QA described the result as still "dark as fuck" even after M5 made the Reader content representative and M4 made the layout sane.
+Human QA described the result as still "dark as fuck" even after M5 made the Reader content representative and M4 made the layout sane. This palette is retained as the non-canonical `reader-workspace-visual-crushed.toml` audit regression specimen.
 
 The useful conclusion is that text contrast and overall palette legibility are not the same question.
 
-## M6 pressure palette
+## Accepted canonical visual Reader palette
 
-The separate M6 pressure specimen uses:
+Human QA accepted the separate M6 pressure direction. Its palette is now used by the canonical `reader_workspace_visual` specimen:
 
 ```text
 canvas          #262B33
@@ -80,4 +80,4 @@ canvas / raised          1.54 : 1
 
 Representative foreground contrast remains strong, including muted/accent text on the raised surface above 5:1.
 
-This palette is intentionally only a pressure direction. M6 human QA decides whether it actually improves the screen without making it washed-out or losing the intended quiet/reading-first character.
+Human QA selected this direction because it remains dark and quiet while materially improving structural legibility. The audit thresholds remain unchanged; the old palette continues to exercise the compressed-darkness detector.

@@ -165,13 +165,11 @@ A compact host-chrome summary is sufficient, for example:
 
 Do not paint audit warnings inside the authored screen itself.
 
-## Pressure palette
+## Accepted palette outcome
 
-M6 includes a separate Reader pressure palette that remains dark but opens the structural tone range substantially.
+M6 included a separate Reader pressure palette that remained dark but opened the structural tone range substantially. Human QA accepted that direction, so it is now the canonical palette for `reader_workspace_visual`.
 
-It is a test direction, not automatically accepted canonical design.
-
-The human should compare the resulting preview against the existing Reader and decide whether the visual character remains quiet/reading-first while becoming easier to perceive.
+The previous compressed palette is retained only in `reader-workspace-visual-crushed.toml` as regression evidence for the audit.
 
 ## Explicit non-goals
 

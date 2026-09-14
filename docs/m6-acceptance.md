@@ -64,9 +64,7 @@ The pressure specimen should:
 - preserve strong foreground readability
 - produce fewer compressed-darkness/surface-separation warnings than the canonical M5 palette
 
-Do not migrate the canonical visual Reader palette merely because the pressure specimen exists.
-
-Human QA decides whether the pressure palette should later become canonical.
+Human QA accepted the pressure comparison. The less-compressed palette is now canonical for `reader_workspace_visual`; the prior palette is retained only as a clearly non-canonical audit regression specimen.
 
 ## Tests
 

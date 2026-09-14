@@ -42,9 +42,9 @@ Initial thresholds are implementation-level lint heuristics documented by the mi
 
 If later pressure demonstrates that projects need authored audit policy, that should be a separate earned schema change.
 
-## Pressure specimen
+## Retained regression specimen
 
-A separate M6 Reader specimen may alter only existing color-token values to exercise the audit.
+A non-canonical Reader regression specimen retains the pre-M6 color-token values to exercise the audit.
 
 That is not a schema extension.
 

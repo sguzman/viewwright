@@ -1128,9 +1128,9 @@ mod tests {
         assert_eq!(
             v.palette.canvas,
             Color {
-                r: 16,
-                g: 18,
-                b: 22,
+                r: 38,
+                g: 43,
+                b: 51,
                 a: 255
             }
         );

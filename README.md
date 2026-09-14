@@ -101,9 +101,9 @@ The repository is a Cargo workspace. Blueprints are parsed, validated, and resol
     cargo test
     cargo run -p viewwright-preview
 
-## Current design work — M6 visual legibility audit
+## M6 — visual legibility audit accepted
 
-Human QA after M5 removed the remaining Reader-content ambiguity: the populated Reader is structurally sane and representative, but the authored dark palette still feels excessively dark.
+Human QA after M5 removed the remaining Reader-content ambiguity: the populated Reader is structurally sane and representative, but the original dark palette still felt excessively dark.
 
 The key pressure is not ordinary text contrast. The current palette gives text strong foreground/background contrast while clustering canvas, panel, and raised surfaces in a very-low-luminance range with weak separation.
 
@@ -121,7 +121,7 @@ visual audit
 
 M6 adds no new canonical authoring syntax. Audit findings are warnings, not validation errors, and never silently rewrite authored colors.
 
-A separate visual Reader pressure specimen explores a less-compressed dark palette for human comparison before any canonical palette migration is accepted.
+The audit confirmed that distinction, and human QA selected the less-compressed dark palette. That palette is now canonical for `reader_workspace_visual`; the previous crushed palette remains only as `specimens/reader-workspace-visual-crushed.toml` for audit regression coverage.
 
 See:
 
@@ -130,7 +130,7 @@ See:
 - [`docs/m6-schema-summary.md`](docs/m6-schema-summary.md)
 - [`docs/m6-implementation-boundary.md`](docs/m6-implementation-boundary.md)
 - [`docs/m6-stop-condition.md`](docs/m6-stop-condition.md)
-- [`specimens/reader-workspace-visual-m6.toml`](specimens/reader-workspace-visual-m6.toml)
+- [`specimens/reader-workspace-visual-crushed.toml`](specimens/reader-workspace-visual-crushed.toml)
 
 ## Status
 
@@ -140,4 +140,4 @@ See:
 - M3 — accepted
 - M4 — accepted
 - M5 — accepted
-- M6 — visual-legibility pressure test formalized; implementation not yet started
+- M6 — accepted (visual audit implemented; less-compressed dark palette promoted to the canonical visual Reader)

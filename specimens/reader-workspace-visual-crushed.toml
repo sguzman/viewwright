@@ -1,6 +1,6 @@
 [screen]
-id = "reader_workspace_visual_m6"
-purpose = "Pressure-test a quieter dark Reader with more legible structural luminance"
+id = "reader_workspace_visual_crushed"
+purpose = "Regression specimen for compressed dark Reader surfaces"
 density = "comfortable"
 root = "workspace"
 
@@ -19,13 +19,13 @@ xl = 24
 small = 4
 medium = 7
 [tokens.color]
-canvas = "#262B33"
-surface = "#313844"
-surface_raised = "#3E4856"
-text = "#F2F4F7"
-text_muted = "#B9C0CA"
-accent = "#9BCBE0"
-border = "#566172"
+canvas = "#101216"
+surface = "#171A20"
+surface_raised = "#1E222A"
+text = "#E8EAF0"
+text_muted = "#9299A6"
+accent = "#8DB7C7"
+border = "#2B313B"
 [tokens.type]
 display = 26
 heading = 18

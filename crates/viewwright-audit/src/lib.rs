@@ -300,6 +300,13 @@ mod tests {
         .unwrap()
     }
 
+    fn crushed_reader() -> ResolvedBlueprint {
+        parse_and_resolve(include_str!(
+            "../../../specimens/reader-workspace-visual-crushed.toml"
+        ))
+        .unwrap()
+    }
+
     #[test]
     fn srgb_luminance_and_contrast_are_standard() {
         assert_eq!(
@@ -336,7 +343,7 @@ mod tests {
     }
 
     #[test]
-    fn canonical_reader_reports_foreground_strength_and_structural_pressure() {
+    fn canonical_reader_reports_strong_foreground_and_accepted_surfaces() {
         let result = audit(&visual_reader()).unwrap();
         assert!(result.used_surfaces.contains(&SurfaceRole::Canvas));
         assert!(result.used_surfaces.contains(&SurfaceRole::Panel));
@@ -346,7 +353,22 @@ mod tests {
                 && metric.surface == SurfaceRole::Canvas
                 && metric.ratio > 4.5
         }));
-        assert!(result.findings.iter().any(|finding| matches!(
+        assert!(result
+            .findings
+            .iter()
+            .all(|finding| !matches!(finding, AuditFinding::CompressedVeryDarkRange { .. })));
+        assert!(result.luminance.canvas > 0.02);
+    }
+
+    #[test]
+    fn crushed_regression_preserves_structural_detector_and_summary_is_stable() {
+        let canonical = audit(&visual_reader()).unwrap();
+        let crushed = audit(&crushed_reader()).unwrap();
+        assert!(crushed
+            .findings
+            .iter()
+            .any(|finding| matches!(finding, AuditFinding::CompressedVeryDarkRange { .. })));
+        assert!(crushed.findings.iter().any(|finding| matches!(
             finding,
             AuditFinding::WeakSurfaceSeparation {
                 first: SurfaceRole::Canvas,
@@ -354,26 +376,8 @@ mod tests {
                 ..
             }
         )));
-        assert!(result
-            .findings
-            .iter()
-            .any(|finding| matches!(finding, AuditFinding::CompressedVeryDarkRange { .. })));
-    }
-
-    #[test]
-    fn pressure_palette_materially_reduces_structural_warnings_and_summary_is_stable() {
-        let pressure = parse_and_resolve(include_str!(
-            "../../../specimens/reader-workspace-visual-m6.toml"
-        ))
-        .unwrap();
-        let canonical = audit(&visual_reader()).unwrap();
-        let pressure = audit(&pressure).unwrap();
-        assert!(pressure
-            .findings
-            .iter()
-            .all(|finding| !matches!(finding, AuditFinding::CompressedVeryDarkRange { .. })));
-        assert!(pressure.findings.len() < canonical.findings.len());
-        assert_eq!(pressure.summary(), pressure.summary());
+        assert!(canonical.findings.len() < crushed.findings.len());
+        assert_eq!(crushed.summary(), crushed.summary());
     }
 
     #[test]
