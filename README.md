@@ -46,46 +46,51 @@ ViewWright owns the UI blueprint schema, semantic UI vocabulary, composition pri
 
 It does **not** own application business logic, arbitrary 2D/3D graphics, runtime UI observation, GUI automation, or persistence for the host application.
 
-## M0 — Blueprint embryo
+## Implemented structural foundation
 
-The first milestone is intentionally narrow. It should support:
-
-- screens
-- regions
-- elements
-- composition
-- importance / visual hierarchy
-- basic sizing
-- basic spacing
-- design intent
-- validation
-
-And produce three useful results:
+M0 established the first executable vertical slice:
 
 ```text
-TOML → validated semantic model
-TOML → ASCII projection
-TOML → simple egui projection
+TOML → typed / validated / resolved blueprint
+     ├── semantic tree
+     ├── ASCII
+     └── egui preview
 ```
 
-M0 succeeds when one real application screen can be described declaratively, understood quickly through its ASCII projection, and rendered recognizably in egui without hand-writing the entire layout.
+M1 added an explicit composition root, recursive nested compositions, fixed vertical sizing, cycle diagnostics, and a semantic document surface. The Project Browser and Reader Workspace now resolve through the same backend-independent composition model.
 
-See [`docs/charter.md`](docs/charter.md) for project boundaries and [`examples/project-browser.toml`](examples/project-browser.toml) for the first design specimen.
+The current preview can switch between both structural specimens.
 
-## Running the M0 slice
+## Running the current slice
 
-The repository is a Cargo workspace. The example is parsed, validated, and
-resolved before the preview enters its render loop:
+The repository is a Cargo workspace. Blueprints are parsed, validated, and resolved before the preview enters its render loop:
 
     cargo test
     cargo run -p viewwright-preview
 
-The preview prints the resolved semantic tree and generated ASCII projection
-to stdout, then opens an isolated egui window. Its fixture bar selects the
-named many_projects, selected_project, and empty fixtures.
+## Current design work — M2 visual authoring
+
+The next pressure test addresses the original motivation for ViewWright: structurally valid UIs can still be visually awful.
+
+M2 is being designed around a deliberately small semantic visual grammar:
+
+- named color tokens
+- a compact type scale
+- semantic region surface roles
+- border and corner policy
+- existing spacing and importance semantics
+- a deterministic concept-specification projection
+
+The goal is **not** to recreate CSS. The same authored visual intent should be useful to both egui and concept-art generation without becoming toolkit-specific styling.
+
+See:
+
+- [`docs/m2-visual-authoring.md`](docs/m2-visual-authoring.md)
+- [`specimens/reader-workspace-visual.toml`](specimens/reader-workspace-visual.toml)
+- [`specimens/reader-workspace-visual.concept.txt`](specimens/reader-workspace-visual.concept.txt)
 
 ## Status
 
-M0 vertical slice implemented. The egui projection is intentionally a small,
-recognizable renderer for the specimen, not a production theme or a general
-widget/layout language.
+- M0 — accepted
+- M1 — accepted
+- M2 — visual-authoring design pressure test formalized; implementation not yet started
