@@ -267,6 +267,9 @@ pub fn resolve(s: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintError> 
                 .and_then(|g| spacing.get(g))
                 .copied()
                 .unwrap_or(0);
+            if c.padding.is_some() && !spacing.contains_key(c.padding.as_ref().unwrap()) {
+                errs.push(format!("composition '{}': missing spacing token", c.id));
+            }
             ResolvedComposition {
                 id: c.id.clone(),
                 kind: c.kind.clone(),
@@ -355,5 +358,18 @@ mod tests {
         assert!(e.contains("duplicate id 'same'"));
         assert!(e.contains("missing child reference 'nope'"));
         assert!(e.contains("missing spacing token"));
+    }
+
+    #[test]
+    fn missing_padding_token_is_reported() {
+        let e = parse_and_resolve(
+            "[screen]\nid='x'\npurpose='x'\n\
+             [[region]]\nid='a'\nrole='navigation'\nimportance='secondary'\n\
+             [[region]]\nid='b'\nrole='inspector'\nimportance='secondary'\n\
+             [[composition]]\nid='root'\nkind='split'\nchildren=['a','b']\npadding='xl'",
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(e.contains("composition 'root': missing spacing token"));
     }
 }
