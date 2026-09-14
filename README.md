@@ -161,6 +161,38 @@ See:
 - [`docs/m8-pressure-evidence.md`](docs/m8-pressure-evidence.md)
 - [`docs/m8-acceptance-matrix.md`](docs/m8-acceptance-matrix.md)
 
+## Current design work — M9 screen density fidelity
+
+Accepted canonical screens already author both `comfortable` and `dense` screen density, but the field is currently an unchecked source string and does not drive egui projection. M9 makes that existing semantic distinction truthful without turning density into a second layout system.
+
+```text
+authored screen density
+    ↓
+typed resolved density
+    ↓
+semantic / concept inspection
+    ↓
+backend-local micro-layout policy
+```
+
+M9 is limited to local rhythm inside M4-planned regions. It must not rescale major geometry, authored spacing tokens, typography, palette, fixtures, actions, or collection presentation.
+
+The A/B pressure pair isolates the variable:
+
+- [`specimens/density-pressure-comfortable.toml`](specimens/density-pressure-comfortable.toml)
+- [`specimens/density-pressure-dense.toml`](specimens/density-pressure-dense.toml)
+
+See:
+
+- [`docs/m9-screen-density.md`](docs/m9-screen-density.md)
+- [`docs/m9-acceptance.md`](docs/m9-acceptance.md)
+- [`docs/m9-schema-summary.md`](docs/m9-schema-summary.md)
+- [`docs/m9-implementation-boundary.md`](docs/m9-implementation-boundary.md)
+- [`docs/m9-stop-condition.md`](docs/m9-stop-condition.md)
+- [`docs/m9-pressure-evidence.md`](docs/m9-pressure-evidence.md)
+- [`docs/m9-pressure-pair.md`](docs/m9-pressure-pair.md)
+- [`docs/m9-acceptance-matrix.md`](docs/m9-acceptance-matrix.md)
+
 ## Status
 
 - M0 — accepted
@@ -172,3 +204,4 @@ See:
 - M6 — accepted
 - M7 — accepted
 - M8 — accepted
+- M9 — screen-density fidelity formalized; implementation not yet started
