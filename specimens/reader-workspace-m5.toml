@@ -1,0 +1,159 @@
+[screen]
+id = "reader_workspace_m5"
+purpose = "Pressure-test representative Reader fixture content"
+density = "comfortable"
+root = "workspace"
+
+[design]
+character = ["quiet", "focused", "crafted", "reading_first"]
+dominant = "reader"
+avoid = ["toolbar_dominance", "uniform_visual_weight", "nested_card_soup", "border_everything", "control_clutter"]
+
+[tokens.spacing]
+xs = 4
+sm = 8
+md = 12
+lg = 16
+xl = 24
+[tokens.corners]
+small = 4
+medium = 7
+
+[[region]]
+id = "app_commands"
+role = "commands"
+importance = "secondary"
+height = "52px"
+[[region]]
+id = "library"
+role = "navigation"
+importance = "secondary"
+width = "250px"
+[[region]]
+id = "reader"
+role = "primary_content"
+importance = "primary"
+grow = 1
+[[region]]
+id = "inspector"
+role = "inspector"
+importance = "tertiary"
+width = "300px"
+[[region]]
+id = "transport"
+role = "commands"
+importance = "secondary"
+height = "68px"
+
+[[composition]]
+id = "workspace"
+kind = "column"
+axis = "vertical"
+children = ["app_commands", "reading_body", "transport"]
+gap = "sm"
+padding = "md"
+[[composition]]
+id = "reading_body"
+kind = "split"
+axis = "horizontal"
+children = ["library", "reader", "inspector"]
+gap = "md"
+grow = 1
+
+[[element]]
+id = "open_document"
+region = "app_commands"
+kind = "command"
+importance = "secondary"
+label = "Open"
+[[element]]
+id = "library_search"
+region = "library"
+kind = "search"
+importance = "secondary"
+label = "Search library"
+[[element]]
+id = "document_outline"
+region = "library"
+kind = "tree"
+importance = "secondary"
+label = "Contents"
+[[element]]
+id = "document_surface"
+region = "reader"
+kind = "document"
+importance = "primary"
+label = "Document"
+[[element]]
+id = "reader_settings"
+region = "inspector"
+kind = "property_sheet"
+importance = "tertiary"
+label = "Reading settings"
+[[element]]
+id = "play_pause"
+region = "transport"
+kind = "command"
+importance = "primary"
+label = "Play / pause"
+[[element]]
+id = "voice"
+region = "transport"
+kind = "command"
+importance = "secondary"
+label = "Voice"
+[[element]]
+id = "speed"
+region = "transport"
+kind = "command"
+importance = "secondary"
+label = "Speed"
+[[element]]
+id = "reading_status"
+region = "transport"
+kind = "status"
+importance = "tertiary"
+label = "Reading status"
+
+[[fixture]]
+id = "reading"
+state = "document_loaded"
+[[fixture.content]]
+element = "document_outline"
+nodes = [
+  { id = "introduction", label = "Introduction" },
+  { id = "part_one", label = "Part I · The City" },
+  { id = "chapter_one", label = "Chapter 1 · Windows", parent = "part_one" },
+  { id = "chapter_two", label = "Chapter 2 · The Quiet Machine", parent = "part_one" },
+  { id = "part_two", label = "Part II · After Midnight" },
+]
+selected = "chapter_two"
+[[fixture.content]]
+element = "document_surface"
+document = { title = "The Quiet Machine", paragraphs = ["Rain gathered against the windows while the city settled into its evening rhythm.", "The machine remained awake beneath the low electrical hum, listening to pipes, elevators, and distant traffic as if the building itself were speaking.", "Nothing dramatic happened. That was the point: attention accumulated in the ordinary spaces between events."] }
+[[fixture.content]]
+element = "reader_settings"
+properties = [
+  { name = "Voice", value = "Narrator" },
+  { name = "Speed", value = "1.0×" },
+  { name = "Display", value = "Comfortable" },
+]
+[[fixture.content]]
+element = "reading_status"
+text = "Chapter 2 · 42% · paused"
+
+[[fixture]]
+id = "empty"
+state = "no_document"
+[[fixture.content]]
+element = "document_outline"
+nodes = []
+[[fixture.content]]
+element = "document_surface"
+document = { title = "No document loaded", paragraphs = [] }
+[[fixture.content]]
+element = "reader_settings"
+properties = []
+[[fixture.content]]
+element = "reading_status"
+text = "Open a document to begin reading"
