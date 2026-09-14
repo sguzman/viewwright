@@ -1,7 +1,7 @@
 use egui::{Align, CentralPanel, Color32, Context, FontId, Frame, Layout, RichText, Stroke};
 use viewwright_model::{
     BorderPolicy, Color, CompositionChild, ElementKind, Importance, ResolvedBlueprint,
-    ResolvedComposition, ResolvedRegion, SurfaceRole,
+    ResolvedComposition, ResolvedFixtureContent, ResolvedRegion, SurfaceRole,
 };
 
 pub fn show(ctx: &Context, blueprint: &ResolvedBlueprint, fixture: &str) {
@@ -215,7 +215,7 @@ fn render_element(
             let mut query = String::new();
             ui.text_edit_singleline(&mut query);
         }
-        ElementKind::Collection => render_collection(ui, &e.label, fixture, b.visual.as_ref()),
+        ElementKind::Collection => render_collection(ui, e, b, fixture, b.visual.as_ref()),
         ElementKind::Document => {
             ui.label(element_text(
                 "Document surface",
@@ -229,12 +229,16 @@ fn render_element(
             });
         }
         ElementKind::PropertySheet => {
-            let text = RichText::new("Representative properties");
-            ui.label(if let Some(v) = &b.visual {
-                text.color(color32(v.palette.text_muted))
-            } else {
-                text
-            });
+            if let Some(ResolvedFixtureContent::Properties { properties, .. }) =
+                content_for(b, fixture, &e.id)
+            {
+                for property in properties {
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(&property.name).strong());
+                        ui.label(&property.value);
+                    });
+                }
+            }
         }
         ElementKind::Command => {
             let label = if e.importance == Importance::Primary {
@@ -251,6 +255,12 @@ fn render_element(
             };
             let _ = ui.button(label);
         }
+        ElementKind::Status => {
+            if let Some(ResolvedFixtureContent::Text { text, .. }) = content_for(b, fixture, &e.id)
+            {
+                ui.label(text);
+            }
+        }
         _ => {
             ui.label(format!("{} element", kind_name(e.kind)));
         }
@@ -258,37 +268,30 @@ fn render_element(
 }
 fn render_collection(
     ui: &mut egui::Ui,
-    label: &str,
+    element: &viewwright_model::ResolvedElement,
+    b: &ResolvedBlueprint,
     fixture: &str,
     visual: Option<&viewwright_model::ResolvedVisual>,
 ) {
-    ui.strong(label);
-    let count = if fixture.contains("empty") {
-        0
-    } else if fixture.contains("dense") {
-        6
-    } else {
-        3
+    let Some(ResolvedFixtureContent::Collection {
+        items, selected, ..
+    }) = content_for(b, fixture, &element.id)
+    else {
+        return;
     };
-    if count == 0 {
-        ui.weak("No items");
-    } else {
-        for index in 1..=count {
-            ui.group(|ui| {
-                ui.label(format!("Item {index}"));
-                if fixture.contains("selection") && index == 1 {
-                    if let Some(v) = visual {
-                        ui.label(
-                            RichText::new("Selected")
-                                .color(color32(v.palette.accent))
-                                .strong(),
-                        );
-                    } else {
-                        ui.strong("Selected");
-                    }
-                }
-            });
-        }
+    for item in items {
+        let selected_item = selected.as_deref() == Some(item.id.as_str());
+        let text = RichText::new(&item.label);
+        let text = if selected_item {
+            if let Some(v) = visual {
+                text.color(color32(v.palette.accent)).strong()
+            } else {
+                text.strong()
+            }
+        } else {
+            text
+        };
+        ui.label(text);
     }
 }
 
@@ -345,6 +348,23 @@ fn kind_name(kind: ElementKind) -> &'static str {
         ElementKind::Status => "status",
         ElementKind::Document => "document",
     }
+}
+
+fn content_for<'a>(
+    b: &'a ResolvedBlueprint,
+    fixture: &str,
+    element: &str,
+) -> Option<&'a ResolvedFixtureContent> {
+    b.fixtures
+        .iter()
+        .find(|f| f.id == fixture)?
+        .content
+        .iter()
+        .find(|content| match content {
+            ResolvedFixtureContent::Collection { element: id, .. }
+            | ResolvedFixtureContent::Properties { element: id, .. }
+            | ResolvedFixtureContent::Text { element: id, .. } => id == element,
+        })
 }
 
 fn color32(c: Color) -> Color32 {

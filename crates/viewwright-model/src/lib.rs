@@ -123,6 +123,29 @@ pub struct ElementSource {
 pub struct FixtureSource {
     pub id: String,
     pub state: String,
+    #[serde(default)]
+    pub content: Vec<FixtureContentSource>,
+}
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FixtureContentSource {
+    pub element: String,
+    pub items: Option<Vec<CollectionItemSource>>,
+    pub selected: Option<String>,
+    pub properties: Option<Vec<PropertySource>>,
+    pub text: Option<String>,
+}
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CollectionItemSource {
+    pub id: String,
+    pub label: String,
+}
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PropertySource {
+    pub name: String,
+    pub value: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -252,6 +275,33 @@ pub struct ResolvedComposition {
 pub struct ResolvedFixture {
     pub id: String,
     pub state: String,
+    pub content: Vec<ResolvedFixtureContent>,
+}
+#[derive(Debug, Clone)]
+pub enum ResolvedFixtureContent {
+    Collection {
+        element: String,
+        items: Vec<ResolvedCollectionItem>,
+        selected: Option<String>,
+    },
+    Properties {
+        element: String,
+        properties: Vec<ResolvedProperty>,
+    },
+    Text {
+        element: String,
+        text: String,
+    },
+}
+#[derive(Debug, Clone)]
+pub struct ResolvedCollectionItem {
+    pub id: String,
+    pub label: String,
+}
+#[derive(Debug, Clone)]
+pub struct ResolvedProperty {
+    pub name: String,
+    pub value: String,
 }
 #[derive(Debug, Clone)]
 pub struct ResolvedBlueprint {
@@ -575,8 +625,119 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
     if !root.is_empty() {
         visit(&root, &by_id, &mut visiting, &mut visited, &mut errors);
     }
+    let mut resolved_fixtures = Vec::new();
     for f in &source.fixture {
         add_id(&mut ids, &mut errors, &f.id, "fixture");
+        let mut seen_content = HashSet::new();
+        let mut content = Vec::new();
+        for record in &f.content {
+            if !seen_content.insert(record.element.clone()) {
+                errors.push(format!(
+                    "fixture '{}': duplicate content for element '{}'",
+                    f.id, record.element
+                ));
+                continue;
+            }
+            let Some(element) = elements.iter().find(|e| e.id == record.element) else {
+                errors.push(format!(
+                    "fixture '{}': content references missing element '{}'",
+                    f.id, record.element
+                ));
+                continue;
+            };
+            let families = usize::from(record.items.is_some())
+                + usize::from(record.properties.is_some())
+                + usize::from(record.text.is_some());
+            if families != 1 {
+                errors.push(format!(
+                    "fixture '{}': content for '{}' must contain exactly one payload family",
+                    f.id, record.element
+                ));
+                continue;
+            }
+            if record.selected.is_some() && record.items.is_none() {
+                errors.push(format!(
+                    "fixture '{}': selected is only valid with collection content for '{}'",
+                    f.id, record.element
+                ));
+                continue;
+            }
+            if let Some(items) = &record.items {
+                if element.kind != ElementKind::Collection {
+                    errors.push(format!(
+                        "fixture '{}': collection content on '{}' requires a collection element",
+                        f.id, record.element
+                    ));
+                    continue;
+                }
+                let mut item_ids = HashSet::new();
+                let resolved_items = items
+                    .iter()
+                    .filter_map(|item| {
+                        if !item_ids.insert(item.id.clone()) {
+                            errors.push(format!(
+                                "fixture '{}': duplicate collection item id '{}' for '{}'",
+                                f.id, item.id, record.element
+                            ));
+                            None
+                        } else {
+                            Some(ResolvedCollectionItem {
+                                id: item.id.clone(),
+                                label: item.label.clone(),
+                            })
+                        }
+                    })
+                    .collect();
+                if let Some(selected) = &record.selected {
+                    if !item_ids.contains(selected) {
+                        errors.push(format!(
+                            "fixture '{}': selected item '{}' is absent from collection '{}'",
+                            f.id, selected, record.element
+                        ));
+                    }
+                }
+                content.push(ResolvedFixtureContent::Collection {
+                    element: record.element.clone(),
+                    items: resolved_items,
+                    selected: record.selected.clone(),
+                });
+            } else if let Some(properties) = &record.properties {
+                if element.kind != ElementKind::PropertySheet {
+                    errors.push(format!(
+                        "fixture '{}': property content on '{}' requires a property_sheet element",
+                        f.id, record.element
+                    ));
+                    continue;
+                }
+                content.push(ResolvedFixtureContent::Properties {
+                    element: record.element.clone(),
+                    properties: properties
+                        .iter()
+                        .map(|p| ResolvedProperty {
+                            name: p.name.clone(),
+                            value: p.value.clone(),
+                        })
+                        .collect(),
+                });
+            } else if let Some(text) = &record.text {
+                if element.kind != ElementKind::Status {
+                    errors.push(format!(
+                        "fixture '{}': text content on '{}' requires a status element",
+                        f.id, record.element
+                    ));
+                    continue;
+                }
+                content.push(ResolvedFixtureContent::Text {
+                    element: record.element.clone(),
+                    text: text.clone(),
+                });
+            }
+        }
+        resolved_fixtures.push(ResolvedFixture {
+            id: f.id.clone(),
+            state: f.state.clone(),
+            content,
+        });
     }
     if let Some(d) = &source.design.dominant {
         if !region_ids.contains(d.as_str()) && !element_ids.contains(d.as_str()) {
@@ -597,14 +758,7 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
         regions,
         compositions,
         elements,
-        fixtures: source
-            .fixture
-            .into_iter()
-            .map(|f| ResolvedFixture {
-                id: f.id,
-                state: f.state,
-            })
-            .collect(),
+        fixtures: resolved_fixtures,
         visual,
     })
 }
@@ -658,6 +812,29 @@ impl ResolvedBlueprint {
         walk(&self.root, self, &mut out, 2, &mut HashSet::new());
         for f in &self.fixtures {
             out.push_str(&format!("  fixture {} [{}]\n", f.id, f.state));
+            for content in &f.content {
+                match content {
+                    ResolvedFixtureContent::Collection {
+                        element,
+                        items,
+                        selected,
+                    } => out.push_str(&format!(
+                        "    content {element}: collection {} items, selected {:?}\n",
+                        items.len(),
+                        selected
+                    )),
+                    ResolvedFixtureContent::Properties {
+                        element,
+                        properties,
+                    } => out.push_str(&format!(
+                        "    content {element}: {} properties\n",
+                        properties.len()
+                    )),
+                    ResolvedFixtureContent::Text { element, text } => {
+                        out.push_str(&format!("    content {element}: {text}\n"))
+                    }
+                }
+            }
         }
         out
     }
@@ -717,6 +894,67 @@ mod tests {
                 && e.contains("missing child")
                 && e.contains("missing spacing token")
         );
+    }
+    #[test]
+    fn dependency_workbench_fixture_content_resolves_and_differs() {
+        let b = parse_and_resolve(include_str!("../../../specimens/dependency-workbench.toml"))
+            .unwrap();
+        let healthy = b.fixtures.iter().find(|f| f.id == "healthy").unwrap();
+        let advisory = b.fixtures.iter().find(|f| f.id == "advisory").unwrap();
+        assert!(healthy.content.iter().any(|c| matches!(c, ResolvedFixtureContent::Text { text, .. } if text.contains("0 advisories"))));
+        assert!(advisory.content.iter().any(
+            |c| matches!(c, ResolvedFixtureContent::Text { text, .. } if text.contains("advisory"))
+        ));
+        assert_ne!(format!("{healthy:?}"), format!("{advisory:?}"));
+    }
+    #[test]
+    fn fixture_content_validation_rejects_invalid_records() {
+        let base = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='r'\nrole='content'\nimportance='primary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['r','r']\n[[element]]\nid='list'\nregion='r'\nkind='collection'\nimportance='primary'\n[[fixture]]\nid='f'\nstate='x'\n";
+        let missing = format!("{base}[[fixture.content]]\nelement='nope'\ntext='x'");
+        assert!(parse_and_resolve(&missing)
+            .unwrap_err()
+            .to_string()
+            .contains("missing element"));
+        let selected = format!(
+            "{base}[[fixture.content]]\nelement='list'\nitems=[{{id='a',label='A'}}]\nselected='b'"
+        );
+        assert!(parse_and_resolve(&selected)
+            .unwrap_err()
+            .to_string()
+            .contains("selected item"));
+        let incompatible = format!(
+            "{base}[[fixture.content]]\nelement='list'\nproperties=[{{name='x',value='y'}}]"
+        );
+        assert!(parse_and_resolve(&incompatible)
+            .unwrap_err()
+            .to_string()
+            .contains("property content"));
+        let mixed = format!("{base}[[fixture.content]]\nelement='list'\nitems=[]\ntext='x'");
+        assert!(parse_and_resolve(&mixed)
+            .unwrap_err()
+            .to_string()
+            .contains("exactly one payload"));
+        let text = format!("{base}[[fixture.content]]\nelement='list'\ntext='x'");
+        assert!(parse_and_resolve(&text)
+            .unwrap_err()
+            .to_string()
+            .contains("text content"));
+    }
+    #[test]
+    fn fixture_content_unknown_and_duplicate_items_are_rejected() {
+        let base = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='r'\nrole='content'\nimportance='primary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['r','r']\n[[element]]\nid='list'\nregion='r'\nkind='collection'\nimportance='primary'\n[[fixture]]\nid='f'\nstate='x'\n[[fixture.content]]\nelement='list'\nitems=[{id='a',label='A'},{id='a',label='A2'}]\n";
+        assert!(parse_and_resolve(base)
+            .unwrap_err()
+            .to_string()
+            .contains("duplicate collection item"));
+        let unknown = base.replace(
+            "items=[{id='a',label='A'},{id='a',label='A2'}]",
+            "items=[]\nwat='x'",
+        );
+        assert!(parse_and_resolve(&unknown)
+            .unwrap_err()
+            .to_string()
+            .contains("unknown field"));
     }
     #[test]
     fn visual_reader_resolves_concrete_palette_and_profile() {

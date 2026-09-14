@@ -81,11 +81,58 @@ importance = "secondary"
 [[fixture]]
 id = "many_projects"
 state = "populated_dense"
+[[fixture.content]]
+element = "navigation_items"
+items = [
+  { id = "projects", label = "Projects" },
+  { id = "archive", label = "Archive" },
+  { id = "settings", label = "Settings" },
+]
+[[fixture.content]]
+element = "project_collection"
+items = [
+  { id = "project_a", label = "Project A · active" },
+  { id = "project_b", label = "Project B · dormant" },
+  { id = "project_c", label = "Project C · queued" },
+  { id = "project_d", label = "Project D · maintenance" },
+]
+selected = "project_a"
+[[fixture.content]]
+element = "project_inspector"
+properties = [
+  { name = "Status", value = "Active" },
+  { name = "Description", value = "Representative project" },
+]
 
 [[fixture]]
 id = "selected_project"
 state = "selection"
+[[fixture.content]]
+element = "navigation_items"
+items = [
+  { id = "projects", label = "Projects" },
+  { id = "archive", label = "Archive" },
+  { id = "settings", label = "Settings" },
+]
+[[fixture.content]]
+element = "project_collection"
+items = [
+  { id = "project_a", label = "Project A · active" },
+]
+selected = "project_a"
+[[fixture.content]]
+element = "project_inspector"
+properties = [
+  { name = "Status", value = "Active" },
+  { name = "Description", value = "Selected project" },
+]
 
 [[fixture]]
 id = "empty"
 state = "empty"
+[[fixture.content]]
+element = "navigation_items"
+items = []
+[[fixture.content]]
+element = "project_collection"
+items = []
