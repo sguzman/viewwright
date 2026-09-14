@@ -1,0 +1,30 @@
+ViewWright: dependency_workbench — Inspect dependency health and package metadata
+
++ workspace (column)
+  |-- commands
+      [Refresh]
+  + body (split)
+    |-- filters
+        Search dependencies
+        Scope
+          > All
+            Direct
+            Transitive
+    |-- packages  [dominant]
+        Dependencies
+          > serde 1.0.210 · direct · healthy
+            toml 0.8.19 · direct · healthy
+            thiserror 1.0.69 · direct · healthy
+            syn 2.0.87 · transitive · healthy
+    |-- inspector
+        Package details
+          Name      serde
+          Version   1.0.210
+          Scope     direct
+          Source    registry
+  |-- status
+      24 packages · 8 direct · 0 advisories
+
+Fixture: healthy
+
+This file is an illustrative human target for the M3 pressure specimen. Canonical authority remains TOML; generated ASCII does not need to match this byte-for-byte.
