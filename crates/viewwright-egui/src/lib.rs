@@ -1,8 +1,8 @@
 use egui::{CentralPanel, Color32, Context, FontId, Frame, RichText, Stroke, UiBuilder};
 use viewwright_layout::{layout, LayoutPlan, Rect as LayoutRect};
 use viewwright_model::{
-    BorderPolicy, CollectionPresentation, Color, CompositionChild, ElementKind, Importance,
-    ResolvedBlueprint, ResolvedFixtureContent, ResolvedRegion, SurfaceRole,
+    BorderPolicy, CollectionPresentation, Color, CompositionChild, Density, ElementKind,
+    Importance, ResolvedBlueprint, ResolvedFixtureContent, ResolvedRegion, SurfaceRole,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -16,6 +16,45 @@ pub struct RenderOutput {
     pub activation: Option<InteractionEvent>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DensityPolicy {
+    pub region_inset: f32,
+    pub element_gap: f32,
+    pub paragraph_gap: f32,
+    pub item_spacing: f32,
+    pub button_padding: egui::Vec2,
+    pub min_interact_height: f32,
+    pub card_height: f32,
+    pub card_inner_margin: f32,
+}
+
+impl DensityPolicy {
+    pub fn for_density(density: Density) -> Self {
+        match density {
+            Density::Comfortable => Self {
+                region_inset: 10.0,
+                element_gap: 4.0,
+                paragraph_gap: 6.0,
+                item_spacing: 8.0,
+                button_padding: egui::vec2(8.0, 4.0),
+                min_interact_height: 24.0,
+                card_height: 64.0,
+                card_inner_margin: 8.0,
+            },
+            Density::Dense => Self {
+                region_inset: 6.0,
+                element_gap: 2.0,
+                paragraph_gap: 3.0,
+                item_spacing: 4.0,
+                button_padding: egui::vec2(6.0, 2.0),
+                min_interact_height: 20.0,
+                card_height: 52.0,
+                card_inner_margin: 6.0,
+            },
+        }
+    }
+}
+
 pub fn show(ctx: &Context, blueprint: &ResolvedBlueprint, fixture: &str) -> RenderOutput {
     let mut output = RenderOutput::default();
     let root_fill = root_fill(ctx, blueprint);
@@ -24,6 +63,8 @@ pub fn show(ctx: &Context, blueprint: &ResolvedBlueprint, fixture: &str) -> Rend
         .show(ctx, |ui| {
             ui.scope(|ui| {
                 apply_visuals(ui, blueprint);
+                let density = DensityPolicy::for_density(blueprint.screen.density);
+                apply_density(ui, density);
                 let plan = layout(blueprint, ui.available_width(), ui.available_height());
                 let origin = ui.min_rect().min;
                 render_composition(
@@ -34,6 +75,7 @@ pub fn show(ctx: &Context, blueprint: &ResolvedBlueprint, fixture: &str) -> Rend
                     &plan,
                     origin,
                     &mut output.activation,
+                    density,
                 );
             });
         });
@@ -56,6 +98,7 @@ fn render_composition(
     plan: &LayoutPlan,
     origin: egui::Pos2,
     activation: &mut Option<InteractionEvent>,
+    density: DensityPolicy,
 ) {
     let Some(c) = b.compositions.iter().find(|c| c.id == id) else {
         return;
@@ -77,11 +120,13 @@ fn render_composition(
                 .max_rect(child_egui_rect),
             |ui| match child {
                 CompositionChild::Composition(id) => {
-                    render_composition(ui, id, b, fixture, plan, origin, activation)
+                    render_composition(ui, id, b, fixture, plan, origin, activation, density)
                 }
                 CompositionChild::Region(id) => {
                     if let Some(region) = b.regions.iter().find(|r| r.id == *id) {
-                        render_region(ui, region, b, fixture, child_rect, origin, activation);
+                        render_region(
+                            ui, region, b, fixture, child_rect, origin, activation, density,
+                        );
                     }
                 }
             },
@@ -97,6 +142,7 @@ fn render_region(
     rect: LayoutRect,
     origin: egui::Pos2,
     activation: &mut Option<InteractionEvent>,
+    density: DensityPolicy,
 ) {
     let egui_rect = to_egui_rect(rect, origin);
     if let Some(v) = &b.visual {
@@ -130,7 +176,7 @@ fn render_region(
                 .paint(egui_rect),
         );
     }
-    let content = egui_rect.shrink(10.0);
+    let content = egui_rect.shrink(density.region_inset);
     ui.scope_builder(
         UiBuilder::new()
             .id_salt(("region", &r.id))
@@ -151,12 +197,12 @@ fn render_region(
             if r.role == "commands" {
                 ui.horizontal_wrapped(|ui| {
                     for e in elements {
-                        render_element(ui, e, b, fixture, activation);
+                        render_element(ui, e, b, fixture, activation, density);
                     }
                 });
             } else {
                 for e in elements {
-                    render_element(ui, e, b, fixture, activation);
+                    render_element(ui, e, b, fixture, activation, density);
                 }
             }
         },
@@ -169,15 +215,16 @@ fn render_element(
     b: &ResolvedBlueprint,
     fixture: &str,
     activation: &mut Option<InteractionEvent>,
+    density: DensityPolicy,
 ) {
-    ui.add_space(4.0);
+    ui.add_space(density.element_gap);
     ui.label(element_text(&e.label, e.importance, b.visual.as_ref()));
     match e.kind {
         ElementKind::Search => {
             let mut query = String::new();
             ui.text_edit_singleline(&mut query);
         }
-        ElementKind::Collection => render_collection(ui, e, b, fixture, b.visual.as_ref()),
+        ElementKind::Collection => render_collection(ui, e, b, fixture, b.visual.as_ref(), density),
         ElementKind::Document => {
             if let Some(ResolvedFixtureContent::Document {
                 title, paragraphs, ..
@@ -185,7 +232,7 @@ fn render_element(
             {
                 ui.label(element_text(title, e.importance, b.visual.as_ref()).strong());
                 for paragraph in paragraphs {
-                    ui.add_space(6.0);
+                    ui.add_space(density.paragraph_gap);
                     ui.label(element_text(paragraph, e.importance, b.visual.as_ref()));
                 }
             }
@@ -289,6 +336,7 @@ fn render_collection(
     b: &ResolvedBlueprint,
     fixture: &str,
     visual: Option<&viewwright_model::ResolvedVisual>,
+    density: DensityPolicy,
 ) {
     let Some(ResolvedFixtureContent::Collection {
         items, selected, ..
@@ -301,7 +349,7 @@ fn render_collection(
             render_collection_list(ui, items, selected, visual)
         }
         Some(CollectionPresentation::AdaptiveCards) => {
-            render_collection_cards(ui, items, selected, visual)
+            render_collection_cards(ui, items, selected, visual, density)
         }
     }
 }
@@ -333,9 +381,9 @@ fn render_collection_cards(
     items: &[viewwright_model::ResolvedCollectionItem],
     selected: &Option<String>,
     visual: Option<&viewwright_model::ResolvedVisual>,
+    density: DensityPolicy,
 ) {
     const CARD_WIDTH: f32 = 180.0;
-    const CARD_HEIGHT: f32 = 64.0;
     ui.horizontal_wrapped(|ui| {
         for item in items {
             let selected_item = selected.as_deref() == Some(item.id.as_str());
@@ -373,11 +421,11 @@ fn render_collection_cards(
                     },
                 )
             };
-            ui.allocate_ui(egui::vec2(CARD_WIDTH, CARD_HEIGHT), |ui| {
+            ui.allocate_ui(egui::vec2(CARD_WIDTH, density.card_height), |ui| {
                 Frame::new()
                     .fill(fill)
                     .stroke(stroke)
-                    .inner_margin(8.0)
+                    .inner_margin(density.card_inner_margin)
                     .show(ui, |ui| {
                         let text = if selected_item {
                             element_text(&item.label, Importance::Primary, visual).strong()
@@ -519,11 +567,52 @@ fn apply_visuals(ui: &mut egui::Ui, b: &ResolvedBlueprint) {
     );
 }
 
+fn apply_density(ui: &mut egui::Ui, policy: DensityPolicy) {
+    let spacing = &mut ui.style_mut().spacing;
+    spacing.item_spacing = egui::vec2(policy.item_spacing, policy.item_spacing);
+    spacing.button_padding = policy.button_padding;
+    spacing.interact_size.y = policy.min_interact_height;
+}
+
 #[cfg(test)]
 mod tests {
-    use super::root_fill;
+    use super::{root_fill, DensityPolicy};
     use egui::{Color32, Context};
-    use viewwright_model::parse_and_resolve;
+    use viewwright_model::{parse_and_resolve, Density};
+
+    #[test]
+    fn density_policy_is_tighter_without_typography_or_screen_specific_rules() {
+        let comfortable = DensityPolicy::for_density(Density::Comfortable);
+        let dense = DensityPolicy::for_density(Density::Dense);
+        assert!(dense.region_inset < comfortable.region_inset);
+        assert!(dense.element_gap < comfortable.element_gap);
+        assert!(dense.paragraph_gap < comfortable.paragraph_gap);
+        assert!(dense.item_spacing < comfortable.item_spacing);
+        assert!(dense.button_padding.y < comfortable.button_padding.y);
+        assert!(dense.min_interact_height < comfortable.min_interact_height);
+        assert!(dense.card_height < comfortable.card_height);
+        assert!(dense.card_inner_margin < comfortable.card_inner_margin);
+        let comfortable_blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/density-pressure-comfortable.toml"
+        ))
+        .unwrap();
+        let dense_blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/density-pressure-dense.toml"
+        ))
+        .unwrap();
+        assert_eq!(
+            comfortable_blueprint.elements.len(),
+            dense_blueprint.elements.len()
+        );
+        assert_eq!(
+            comfortable_blueprint.screen.purpose,
+            dense_blueprint.screen.purpose
+        );
+        assert_ne!(
+            comfortable_blueprint.screen.density,
+            dense_blueprint.screen.density
+        );
+    }
 
     #[test]
     fn root_fill_uses_active_theme_without_visual_and_authored_canvas_with_visual() {

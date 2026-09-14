@@ -40,6 +40,11 @@ pub struct ScreenSource {
 fn default_density() -> String {
     "comfortable".into()
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Density {
+    Comfortable,
+    Dense,
+}
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DesignSource {
@@ -410,7 +415,7 @@ pub struct ResolvedTreeNode {
 }
 #[derive(Debug, Clone)]
 pub struct ResolvedBlueprint {
-    pub screen: ScreenSource,
+    pub screen: ResolvedScreen,
     pub design: DesignSource,
     pub root: String,
     pub regions: Vec<ResolvedRegion>,
@@ -418,6 +423,12 @@ pub struct ResolvedBlueprint {
     pub elements: Vec<ResolvedElement>,
     pub fixtures: Vec<ResolvedFixture>,
     pub visual: Option<ResolvedVisual>,
+}
+#[derive(Debug, Clone)]
+pub struct ResolvedScreen {
+    pub id: String,
+    pub purpose: String,
+    pub density: Density,
 }
 
 pub fn parse_and_resolve(source: &str) -> Result<ResolvedBlueprint, BlueprintError> {
@@ -572,6 +583,16 @@ fn surface(value: Option<&String>, id: &str, errors: &mut Vec<String>) -> Surfac
 pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintError> {
     let mut errors = Vec::new();
     let mut ids = HashSet::new();
+    let density = match source.screen.density.as_str() {
+        "comfortable" => Density::Comfortable,
+        "dense" => Density::Dense,
+        other => {
+            errors.push(format!(
+                "screen.density: unknown density '{other}' (expected comfortable or dense)"
+            ));
+            Density::Comfortable
+        }
+    };
     let spacing = &source.tokens.spacing;
     let mut regions = Vec::new();
     for r in &source.region {
@@ -1005,7 +1026,11 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
         return Err(BlueprintError::Validation(errors.join("\n")));
     }
     Ok(ResolvedBlueprint {
-        screen: source.screen,
+        screen: ResolvedScreen {
+            id: source.screen.id,
+            purpose: source.screen.purpose,
+            density,
+        },
         design: source.design,
         root,
         regions,
@@ -1068,7 +1093,10 @@ impl ResolvedBlueprint {
                 }
             }
         }
-        let mut out = format!("screen {} — {}\n", self.screen.id, self.screen.purpose);
+        let mut out = format!(
+            "screen {} — {} (density {:?})\n",
+            self.screen.id, self.screen.purpose, self.screen.density
+        );
         walk(&self.root, self, &mut out, 2, &mut HashSet::new());
         for f in &self.fixtures {
             out.push_str(&format!("  fixture {} [{}]\n", f.id, f.state));
@@ -1232,6 +1260,44 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("only valid for collection elements"));
+    }
+    #[test]
+    fn screen_density_is_typed_defaulted_and_validated() {
+        assert_eq!(
+            parse_and_resolve(project()).unwrap().screen.density,
+            Density::Comfortable
+        );
+        assert_eq!(
+            parse_and_resolve(include_str!(
+                "../../../specimens/reader-workspace-visual.toml"
+            ))
+            .unwrap()
+            .screen
+            .density,
+            Density::Comfortable
+        );
+        assert_eq!(
+            parse_and_resolve(include_str!("../../../specimens/dependency-workbench.toml"))
+                .unwrap()
+                .screen
+                .density,
+            Density::Dense
+        );
+        let omitted = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='a'\nrole='a'\nimportance='primary'\n[[region]]\nid='b'\nrole='b'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','b']";
+        assert_eq!(
+            parse_and_resolve(omitted).unwrap().screen.density,
+            Density::Comfortable
+        );
+        let unknown = omitted.replace("purpose='x'", "purpose='x'\ndensity='compact'");
+        assert!(parse_and_resolve(&unknown)
+            .unwrap_err()
+            .to_string()
+            .contains("screen.density: unknown density 'compact'"));
+        let semantic =
+            parse_and_resolve(include_str!("../../../specimens/dependency-workbench.toml"))
+                .unwrap()
+                .semantic_tree();
+        assert!(semantic.contains("density Dense"));
     }
     #[test]
     fn reader_resolves_nested_tree() {

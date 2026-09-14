@@ -188,6 +188,33 @@ padding = "pad"
     }
 
     #[test]
+    fn density_pressure_pair_keeps_major_layout_identical() {
+        let comfortable = viewwright_model::parse_and_resolve(include_str!(
+            "../../../specimens/density-pressure-comfortable.toml"
+        ))
+        .unwrap();
+        let dense = viewwright_model::parse_and_resolve(include_str!(
+            "../../../specimens/density-pressure-dense.toml"
+        ))
+        .unwrap();
+        assert_eq!(
+            layout(&comfortable, 1440.0, 900.0),
+            layout(&dense, 1440.0, 900.0)
+        );
+        assert_eq!(
+            comfortable.screen.density,
+            viewwright_model::Density::Comfortable
+        );
+        assert_eq!(dense.screen.density, viewwright_model::Density::Dense);
+        assert_eq!(comfortable.visual, dense.visual);
+        assert_eq!(comfortable.elements.len(), dense.elements.len());
+        assert_eq!(
+            comfortable.fixtures[0].content.len(),
+            dense.fixtures[0].content.len()
+        );
+    }
+
+    #[test]
     fn root_padding_gaps_fixed_and_proportional_growth_are_deterministic() {
         let b = blueprint();
         let plan = layout(&b, 1000.0, 600.0);

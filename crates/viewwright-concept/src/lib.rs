@@ -2,8 +2,8 @@ use viewwright_model::{CompositionChild, ResolvedBlueprint};
 
 pub fn render(b: &ResolvedBlueprint) -> String {
     let mut out = format!(
-        "ViewWright concept specification\n\nScreen\n  id: {}\n  purpose: {}\n\n",
-        b.screen.id, b.screen.purpose
+        "ViewWright concept specification\n\nScreen\n  id: {}\n  purpose: {}\n  density: {:?}\n\n",
+        b.screen.id, b.screen.purpose, b.screen.density
     );
     out.push_str("Design character\n");
     for value in &b.design.character {
@@ -81,5 +81,10 @@ mod tests {
         );
         assert!(project.contains("Collection: navigation items (presentation List)"));
         assert!(project.contains("Collection: project collection (presentation AdaptiveCards)"));
+        let dependency = render(
+            &parse_and_resolve(include_str!("../../../specimens/dependency-workbench.toml"))
+                .unwrap(),
+        );
+        assert!(dependency.contains("density: Dense"));
     }
 }

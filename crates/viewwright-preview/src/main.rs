@@ -13,6 +13,14 @@ fn main() -> eframe::Result<()> {
         .expect("visual reader specimen must be valid"),
         parse_and_resolve(include_str!("../../../specimens/dependency-workbench.toml"))
             .expect("dependency workbench specimen must be valid"),
+        parse_and_resolve(include_str!(
+            "../../../specimens/density-pressure-comfortable.toml"
+        ))
+        .expect("comfortable density pressure specimen must be valid"),
+        parse_and_resolve(include_str!(
+            "../../../specimens/density-pressure-dense.toml"
+        ))
+        .expect("dense density pressure specimen must be valid"),
     ];
     for b in &blueprints {
         println!("{}\n{}", b.semantic_tree(), viewwright_ascii::render(b));
