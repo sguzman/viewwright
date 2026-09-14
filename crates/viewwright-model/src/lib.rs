@@ -751,4 +751,20 @@ mod tests {
             .to_string()
             .contains("unknown field"));
     }
+    #[test]
+    fn missing_visual_color_reference_is_rejected() {
+        let source = include_str!("../../../specimens/reader-workspace-visual.toml")
+            .replace("border = \"border\"", "border = \"missing_border\"");
+        let error = parse_and_resolve(&source).unwrap_err().to_string();
+        assert!(error.contains("visual.border: missing color token 'missing_border'"));
+    }
+    #[test]
+    fn invalid_region_surface_is_rejected() {
+        let source = include_str!("../../../specimens/reader-workspace-visual.toml").replace(
+            "surface = \"canvas\"\ngrow = 1",
+            "surface = \"glass\"\ngrow = 1",
+        );
+        let error = parse_and_resolve(&source).unwrap_err().to_string();
+        assert!(error.contains("invalid surface role 'glass'"));
+    }
 }

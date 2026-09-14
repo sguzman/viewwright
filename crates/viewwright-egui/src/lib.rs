@@ -1,7 +1,7 @@
-use egui::{Align, CentralPanel, Color32, Context, FontId, Frame, Layout, Stroke};
+use egui::{Align, CentralPanel, Color32, Context, FontId, Frame, Layout, RichText, Stroke};
 use viewwright_model::{
-    BorderPolicy, Color, CompositionChild, ElementKind, ResolvedBlueprint, ResolvedComposition,
-    ResolvedRegion, SurfaceRole,
+    BorderPolicy, Color, CompositionChild, ElementKind, Importance, ResolvedBlueprint,
+    ResolvedComposition, ResolvedRegion, SurfaceRole,
 };
 
 pub fn show(ctx: &Context, blueprint: &ResolvedBlueprint, fixture: &str) {
@@ -150,10 +150,19 @@ fn render_region(ui: &mut egui::Ui, r: &ResolvedRegion, b: &ResolvedBlueprint, f
                 a: 0,
             },
         };
+        let separated_surface =
+            !matches!(r.surface, SurfaceRole::Canvas | SurfaceRole::Transparent);
         let stroke = match v.border_policy {
             BorderPolicy::None => Stroke::NONE,
+            BorderPolicy::Minimal if r.surface == SurfaceRole::Raised => {
+                Stroke::new(1.0_f32, color32(v.palette.border))
+            }
+            BorderPolicy::Minimal if !separated_surface => Stroke::NONE,
             BorderPolicy::Minimal => Stroke::new(1.0_f32, color32(v.palette.border)),
-            BorderPolicy::Defined => Stroke::new(2.0_f32, color32(v.palette.border)),
+            BorderPolicy::Defined if separated_surface => {
+                Stroke::new(2.0_f32, color32(v.palette.border))
+            }
+            BorderPolicy::Defined => Stroke::NONE,
         };
         Frame::new()
             .fill(color32(fill))
@@ -163,19 +172,34 @@ fn render_region(ui: &mut egui::Ui, r: &ResolvedRegion, b: &ResolvedBlueprint, f
         Frame::group(ui.style())
     };
     frame.show(ui, |ui| {
-        ui.heading(&r.id);
-        ui.small(&r.role);
+        ui.label(region_text(&r.id, r.importance, b.visual.as_ref()));
+        ui.label(
+            RichText::new(&r.role)
+                .color(
+                    b.visual
+                        .as_ref()
+                        .map(|v| color32(v.palette.text_muted))
+                        .unwrap_or(Color32::GRAY),
+                )
+                .small(),
+        );
         for e in b.elements.iter().filter(|e| e.region == r.id) {
             ui.separator();
-            ui.label(&e.label);
+            ui.label(element_text(&e.label, e.importance, b.visual.as_ref()));
             match e.kind {
                 ElementKind::Search => {
                     let mut query = String::new();
                     ui.text_edit_singleline(&mut query);
                 }
-                ElementKind::Collection => render_collection(ui, &e.label, fixture),
+                ElementKind::Collection => {
+                    render_collection(ui, &e.label, fixture, b.visual.as_ref())
+                }
                 ElementKind::Document => {
-                    ui.heading("Document surface");
+                    ui.label(element_text(
+                        "Document surface",
+                        e.importance,
+                        b.visual.as_ref(),
+                    ));
                     ui.label(if fixture.contains("no_document") {
                         "No document loaded"
                     } else {
@@ -186,7 +210,19 @@ fn render_region(ui: &mut egui::Ui, r: &ResolvedRegion, b: &ResolvedBlueprint, f
                     ui.label("Representative properties");
                 }
                 ElementKind::Command => {
-                    let _ = ui.button(&e.label);
+                    let label = if e.importance == Importance::Primary {
+                        if let Some(v) = &b.visual {
+                            RichText::new(&e.label)
+                                .size(v.type_scale.body as f32)
+                                .color(color32(v.palette.accent))
+                                .strong()
+                        } else {
+                            element_text(&e.label, e.importance, b.visual.as_ref())
+                        }
+                    } else {
+                        RichText::new(&e.label)
+                    };
+                    let _ = ui.button(label);
                 }
                 _ => {
                     ui.label(format!("{} element", kind_name(e.kind)));
@@ -195,7 +231,12 @@ fn render_region(ui: &mut egui::Ui, r: &ResolvedRegion, b: &ResolvedBlueprint, f
         }
     });
 }
-fn render_collection(ui: &mut egui::Ui, label: &str, fixture: &str) {
+fn render_collection(
+    ui: &mut egui::Ui,
+    label: &str,
+    fixture: &str,
+    visual: Option<&viewwright_model::ResolvedVisual>,
+) {
     ui.strong(label);
     let count = if fixture.contains("empty") {
         0
@@ -211,11 +252,61 @@ fn render_collection(ui: &mut egui::Ui, label: &str, fixture: &str) {
             ui.group(|ui| {
                 ui.label(format!("Item {index}"));
                 if fixture.contains("selection") && index == 1 {
-                    ui.strong("Selected");
+                    if let Some(v) = visual {
+                        ui.label(
+                            RichText::new("Selected")
+                                .color(color32(v.palette.accent))
+                                .strong(),
+                        );
+                    } else {
+                        ui.strong("Selected");
+                    }
                 }
             });
         }
     }
+}
+
+fn region_text(
+    text: &str,
+    importance: Importance,
+    visual: Option<&viewwright_model::ResolvedVisual>,
+) -> RichText {
+    let mut value = RichText::new(text);
+    if let Some(v) = visual {
+        value = value
+            .size(match importance {
+                Importance::Primary => v.type_scale.heading as f32,
+                _ => v.type_scale.body as f32,
+            })
+            .color(if importance == Importance::Tertiary {
+                color32(v.palette.text_muted)
+            } else {
+                color32(v.palette.text)
+            });
+    }
+    value.strong()
+}
+fn element_text(
+    text: &str,
+    importance: Importance,
+    visual: Option<&viewwright_model::ResolvedVisual>,
+) -> RichText {
+    let mut value = RichText::new(text);
+    if let Some(v) = visual {
+        value = value
+            .size(match importance {
+                Importance::Primary => v.type_scale.heading as f32,
+                Importance::Secondary => v.type_scale.body as f32,
+                Importance::Tertiary => v.type_scale.caption as f32,
+            })
+            .color(if importance == Importance::Tertiary {
+                color32(v.palette.text_muted)
+            } else {
+                color32(v.palette.text)
+            });
+    }
+    value
 }
 fn kind_name(kind: ElementKind) -> &'static str {
     match kind {
