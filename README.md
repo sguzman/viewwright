@@ -39,6 +39,7 @@ They are separate projects with deliberately opposite authority. In time, ViewWr
 6. **Screens should be previewable in isolation.** Real application startup must not be required merely to inspect a screen design.
 7. **Intent survives implementation.** Design hierarchy, dominance, density, composition, and explicit avoidances should remain machine-readable rather than disappearing into widget code.
 8. **No heavy work on the render thread.** Backends must keep rendering responsive; parsing, resolution, asset work, and other heavy operations belong off the UI/render thread.
+9. **Preview tools clean up after themselves.** QA may launch windows or processes, but automated workers should close what they launch before declaring completion unless explicitly asked to leave it running.
 
 ## What ViewWright owns
 
@@ -46,7 +47,7 @@ ViewWright owns the UI blueprint schema, semantic UI vocabulary, composition pri
 
 It does **not** own application business logic, arbitrary 2D/3D graphics, runtime UI observation, GUI automation, or persistence for the host application.
 
-## Implemented structural foundation
+## Implemented foundation
 
 M0 established the first executable vertical slice:
 
@@ -57,9 +58,20 @@ TOML → typed / validated / resolved blueprint
      └── egui preview
 ```
 
-M1 added an explicit composition root, recursive nested compositions, fixed vertical sizing, cycle diagnostics, and a semantic document surface. The Project Browser and Reader Workspace now resolve through the same backend-independent composition model.
+M1 added an explicit composition root, recursive nested compositions, fixed vertical sizing, cycle diagnostics, and a semantic document surface. The Project Browser and Reader Workspace resolve through the same backend-independent composition model.
 
-The current preview can switch between both structural specimens.
+M2 added semantic visual authoring:
+
+- named color tokens
+- compact type scale
+- semantic region surface roles
+- border and corner policy
+- strict authored-field validation
+- deterministic concept-specification projection
+- egui consumption of resolved visual semantics
+- scoped preview styling so authored screen visuals do not contaminate preview-host chrome
+
+The visual Reader Workspace pressure test is now accepted. It demonstrated that a coherent authored visual profile can survive canonical TOML → resolution → concept specification + egui without becoming a CSS-like styling system.
 
 ## Running the current slice
 
@@ -68,29 +80,19 @@ The repository is a Cargo workspace. Blueprints are parsed, validated, and resol
     cargo test
     cargo run -p viewwright-preview
 
-## Current design work — M2 visual authoring
+The preview currently includes the Project Browser, structural Reader Workspace, and visual Reader Workspace specimens.
 
-The next pressure test addresses the original motivation for ViewWright: structurally valid UIs can still be visually awful.
+## Current design work — M3 semantic element realization
 
-M2 is being designed around a deliberately small semantic visual grammar:
+The next pressure test focuses on the semantic element layer.
 
-- named color tokens
-- a compact type scale
-- semantic region surface roles
-- border and corner policy
-- existing spacing and importance semantics
-- a deterministic concept-specification projection
+ViewWright can already place and style regions, but higher-level element kinds such as collections, property sheets, trees, commands, status surfaces, and document surfaces are still rendered with placeholder-like backend behavior. M3 will test whether a small amount of backend-independent element semantics can produce recognizable interface objects without collapsing into serialized widgets or application business logic.
 
-The goal is **not** to recreate CSS. The same authored visual intent should be useful to both egui and concept-art generation without becoming toolkit-specific styling.
-
-See:
-
-- [`docs/m2-visual-authoring.md`](docs/m2-visual-authoring.md)
-- [`specimens/reader-workspace-visual.toml`](specimens/reader-workspace-visual.toml)
-- [`specimens/reader-workspace-visual.concept.txt`](specimens/reader-workspace-visual.concept.txt)
+M3 should be earned by a new specimen rather than by polishing the existing Reader Workspace indefinitely.
 
 ## Status
 
 - M0 — accepted
 - M1 — accepted
-- M2 — visual-authoring design pressure test formalized; implementation not yet started
+- M2 — accepted
+- M3 — design pressure test in progress
