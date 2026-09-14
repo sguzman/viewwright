@@ -71,15 +71,19 @@ M2 added semantic visual authoring:
 - egui consumption of resolved visual semantics
 - scoped preview styling so authored screen visuals do not contaminate preview-host chrome
 
-M3 added fixture-backed semantic preview content:
+M3 added fixture-backed semantic preview content for collections, property sheets, and status text, including migration away from fixture-id substring heuristics for those supported families.
 
-- collection items and authored selection
-- ordered property-sheet values
-- status text
-- validation of fixture-content compatibility
-- migration away from fixture-id substring heuristics for supported content families
+M4 added deterministic backend-independent major layout slots:
 
-The Project Browser, Reader Workspace, visual Reader Workspace, and Dependency Workbench now share the same semantic pipeline.
+- composition `grow`
+- true four-edge composition padding
+- sibling gap geometry
+- fixed + proportional growing slots
+- nested composition growth
+- cross-axis fill
+- egui rendering inside planned composition/region rectangles
+
+The Project Browser, Reader Workspace, visual Reader Workspace, and Dependency Workbench now share the same semantic pipeline and layout projection.
 
 ## Running the current slice
 
@@ -88,33 +92,26 @@ The repository is a Cargo workspace. Blueprints are parsed, validated, and resol
     cargo test
     cargo run -p viewwright-preview
 
-## Current design work — M4 layout-slot fidelity
+## Current design work — M5 Reader fixture honesty
 
-Runtime QA of both the Reader Workspace and Dependency Workbench exposed a repeated geometry failure: the semantic model allocates growing major areas, but egui still allows region surfaces to collapse to intrinsic content size and huddle at the upper-left.
+Human QA after M4 showed that the Reader geometry is now correct, but the dominant reader surface is still too placeholder-heavy to judge the visual design honestly: the outline is backend fiction, document content is backend fiction, and the document renderer still infers state from fixture naming.
 
-M4 makes major composition geometry deterministic and backend-independent for a concrete viewport:
+M5 extends canonical fixture content narrowly with:
 
-```text
-resolved blueprint + viewport
-        ↓
-major layout-slot projection
-        ↓
-composition / region rectangles
-        ↓
-backend rendering inside exact slots
-```
+- hierarchical tree nodes represented as stable flat node records with optional parents
+- optional selected tree node
+- a plain document title + ordered paragraphs
+- existing M3 property/status content for Reader settings and reading status
 
-M4 also adds `composition.grow` so nested compositions can explicitly own remaining space when they are first-class children of another composition.
-
-This is not a responsive-layout milestone and does not introduce breakpoints, percentages, min/max constraints, docking, or a general constraint solver.
+This exists only to make the Reader preview representative enough for a real visual judgment. It does not introduce rich text, pagination, scrolling architecture, TTS semantics, runtime data binding, or interaction state machines.
 
 See:
 
-- [`docs/m4-layout-slots.md`](docs/m4-layout-slots.md)
-- [`docs/m4-acceptance.md`](docs/m4-acceptance.md)
-- [`docs/m4-schema-summary.md`](docs/m4-schema-summary.md)
-- [`docs/m4-implementation-boundary.md`](docs/m4-implementation-boundary.md)
-- [`docs/m4-stop-condition.md`](docs/m4-stop-condition.md)
+- [`docs/m5-reader-fixture-content.md`](docs/m5-reader-fixture-content.md)
+- [`docs/m5-acceptance.md`](docs/m5-acceptance.md)
+- [`docs/m5-schema-summary.md`](docs/m5-schema-summary.md)
+- [`docs/m5-implementation-boundary.md`](docs/m5-implementation-boundary.md)
+- [`docs/m5-stop-condition.md`](docs/m5-stop-condition.md)
 
 ## Status
 
@@ -122,4 +119,5 @@ See:
 - M1 — accepted
 - M2 — accepted
 - M3 — accepted
-- M4 — layout-slot pressure test formalized; implementation not yet started
+- M4 — accepted
+- M5 — Reader fixture-content pressure test formalized; implementation not yet started
