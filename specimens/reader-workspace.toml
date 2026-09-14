@@ -1,0 +1,157 @@
+# Schema-pressure specimen for post-M0 ViewWright.
+#
+# This file intentionally expresses the desired authoring model, including
+# capabilities that M0 does not yet parse/resolve. It is a design specimen,
+# not a currently runnable example.
+
+[screen]
+id = "reader_workspace"
+purpose = "Read a document while controlling navigation and narration"
+density = "comfortable"
+root = "workspace"
+
+[design]
+character = ["quiet", "focused", "crafted", "reading_first"]
+dominant = "reader"
+avoid = [
+    "toolbar_dominance",
+    "uniform_visual_weight",
+    "nested_card_soup",
+    "border_everything",
+    "control_clutter",
+]
+
+[tokens.spacing]
+xs = 4
+sm = 8
+md = 12
+lg = 16
+xl = 24
+
+[tokens.corners]
+small = 4
+medium = 7
+
+[[region]]
+id = "app_commands"
+role = "commands"
+importance = "secondary"
+height = "52px"
+
+[[region]]
+id = "library"
+role = "navigation"
+importance = "secondary"
+width = "250px"
+
+[[region]]
+id = "reader"
+role = "primary_content"
+importance = "primary"
+grow = 1
+
+[[region]]
+id = "inspector"
+role = "inspector"
+importance = "tertiary"
+width = "300px"
+
+[[region]]
+id = "transport"
+role = "commands"
+importance = "secondary"
+height = "68px"
+
+[[composition]]
+id = "workspace"
+kind = "column"
+axis = "vertical"
+children = ["app_commands", "reading_body", "transport"]
+gap = "sm"
+padding = "md"
+
+[[composition]]
+id = "reading_body"
+kind = "split"
+axis = "horizontal"
+children = ["library", "reader", "inspector"]
+gap = "md"
+
+[[element]]
+id = "open_document"
+region = "app_commands"
+kind = "command"
+importance = "secondary"
+label = "Open"
+
+[[element]]
+id = "library_search"
+region = "library"
+kind = "search"
+importance = "secondary"
+label = "Search library"
+
+[[element]]
+id = "document_outline"
+region = "library"
+kind = "tree"
+importance = "secondary"
+label = "Contents"
+
+[[element]]
+id = "document_surface"
+region = "reader"
+kind = "document"
+importance = "primary"
+label = "Document"
+
+[[element]]
+id = "reader_settings"
+region = "inspector"
+kind = "property_sheet"
+importance = "tertiary"
+label = "Reading settings"
+
+[[element]]
+id = "play_pause"
+region = "transport"
+kind = "command"
+importance = "primary"
+label = "Play / pause"
+
+[[element]]
+id = "voice"
+region = "transport"
+kind = "command"
+importance = "secondary"
+label = "Voice"
+
+[[element]]
+id = "speed"
+region = "transport"
+kind = "command"
+importance = "secondary"
+label = "Speed"
+
+[[element]]
+id = "reading_status"
+region = "transport"
+kind = "status"
+importance = "tertiary"
+label = "Reading status"
+
+[[fixture]]
+id = "reading"
+state = "document_loaded"
+
+[[fixture]]
+id = "selected_chapter"
+state = "outline_selection"
+
+[[fixture]]
+id = "settings_open"
+state = "settings_visible"
+
+[[fixture]]
+id = "empty"
+state = "no_document"
