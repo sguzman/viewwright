@@ -1,0 +1,6 @@
+[package]
+name = "viewwright-concept"
+version.workspace = true
+edition.workspace = true
+[dependencies]
+viewwright-model = { path = "../viewwright-model" }

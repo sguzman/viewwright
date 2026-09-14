@@ -11,12 +11,14 @@ pub enum BlueprintError {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SourceBlueprint {
     pub screen: ScreenSource,
     #[serde(default)]
     pub design: DesignSource,
     #[serde(default)]
     pub tokens: TokensSource,
+    pub visual: Option<VisualSource>,
     #[serde(default)]
     pub region: Vec<RegionSource>,
     #[serde(default)]
@@ -27,6 +29,7 @@ pub struct SourceBlueprint {
     pub fixture: Vec<FixtureSource>,
 }
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ScreenSource {
     pub id: String,
     pub purpose: String,
@@ -38,6 +41,7 @@ fn default_density() -> String {
     "comfortable".into()
 }
 #[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DesignSource {
     #[serde(default)]
     pub character: Vec<String>,
@@ -46,13 +50,45 @@ pub struct DesignSource {
     pub avoid: Vec<String>,
 }
 #[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct TokensSource {
     #[serde(default)]
     pub spacing: HashMap<String, u32>,
     #[serde(default)]
     pub corners: HashMap<String, u32>,
+    #[serde(default)]
+    pub color: ColorTokensSource,
+    #[serde(default)]
+    pub r#type: TypeTokensSource,
+}
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct ColorTokensSource {
+    #[serde(flatten)]
+    pub values: HashMap<String, String>,
+}
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TypeTokensSource {
+    pub display: Option<u16>,
+    pub heading: Option<u16>,
+    pub body: Option<u16>,
+    pub caption: Option<u16>,
 }
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VisualSource {
+    pub canvas: String,
+    pub surface: String,
+    pub surface_raised: String,
+    pub text: String,
+    pub text_muted: String,
+    pub accent: String,
+    pub border: String,
+    pub corner: String,
+    pub border_policy: String,
+}
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RegionSource {
     pub id: String,
     pub role: String,
@@ -60,8 +96,10 @@ pub struct RegionSource {
     pub width: Option<String>,
     pub height: Option<String>,
     pub grow: Option<f32>,
+    pub surface: Option<String>,
 }
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CompositionSource {
     pub id: String,
     pub kind: String,
@@ -71,6 +109,7 @@ pub struct CompositionSource {
     pub padding: Option<String>,
 }
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ElementSource {
     pub id: String,
     pub region: String,
@@ -80,6 +119,7 @@ pub struct ElementSource {
     pub presentation: Option<String>,
 }
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct FixtureSource {
     pub id: String,
     pub state: String,
@@ -90,6 +130,50 @@ pub enum Importance {
     Primary,
     Secondary,
     Tertiary,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SurfaceRole {
+    Canvas,
+    Panel,
+    Raised,
+    Transparent,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BorderPolicy {
+    None,
+    Minimal,
+    Defined,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Color {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub a: u8,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TypeScale {
+    pub display: u16,
+    pub heading: u16,
+    pub body: u16,
+    pub caption: u16,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Palette {
+    pub canvas: Color,
+    pub surface: Color,
+    pub surface_raised: Color,
+    pub text: Color,
+    pub text_muted: Color,
+    pub accent: Color,
+    pub border: Color,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ResolvedVisual {
+    pub palette: Palette,
+    pub type_scale: TypeScale,
+    pub corner_radius: u32,
+    pub border_policy: BorderPolicy,
 }
 fn importance(s: &str, where_: &str, errors: &mut Vec<String>) -> Importance {
     match s {
@@ -139,6 +223,7 @@ pub struct ResolvedRegion {
     pub width: Option<u32>,
     pub height: Option<u32>,
     pub grow: f32,
+    pub surface: SurfaceRole,
 }
 #[derive(Debug, Clone)]
 pub struct ResolvedElement {
@@ -177,6 +262,7 @@ pub struct ResolvedBlueprint {
     pub compositions: Vec<ResolvedComposition>,
     pub elements: Vec<ResolvedElement>,
     pub fixtures: Vec<ResolvedFixture>,
+    pub visual: Option<ResolvedVisual>,
 }
 
 pub fn parse_and_resolve(source: &str) -> Result<ResolvedBlueprint, BlueprintError> {
@@ -204,6 +290,129 @@ fn logical_size(
         }
     }
 }
+fn parse_color(value: &str, name: &str, errors: &mut Vec<String>) -> Color {
+    let valid = value
+        .strip_prefix('#')
+        .filter(|v| v.len() == 6)
+        .and_then(|v| u32::from_str_radix(v, 16).ok());
+    match valid {
+        Some(v) => Color {
+            r: (v >> 16) as u8,
+            g: (v >> 8) as u8,
+            b: v as u8,
+            a: 255,
+        },
+        None => {
+            errors.push(format!("color token '{name}': expected #RRGGBB"));
+            Color {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: 255,
+            }
+        }
+    }
+}
+fn color_ref(
+    tokens: &ColorTokensSource,
+    reference: &str,
+    role: &str,
+    errors: &mut Vec<String>,
+) -> Color {
+    match tokens.values.get(reference) {
+        Some(value) => parse_color(value, reference, errors),
+        None => {
+            errors.push(format!("visual.{role}: missing color token '{reference}'"));
+            Color {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: 255,
+            }
+        }
+    }
+}
+fn resolve_visual(
+    source: Option<&VisualSource>,
+    tokens: &TokensSource,
+    errors: &mut Vec<String>,
+) -> Option<ResolvedVisual> {
+    let Some(v) = source else { return None };
+    let scale = match (
+        tokens.r#type.display,
+        tokens.r#type.heading,
+        tokens.r#type.body,
+        tokens.r#type.caption,
+    ) {
+        (Some(display), Some(heading), Some(body), Some(caption))
+            if [display, heading, body, caption].iter().all(|n| *n > 0) =>
+        {
+            TypeScale {
+                display,
+                heading,
+                body,
+                caption,
+            }
+        }
+        _ => {
+            errors.push("visual: tokens.type must define positive display, heading, body, and caption values".into());
+            TypeScale {
+                display: 1,
+                heading: 1,
+                body: 1,
+                caption: 1,
+            }
+        }
+    };
+    let corner_radius = match tokens.corners.get(&v.corner) {
+        Some(radius) => *radius,
+        None => {
+            errors.push(format!(
+                "visual.corner: missing corner token '{}'",
+                v.corner
+            ));
+            0
+        }
+    };
+    let border_policy = match v.border_policy.as_str() {
+        "none" => BorderPolicy::None,
+        "minimal" => BorderPolicy::Minimal,
+        "defined" => BorderPolicy::Defined,
+        _ => {
+            errors.push(format!(
+                "visual.border_policy: invalid policy '{}'",
+                v.border_policy
+            ));
+            BorderPolicy::None
+        }
+    };
+    Some(ResolvedVisual {
+        palette: Palette {
+            canvas: color_ref(&tokens.color, &v.canvas, "canvas", errors),
+            surface: color_ref(&tokens.color, &v.surface, "surface", errors),
+            surface_raised: color_ref(&tokens.color, &v.surface_raised, "surface_raised", errors),
+            text: color_ref(&tokens.color, &v.text, "text", errors),
+            text_muted: color_ref(&tokens.color, &v.text_muted, "text_muted", errors),
+            accent: color_ref(&tokens.color, &v.accent, "accent", errors),
+            border: color_ref(&tokens.color, &v.border, "border", errors),
+        },
+        type_scale: scale,
+        corner_radius,
+        border_policy,
+    })
+}
+fn surface(value: Option<&String>, id: &str, errors: &mut Vec<String>) -> SurfaceRole {
+    match value.map(String::as_str).unwrap_or("panel") {
+        "canvas" => SurfaceRole::Canvas,
+        "panel" => SurfaceRole::Panel,
+        "raised" => SurfaceRole::Raised,
+        "transparent" => SurfaceRole::Transparent,
+        other => {
+            errors.push(format!("region '{id}': invalid surface role '{other}'"));
+            SurfaceRole::Panel
+        }
+    }
+}
 
 pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintError> {
     let mut errors = Vec::new();
@@ -219,6 +428,7 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
             width: logical_size(r.width.as_ref(), "region width", &r.id, &mut errors),
             height: logical_size(r.height.as_ref(), "region height", &r.id, &mut errors),
             grow: r.grow.unwrap_or(0.0),
+            surface: surface(r.surface.as_ref(), &r.id, &mut errors),
         });
     }
     let region_ids: HashSet<_> = regions.iter().map(|r| r.id.as_str()).collect();
@@ -376,6 +586,10 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
     if !errors.is_empty() {
         return Err(BlueprintError::Validation(errors.join("\n")));
     }
+    let visual = resolve_visual(source.visual.as_ref(), &source.tokens, &mut errors);
+    if !errors.is_empty() {
+        return Err(BlueprintError::Validation(errors.join("\n")));
+    }
     Ok(ResolvedBlueprint {
         screen: source.screen,
         design: source.design,
@@ -391,6 +605,7 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
                 state: f.state,
             })
             .collect(),
+        visual,
     })
 }
 
@@ -502,5 +717,38 @@ mod tests {
                 && e.contains("missing child")
                 && e.contains("missing spacing token")
         );
+    }
+    #[test]
+    fn visual_reader_resolves_concrete_palette_and_profile() {
+        let b = parse_and_resolve(include_str!(
+            "../../../specimens/reader-workspace-visual.toml"
+        ))
+        .unwrap();
+        let v = b.visual.unwrap();
+        assert_eq!(
+            v.palette.canvas,
+            Color {
+                r: 16,
+                g: 18,
+                b: 22,
+                a: 255
+            }
+        );
+        assert_eq!(v.corner_radius, 7);
+    }
+    #[test]
+    fn malformed_visual_inputs_and_unknown_fields_are_rejected() {
+        let bad = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[tokens.color]\ncanvas='#nope'\n[visual]\ncanvas='canvas'\nsurface='canvas'\nsurface_raised='canvas'\ntext='canvas'\ntext_muted='canvas'\naccent='canvas'\nborder='canvas'\ncorner='missing'\nborder_policy='wrong'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','b']\n[[region]]\nid='a'\nrole='a'\nimportance='primary'\n[[region]]\nid='b'\nrole='b'\nimportance='secondary'";
+        let e = parse_and_resolve(bad).unwrap_err().to_string();
+        assert!(
+            e.contains("expected #RRGGBB")
+                && e.contains("missing corner token")
+                && e.contains("invalid policy")
+        );
+        let unknown = "[screen]\nid='x'\npurpose='x'\nroot='root'\nunknown='x'";
+        assert!(parse_and_resolve(unknown)
+            .unwrap_err()
+            .to_string()
+            .contains("unknown field"));
     }
 }

@@ -7,9 +7,16 @@ fn main() -> eframe::Result<()> {
             .expect("project specimen must be valid"),
         parse_and_resolve(include_str!("../../../specimens/reader-workspace.toml"))
             .expect("reader specimen must be valid"),
+        parse_and_resolve(include_str!(
+            "../../../specimens/reader-workspace-visual.toml"
+        ))
+        .expect("visual reader specimen must be valid"),
     ];
     for b in &blueprints {
         println!("{}\n{}", b.semantic_tree(), viewwright_ascii::render(b));
+        if b.visual.is_some() {
+            println!("{}", viewwright_concept::render(b));
+        }
     }
     eframe::run_native(
         "ViewWright Preview",

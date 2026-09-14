@@ -1,9 +1,11 @@
-use egui::{Align, CentralPanel, Context, Layout};
+use egui::{Align, CentralPanel, Color32, Context, FontId, Frame, Layout, Stroke};
 use viewwright_model::{
-    CompositionChild, ElementKind, ResolvedBlueprint, ResolvedComposition, ResolvedRegion,
+    BorderPolicy, Color, CompositionChild, ElementKind, ResolvedBlueprint, ResolvedComposition,
+    ResolvedRegion, SurfaceRole,
 };
 
 pub fn show(ctx: &Context, blueprint: &ResolvedBlueprint, fixture: &str) {
+    apply_visuals(ctx, blueprint);
     egui::TopBottomPanel::top("viewwright-title").show(ctx, |ui| {
         ui.heading(&blueprint.screen.purpose);
         ui.label(format!("Fixture: {fixture}"));
@@ -136,7 +138,31 @@ fn child_height(
 }
 
 fn render_region(ui: &mut egui::Ui, r: &ResolvedRegion, b: &ResolvedBlueprint, fixture: &str) {
-    ui.group(|ui| {
+    let frame = if let Some(v) = &b.visual {
+        let fill = match r.surface {
+            SurfaceRole::Canvas => v.palette.canvas,
+            SurfaceRole::Panel => v.palette.surface,
+            SurfaceRole::Raised => v.palette.surface_raised,
+            SurfaceRole::Transparent => Color {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: 0,
+            },
+        };
+        let stroke = match v.border_policy {
+            BorderPolicy::None => Stroke::NONE,
+            BorderPolicy::Minimal => Stroke::new(1.0_f32, color32(v.palette.border)),
+            BorderPolicy::Defined => Stroke::new(2.0_f32, color32(v.palette.border)),
+        };
+        Frame::new()
+            .fill(color32(fill))
+            .corner_radius((v.corner_radius.min(u8::MAX as u32)) as u8)
+            .stroke(stroke)
+    } else {
+        Frame::group(ui.style())
+    };
+    frame.show(ui, |ui| {
         ui.heading(&r.id);
         ui.small(&r.role);
         for e in b.elements.iter().filter(|e| e.region == r.id) {
@@ -203,4 +229,26 @@ fn kind_name(kind: ElementKind) -> &'static str {
         ElementKind::Status => "status",
         ElementKind::Document => "document",
     }
+}
+
+fn color32(c: Color) -> Color32 {
+    Color32::from_rgba_unmultiplied(c.r, c.g, c.b, c.a)
+}
+fn apply_visuals(ctx: &Context, b: &ResolvedBlueprint) {
+    let Some(v) = &b.visual else { return };
+    let mut style = (*ctx.style()).clone();
+    style.visuals.override_text_color = Some(color32(v.palette.text));
+    style.text_styles.insert(
+        egui::TextStyle::Heading,
+        FontId::proportional(v.type_scale.heading as f32),
+    );
+    style.text_styles.insert(
+        egui::TextStyle::Body,
+        FontId::proportional(v.type_scale.body as f32),
+    );
+    style.text_styles.insert(
+        egui::TextStyle::Small,
+        FontId::proportional(v.type_scale.caption as f32),
+    );
+    ctx.set_style(style);
 }
