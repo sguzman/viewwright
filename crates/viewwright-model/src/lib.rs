@@ -118,6 +118,7 @@ pub struct ElementSource {
     pub importance: String,
     pub label: Option<String>,
     pub presentation: Option<String>,
+    pub action: Option<String>,
 }
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -137,6 +138,7 @@ pub struct FixtureContentSource {
     pub text: Option<String>,
     pub nodes: Option<Vec<TreeNodeSource>>,
     pub document: Option<DocumentSource>,
+    pub command: Option<CommandSource>,
 }
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -163,12 +165,26 @@ pub struct DocumentSource {
     pub title: String,
     pub paragraphs: Vec<String>,
 }
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CommandSource {
+    pub enabled: bool,
+    pub reason: Option<String>,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Importance {
     Primary,
     Secondary,
     Tertiary,
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ActionId(String);
+
+impl ActionId {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SurfaceRole {
@@ -254,6 +270,25 @@ fn kind(s: &str, where_: &str, errors: &mut Vec<String>) -> ElementKind {
         }
     }
 }
+fn action_id(value: &str, element: &str, errors: &mut Vec<String>) -> Option<ActionId> {
+    let valid = !value.is_empty()
+        && !value.starts_with('.')
+        && !value.ends_with('.')
+        && value.split('.').all(|segment| {
+            !segment.is_empty()
+                && segment
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+        });
+    if valid {
+        Some(ActionId(value.to_owned()))
+    } else {
+        errors.push(format!(
+            "element '{element}': action must be a non-empty dot-separated identifier with ASCII letters, digits, '_' or '-'"
+        ));
+        None
+    }
+}
 #[derive(Debug, Clone)]
 pub struct ResolvedRegion {
     pub id: String,
@@ -272,6 +307,7 @@ pub struct ResolvedElement {
     pub importance: Importance,
     pub label: String,
     pub presentation: Option<String>,
+    pub action: Option<ActionId>,
 }
 #[derive(Debug, Clone)]
 pub enum CompositionChild {
@@ -318,6 +354,11 @@ pub enum ResolvedFixtureContent {
         element: String,
         title: String,
         paragraphs: Vec<String>,
+    },
+    Command {
+        element: String,
+        enabled: bool,
+        reason: Option<String>,
     },
 }
 #[derive(Debug, Clone)]
@@ -532,13 +573,33 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
         if !region_ids.contains(e.region.as_str()) {
             errors.push(format!("element '{}': missing region '{}'", e.id, e.region));
         }
+        let element_kind = kind(&e.kind, &format!("element '{}'", e.id), &mut errors);
+        let action = match (element_kind, e.action.as_deref()) {
+            (ElementKind::Command, Some(action)) => action_id(action, &e.id, &mut errors),
+            (ElementKind::Command, None) => {
+                errors.push(format!(
+                    "element '{}': command elements require an action",
+                    e.id
+                ));
+                None
+            }
+            (_kind, Some(_)) => {
+                errors.push(format!(
+                    "element '{}': action is only valid for command elements",
+                    e.id
+                ));
+                None
+            }
+            (_, None) => None,
+        };
         elements.push(ResolvedElement {
             id: e.id.clone(),
             region: e.region.clone(),
-            kind: kind(&e.kind, &format!("element '{}'", e.id), &mut errors),
+            kind: element_kind,
             importance: importance(&e.importance, &format!("element '{}'", e.id), &mut errors),
             label: e.label.clone().unwrap_or_else(|| e.id.replace('_', " ")),
             presentation: e.presentation.clone(),
+            action,
         });
     }
     let composition_ids: HashSet<_> = source.composition.iter().map(|c| c.id.as_str()).collect();
@@ -705,7 +766,8 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
                 + usize::from(record.properties.is_some())
                 + usize::from(record.text.is_some())
                 + usize::from(record.nodes.is_some())
-                + usize::from(record.document.is_some());
+                + usize::from(record.document.is_some())
+                + usize::from(record.command.is_some());
             if families != 1 {
                 errors.push(format!(
                     "fixture '{}': content for '{}' must contain exactly one payload family",
@@ -876,6 +938,19 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
                     title: document.title.clone(),
                     paragraphs: document.paragraphs.clone(),
                 });
+            } else if let Some(command) = &record.command {
+                if element.kind != ElementKind::Command {
+                    errors.push(format!(
+                        "fixture '{}': command content on '{}' requires a command element",
+                        f.id, record.element
+                    ));
+                    continue;
+                }
+                content.push(ResolvedFixtureContent::Command {
+                    element: record.element.clone(),
+                    enabled: command.enabled,
+                    reason: command.reason.clone(),
+                });
             }
         }
         resolved_fixtures.push(ResolvedFixture {
@@ -942,10 +1017,14 @@ impl ResolvedBlueprint {
                         ));
                         for e in b.elements.iter().filter(|e| e.region == *region) {
                             out.push_str(&format!(
-                                "{:indent$}element {} ({:?})\n",
+                                "{:indent$}element {} ({:?}{})\n",
                                 "",
                                 e.id,
                                 e.kind,
+                                e.action
+                                    .as_ref()
+                                    .map(|action| format!(", action {}", action.as_str()))
+                                    .unwrap_or_default(),
                                 indent = indent + 4
                             ));
                         }
@@ -995,11 +1074,51 @@ impl ResolvedBlueprint {
                         "    content {element}: document '{title}', {} paragraphs\n",
                         paragraphs.len()
                     )),
+                    ResolvedFixtureContent::Command {
+                        element,
+                        enabled,
+                        reason,
+                    } => out.push_str(&format!(
+                        "    content {element}: command enabled={enabled}, reason {:?}\n",
+                        reason
+                    )),
                 }
             }
         }
         out
     }
+
+    pub fn command_state<'a>(&'a self, fixture: &str, element: &str) -> ResolvedCommandState<'a> {
+        self.fixtures
+            .iter()
+            .find(|fixture_value| fixture_value.id == fixture)
+            .and_then(|fixture_value| {
+                fixture_value
+                    .content
+                    .iter()
+                    .find_map(|content| match content {
+                        ResolvedFixtureContent::Command {
+                            element: content_element,
+                            enabled,
+                            reason,
+                        } if content_element == element => Some(ResolvedCommandState {
+                            enabled: *enabled,
+                            reason: reason.as_deref(),
+                        }),
+                        _ => None,
+                    })
+            })
+            .unwrap_or(ResolvedCommandState {
+                enabled: true,
+                reason: None,
+            })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ResolvedCommandState<'a> {
+    pub enabled: bool,
+    pub reason: Option<&'a str>,
 }
 
 #[cfg(test)]
@@ -1206,6 +1325,107 @@ mod tests {
         let debug = b.semantic_tree();
         assert!(debug.contains("document_outline: tree 5 nodes"));
         assert!(debug.contains("document_surface: document 'The Quiet Machine', 3 paragraphs"));
+    }
+
+    #[test]
+    fn m7_pressure_and_canonical_commands_resolve_with_stable_actions() {
+        let pressure = parse_and_resolve(include_str!(
+            "../../../specimens/reader-workspace-visual-m7.toml"
+        ))
+        .unwrap();
+        assert_eq!(
+            pressure
+                .elements
+                .iter()
+                .find(|element| element.id == "play_pause")
+                .unwrap()
+                .action
+                .as_ref()
+                .unwrap()
+                .as_str(),
+            "reader.play_pause"
+        );
+        assert_eq!(
+            pressure.command_state("reading", "play_pause").enabled,
+            true
+        );
+        assert_eq!(
+            pressure.command_state("empty", "play_pause"),
+            ResolvedCommandState {
+                enabled: false,
+                reason: Some("Open a document first")
+            }
+        );
+        assert!(pressure
+            .semantic_tree()
+            .contains("action reader.play_pause"));
+        assert!(pressure.semantic_tree().contains("enabled=false"));
+
+        for source in [
+            include_str!("../../../specimens/reader-workspace.toml"),
+            include_str!("../../../specimens/reader-workspace-visual.toml"),
+            include_str!("../../../specimens/dependency-workbench.toml"),
+        ] {
+            let blueprint = parse_and_resolve(source).unwrap();
+            assert!(blueprint
+                .elements
+                .iter()
+                .filter(|element| element.kind == ElementKind::Command)
+                .all(|element| element.action.is_some()));
+        }
+        let duplicate_actions = include_str!("../../../specimens/reader-workspace.toml")
+            .replace(
+                "[[element]]\nid = \"reading_status\"",
+                "[[element]]\nid = \"speed_duplicate\"\nregion = \"transport\"\nkind = \"command\"\nimportance = \"secondary\"\nlabel = \"Speed duplicate\"\naction = \"reader.choose_speed\"\n[[element]]\nid = \"reading_status\"",
+            );
+        assert!(parse_and_resolve(&duplicate_actions).is_ok());
+    }
+
+    #[test]
+    fn action_identifier_and_command_fixture_validation_are_strict() {
+        let base = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='r'\nrole='commands'\nimportance='primary'\n[[region]]\nid='other'\nrole='content'\nimportance='secondary'\n[[element]]\nid='command'\nregion='r'\nkind='command'\nimportance='primary'\nlabel='Run'\naction='run.now'\n[[element]]\nid='text'\nregion='r'\nkind='text'\nimportance='secondary'\nlabel='Text'\n[[composition]]\nid='root'\nkind='split'\nchildren=['r','other']\n[[fixture]]\nid='f'\nstate='x'\n";
+        for action in ["", ".foo", "foo.", "foo..bar", "foo bar", "foo/$bar"] {
+            let source = base.replace("label='Run'", &format!("label='Run'\naction='{action}'"));
+            assert!(
+                parse_and_resolve(&source).is_err(),
+                "accepted invalid action {action:?}"
+            );
+        }
+        assert!(parse_and_resolve(&base.replace("\naction='run.now'", ""))
+            .unwrap_err()
+            .to_string()
+            .contains("require an action"));
+        let non_command = base.replace("kind='text'", "kind='text'\naction='text.inspect'");
+        assert!(parse_and_resolve(&non_command)
+            .unwrap_err()
+            .to_string()
+            .contains("only valid for command"));
+        let disabled = base.replace(
+            "[[fixture]]\nid='f'\nstate='x'\n",
+            "[[fixture]]\nid='f'\nstate='x'\n[[fixture.content]]\nelement='command'\ncommand={enabled=false,reason='Not ready'}\n",
+        );
+        let resolved = parse_and_resolve(&disabled).unwrap();
+        assert!(!resolved.command_state("f", "command").enabled);
+        assert_eq!(
+            resolved.command_state("f", "command").reason,
+            Some("Not ready")
+        );
+        let wrong_element = base.replace(
+            "[[fixture]]\nid='f'\nstate='x'\n",
+            "[[fixture]]\nid='f'\nstate='x'\n[[fixture.content]]\nelement='text'\ncommand={enabled=true}\n",
+        );
+        assert!(parse_and_resolve(&wrong_element)
+            .unwrap_err()
+            .to_string()
+            .contains("requires a command element"));
+        let mixed = base.replace(
+            "[[fixture]]\nid='f'\nstate='x'\n",
+            "[[fixture]]\nid='f'\nstate='x'\n[[fixture.content]]\nelement='command'\ntext='bad'\ncommand={enabled=true}\n",
+        );
+        assert!(parse_and_resolve(&mixed)
+            .unwrap_err()
+            .to_string()
+            .contains("exactly one payload"));
     }
 
     #[test]

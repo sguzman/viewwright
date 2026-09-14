@@ -5,7 +5,19 @@ use viewwright_model::{
     ResolvedFixtureContent, ResolvedRegion, SurfaceRole,
 };
 
-pub fn show(ctx: &Context, blueprint: &ResolvedBlueprint, fixture: &str) {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InteractionEvent {
+    pub element_id: String,
+    pub action: String,
+}
+
+#[derive(Debug, Default)]
+pub struct RenderOutput {
+    pub activation: Option<InteractionEvent>,
+}
+
+pub fn show(ctx: &Context, blueprint: &ResolvedBlueprint, fixture: &str) -> RenderOutput {
+    let mut output = RenderOutput::default();
     let root_fill = blueprint
         .visual
         .as_ref()
@@ -18,9 +30,18 @@ pub fn show(ctx: &Context, blueprint: &ResolvedBlueprint, fixture: &str) {
                 apply_visuals(ui, blueprint);
                 let plan = layout(blueprint, ui.available_width(), ui.available_height());
                 let origin = ui.min_rect().min;
-                render_composition(ui, &blueprint.root, blueprint, fixture, &plan, origin);
+                render_composition(
+                    ui,
+                    &blueprint.root,
+                    blueprint,
+                    fixture,
+                    &plan,
+                    origin,
+                    &mut output.activation,
+                );
             });
         });
+    output
 }
 
 fn render_composition(
@@ -30,6 +51,7 @@ fn render_composition(
     fixture: &str,
     plan: &LayoutPlan,
     origin: egui::Pos2,
+    activation: &mut Option<InteractionEvent>,
 ) {
     let Some(c) = b.compositions.iter().find(|c| c.id == id) else {
         return;
@@ -51,11 +73,11 @@ fn render_composition(
                 .max_rect(child_egui_rect),
             |ui| match child {
                 CompositionChild::Composition(id) => {
-                    render_composition(ui, id, b, fixture, plan, origin)
+                    render_composition(ui, id, b, fixture, plan, origin, activation)
                 }
                 CompositionChild::Region(id) => {
                     if let Some(region) = b.regions.iter().find(|r| r.id == *id) {
-                        render_region(ui, region, b, fixture, child_rect, origin);
+                        render_region(ui, region, b, fixture, child_rect, origin, activation);
                     }
                 }
             },
@@ -70,6 +92,7 @@ fn render_region(
     fixture: &str,
     rect: LayoutRect,
     origin: egui::Pos2,
+    activation: &mut Option<InteractionEvent>,
 ) {
     let egui_rect = to_egui_rect(rect, origin);
     if let Some(v) = &b.visual {
@@ -124,12 +147,12 @@ fn render_region(
             if r.role == "commands" {
                 ui.horizontal_wrapped(|ui| {
                     for e in elements {
-                        render_element(ui, e, b, fixture);
+                        render_element(ui, e, b, fixture, activation);
                     }
                 });
             } else {
                 for e in elements {
-                    render_element(ui, e, b, fixture);
+                    render_element(ui, e, b, fixture, activation);
                 }
             }
         },
@@ -141,6 +164,7 @@ fn render_element(
     e: &viewwright_model::ResolvedElement,
     b: &ResolvedBlueprint,
     fixture: &str,
+    activation: &mut Option<InteractionEvent>,
 ) {
     ui.add_space(4.0);
     ui.label(element_text(&e.label, e.importance, b.visual.as_ref()));
@@ -187,7 +211,20 @@ fn render_element(
             } else {
                 RichText::new(&e.label)
             };
-            let _ = ui.button(label);
+            let state = b.command_state(fixture, &e.id);
+            let response = ui.add_enabled(state.enabled, egui::Button::new(label));
+            if !state.enabled {
+                if let Some(reason) = state.reason {
+                    response.on_hover_text(reason);
+                }
+            } else if response.clicked() {
+                if let Some(action) = &e.action {
+                    *activation = Some(InteractionEvent {
+                        element_id: e.id.clone(),
+                        action: action.as_str().to_owned(),
+                    });
+                }
+            }
         }
         ElementKind::Status => {
             if let Some(ResolvedFixtureContent::Text { text, .. }) = content_for(b, fixture, &e.id)
@@ -344,6 +381,7 @@ fn content_for<'a>(
             | ResolvedFixtureContent::Text { element: id, .. }
             | ResolvedFixtureContent::Tree { element: id, .. }
             | ResolvedFixtureContent::Document { element: id, .. } => id == element,
+            ResolvedFixtureContent::Command { element: id, .. } => id == element,
         })
 }
 

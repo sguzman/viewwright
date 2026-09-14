@@ -95,6 +95,7 @@ region = "app_commands"
 kind = "command"
 importance = "secondary"
 label = "Open"
+action = "document.open"
 [[element]]
 id = "library_search"
 region = "library"
@@ -125,18 +126,21 @@ region = "transport"
 kind = "command"
 importance = "primary"
 label = "Play / pause"
+action = "reader.play_pause"
 [[element]]
 id = "voice"
 region = "transport"
 kind = "command"
 importance = "secondary"
 label = "Voice"
+action = "reader.choose_voice"
 [[element]]
 id = "speed"
 region = "transport"
 kind = "command"
 importance = "secondary"
 label = "Speed"
+action = "reader.choose_speed"
 [[element]]
 id = "reading_status"
 region = "transport"
@@ -181,6 +185,15 @@ document = { title = "No document loaded", paragraphs = [] }
 [[fixture.content]]
 element = "reader_settings"
 properties = []
+[[fixture.content]]
+element = "play_pause"
+command = { enabled = false, reason = "Open a document first" }
+[[fixture.content]]
+element = "voice"
+command = { enabled = false, reason = "Open a document first" }
+[[fixture.content]]
+element = "speed"
+command = { enabled = false, reason = "Open a document first" }
 [[fixture.content]]
 element = "reading_status"
 text = "Open a document to begin reading"

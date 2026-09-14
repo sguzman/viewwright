@@ -32,6 +32,7 @@ fn main() -> eframe::Result<()> {
                 blueprints,
                 screen: 2,
                 fixture: 0,
+                last_action: None,
             }))
         }),
     )
@@ -41,6 +42,7 @@ struct App {
     blueprints: Vec<ResolvedBlueprint>,
     screen: usize,
     fixture: usize,
+    last_action: Option<viewwright_egui::InteractionEvent>,
 }
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
@@ -55,6 +57,12 @@ impl eframe::App for App {
                     },
                 );
             }
+            if let Some(event) = &self.last_action {
+                ui.label(format!(
+                    "Last action: {} ({})",
+                    event.action, event.element_id
+                ));
+            }
         });
         egui::TopBottomPanel::bottom("fixtures").show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -66,6 +74,7 @@ impl eframe::App for App {
                     {
                         self.screen = i;
                         self.fixture = 0;
+                        self.last_action = None;
                     }
                 }
                 ui.separator();
@@ -73,6 +82,7 @@ impl eframe::App for App {
                 for (i, f) in self.blueprints[self.screen].fixtures.iter().enumerate() {
                     if ui.selectable_label(i == self.fixture, &f.id).clicked() {
                         self.fixture = i;
+                        self.last_action = None;
                     }
                 }
             });
@@ -83,6 +93,9 @@ impl eframe::App for App {
             .get(self.fixture)
             .map(|f| f.id.as_str())
             .unwrap_or("default");
-        viewwright_egui::show(ctx, b, fixture);
+        let output = viewwright_egui::show(ctx, b, fixture);
+        if let Some(event) = output.activation {
+            self.last_action = Some(event);
+        }
     }
 }

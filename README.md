@@ -103,9 +103,9 @@ The repository is a Cargo workspace. Blueprints are parsed, validated, and resol
     cargo test
     cargo run -p viewwright-preview
 
-## Current design work — M7 command affordance contracts
+## M7 — command affordance contracts
 
-Accepted screens now contain real command affordances such as Open, Play / pause, Voice, Speed, and Refresh. The renderer detects button clicks, but command meaning is still label-only and click results are discarded.
+Accepted screens now contain real command affordances such as Open, Play / pause, Voice, Speed, and Refresh. Command elements carry validated namespaced action identifiers, and the egui backend reports enabled activations to the preview host without executing application behavior.
 
 M7 closes that semantic gap without making ViewWright an application runtime:
 
@@ -123,7 +123,7 @@ host application may decide what to do
 
 M7 also adds a tiny fixture-backed command enabled/disabled state for honest isolated previews. It does not add callbacks, action execution, condition expressions, event routing, navigation, or application state graphs.
 
-The aspirational pressure specimen is kept separate until parser/model support exists:
+The M7 pressure specimen remains separate from the ordinary selector as reference coverage for fixture-backed disabled commands:
 
 - [`specimens/reader-workspace-visual-m7.toml`](specimens/reader-workspace-visual-m7.toml)
 
@@ -144,4 +144,4 @@ See:
 - M4 — accepted
 - M5 — accepted
 - M6 — accepted
-- M7 — command-affordance pressure test formalized; implementation not yet started
+- M7 — accepted

@@ -102,6 +102,7 @@ region = "commands"
 kind = "command"
 importance = "secondary"
 label = "Refresh"
+action = "dependency.refresh"
 
 [[element]]
 id = "package_search"
