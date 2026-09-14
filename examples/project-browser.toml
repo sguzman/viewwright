@@ -1,0 +1,90 @@
+[screen]
+id = "project_browser"
+purpose = "Browse projects and inspect the selected project"
+density = "comfortable"
+
+[design]
+character = ["quiet", "technical", "crafted"]
+dominant = "projects"
+avoid = [
+    "pill_soup",
+    "nested_card_soup",
+    "border_everything",
+    "uniform_visual_weight",
+]
+
+[tokens.spacing]
+xs = 4
+sm = 8
+md = 12
+lg = 16
+xl = 24
+
+[tokens.corners]
+small = 4
+medium = 7
+
+[[region]]
+id = "navigation"
+role = "navigation"
+importance = "secondary"
+width = "240px"
+
+[[region]]
+id = "projects"
+role = "primary_content"
+importance = "primary"
+grow = 1
+
+[[region]]
+id = "inspector"
+role = "inspector"
+importance = "secondary"
+width = "320px"
+
+[[composition]]
+id = "workspace"
+kind = "split"
+axis = "horizontal"
+children = ["navigation", "projects", "inspector"]
+gap = "md"
+padding = "lg"
+
+[[element]]
+id = "project_search"
+region = "navigation"
+kind = "search"
+importance = "secondary"
+label = "Search projects"
+
+[[element]]
+id = "navigation_items"
+region = "navigation"
+kind = "collection"
+importance = "secondary"
+presentation = "list"
+
+[[element]]
+id = "project_collection"
+region = "projects"
+kind = "collection"
+importance = "primary"
+presentation = "adaptive_cards"
+
+[[element]]
+id = "project_inspector"
+region = "inspector"
+kind = "property_sheet"
+importance = "secondary"
+
+[[fixture]]
+id = "many_projects"
+state = "populated_dense"
+
+[[fixture]]
+id = "selected_project"
+state = "selection"
+
+[[fixture]]
+id = "empty"
+state = "empty"
