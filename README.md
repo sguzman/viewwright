@@ -83,6 +83,15 @@ M4 added deterministic backend-independent major layout slots:
 - cross-axis fill
 - egui rendering inside planned composition/region rectangles
 
+M5 made the Reader fixture state representative and canonical:
+
+- hierarchical tree nodes with parent relationships and authored selection
+- plain document title + ordered paragraphs
+- existing property/status fixture families for settings and reading state
+- canonical loaded and empty Reader states
+- removal of the remaining Reader document fixture-name heuristic
+- semantic/debug summaries for the new fixture families
+
 The Project Browser, Reader Workspace, visual Reader Workspace, and Dependency Workbench now share the same semantic pipeline and layout projection.
 
 ## Running the current slice
@@ -92,26 +101,36 @@ The repository is a Cargo workspace. Blueprints are parsed, validated, and resol
     cargo test
     cargo run -p viewwright-preview
 
-## Current design work — M5 Reader fixture honesty
+## Current design work — M6 visual legibility audit
 
-Human QA after M4 showed that the Reader geometry is now correct, but the dominant reader surface is still too placeholder-heavy to judge the visual design honestly: the outline is backend fiction, document content is backend fiction, and the document renderer still infers state from fixture naming.
+Human QA after M5 removed the remaining Reader-content ambiguity: the populated Reader is structurally sane and representative, but the authored dark palette still feels excessively dark.
 
-M5 extends canonical fixture content narrowly with:
+The key pressure is not ordinary text contrast. The current palette gives text strong foreground/background contrast while clustering canvas, panel, and raised surfaces in a very-low-luminance range with weak separation.
 
-- hierarchical tree nodes represented as stable flat node records with optional parents
-- optional selected tree node
-- a plain document title + ordered paragraphs
-- existing M3 property/status content for Reader settings and reading status
+M6 therefore adds a backend-independent **visual audit** over the existing resolved visual model:
 
-This exists only to make the Reader preview representative enough for a real visual judgment. It does not introduce rich text, pagination, scrolling architecture, TTS semantics, runtime data binding, or interaction state machines.
+```text
+resolved visual blueprint
+    ↓
+visual audit
+    ├── palette luminance
+    ├── foreground contrast
+    ├── structural surface separation
+    └── advisory findings
+```
+
+M6 adds no new canonical authoring syntax. Audit findings are warnings, not validation errors, and never silently rewrite authored colors.
+
+A separate visual Reader pressure specimen explores a less-compressed dark palette for human comparison before any canonical palette migration is accepted.
 
 See:
 
-- [`docs/m5-reader-fixture-content.md`](docs/m5-reader-fixture-content.md)
-- [`docs/m5-acceptance.md`](docs/m5-acceptance.md)
-- [`docs/m5-schema-summary.md`](docs/m5-schema-summary.md)
-- [`docs/m5-implementation-boundary.md`](docs/m5-implementation-boundary.md)
-- [`docs/m5-stop-condition.md`](docs/m5-stop-condition.md)
+- [`docs/m6-visual-legibility.md`](docs/m6-visual-legibility.md)
+- [`docs/m6-acceptance.md`](docs/m6-acceptance.md)
+- [`docs/m6-schema-summary.md`](docs/m6-schema-summary.md)
+- [`docs/m6-implementation-boundary.md`](docs/m6-implementation-boundary.md)
+- [`docs/m6-stop-condition.md`](docs/m6-stop-condition.md)
+- [`specimens/reader-workspace-visual-m6.toml`](specimens/reader-workspace-visual-m6.toml)
 
 ## Status
 
@@ -120,4 +139,5 @@ See:
 - M2 — accepted
 - M3 — accepted
 - M4 — accepted
-- M5 — Reader fixture-content pressure test formalized; implementation not yet started
+- M5 — accepted
+- M6 — visual-legibility pressure test formalized; implementation not yet started
