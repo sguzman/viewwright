@@ -71,7 +71,7 @@ M2 added semantic visual authoring:
 - egui consumption of resolved visual semantics
 - scoped preview styling so authored screen visuals do not contaminate preview-host chrome
 
-The visual Reader Workspace pressure test is now accepted. It demonstrated that a coherent authored visual profile can survive canonical TOML → resolution → concept specification + egui without becoming a CSS-like styling system.
+The visual Reader Workspace pressure test is accepted. It demonstrated that a coherent authored visual profile can survive canonical TOML → resolution → concept specification + egui without becoming a CSS-like styling system.
 
 ## Running the current slice
 
@@ -82,17 +82,24 @@ The repository is a Cargo workspace. Blueprints are parsed, validated, and resol
 
 The preview currently includes the Project Browser, structural Reader Workspace, and visual Reader Workspace specimens.
 
-## Current design work — M3 semantic element realization
+## Current design work — M3 fixture-backed semantic preview content
 
-The next pressure test focuses on the semantic element layer.
+The next pressure test targets the point where current backends still invent representative content.
 
-ViewWright can already place and style regions, but higher-level element kinds such as collections, property sheets, trees, commands, status surfaces, and document surfaces are still rendered with placeholder-like backend behavior. M3 will test whether a small amount of backend-independent element semantics can produce recognizable interface objects without collapsing into serialized widgets or application business logic.
+ViewWright can already describe a collection, property sheet, status surface, and similar semantic elements, but current preview behavior still fabricates placeholder values and partly infers state from fixture-id strings. M3 introduces a deliberately small fixture-content vocabulary so representative collection items, selection, properties, and status text can be authored canonically and resolved before projection.
 
-M3 should be earned by a new specimen rather than by polishing the existing Reader Workspace indefinitely.
+`specimens/dependency-workbench.toml` is the pressure specimen: a light, dense technical workspace deliberately unlike the dark Reader Workspace. It should be renderable without application-specific dependency logic and without becoming a general data-binding system.
+
+See:
+
+- [`docs/m3-fixture-content.md`](docs/m3-fixture-content.md)
+- [`docs/m3-acceptance.md`](docs/m3-acceptance.md)
+- [`specimens/dependency-workbench.toml`](specimens/dependency-workbench.toml)
+- [`specimens/dependency-workbench.ascii.txt`](specimens/dependency-workbench.ascii.txt)
 
 ## Status
 
 - M0 — accepted
 - M1 — accepted
 - M2 — accepted
-- M3 — design pressure test in progress
+- M3 — fixture-content pressure test formalized; implementation not yet started
