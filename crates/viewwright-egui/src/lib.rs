@@ -18,11 +18,7 @@ pub struct RenderOutput {
 
 pub fn show(ctx: &Context, blueprint: &ResolvedBlueprint, fixture: &str) -> RenderOutput {
     let mut output = RenderOutput::default();
-    let root_fill = blueprint
-        .visual
-        .as_ref()
-        .map(|v| color32(v.palette.canvas))
-        .unwrap_or(Color32::TRANSPARENT);
+    let root_fill = root_fill(ctx, blueprint);
     CentralPanel::default()
         .frame(Frame::new().fill(root_fill).inner_margin(0.0))
         .show(ctx, |ui| {
@@ -42,6 +38,14 @@ pub fn show(ctx: &Context, blueprint: &ResolvedBlueprint, fixture: &str) -> Rend
             });
         });
     output
+}
+
+fn root_fill(ctx: &Context, blueprint: &ResolvedBlueprint) -> Color32 {
+    blueprint
+        .visual
+        .as_ref()
+        .map(|v| color32(v.palette.canvas))
+        .unwrap_or_else(|| ctx.style().visuals.panel_fill)
 }
 
 fn render_composition(
@@ -513,4 +517,32 @@ fn apply_visuals(ui: &mut egui::Ui, b: &ResolvedBlueprint) {
         egui::TextStyle::Small,
         FontId::proportional(v.type_scale.caption as f32),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::root_fill;
+    use egui::{Color32, Context};
+    use viewwright_model::parse_and_resolve;
+
+    #[test]
+    fn root_fill_uses_active_theme_without_visual_and_authored_canvas_with_visual() {
+        let context = Context::default();
+        let theme_fill = Color32::from_rgb(12, 34, 56);
+        context.style_mut(|style| style.visuals.panel_fill = theme_fill);
+        let project =
+            parse_and_resolve(include_str!("../../../examples/project-browser.toml")).unwrap();
+        assert_eq!(root_fill(&context, &project), theme_fill);
+
+        let visual = parse_and_resolve(include_str!(
+            "../../../specimens/reader-workspace-visual.toml"
+        ))
+        .unwrap();
+        assert_eq!(root_fill(&context, &visual), Color32::from_rgb(38, 43, 51));
+
+        let another_theme_fill = Color32::from_rgb(210, 220, 230);
+        context.style_mut(|style| style.visuals.panel_fill = another_theme_fill);
+        assert_eq!(root_fill(&context, &project), another_theme_fill);
+        assert_eq!(root_fill(&context, &visual), Color32::from_rgb(38, 43, 51));
+    }
 }
