@@ -1,0 +1,26 @@
+ViewWright ASCII projection specimen
+Derived conceptually from project-browser.toml; this file is illustrative until the projector exists.
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ PROJECT BROWSER                                                              │
+│ Browse projects and inspect the selected project                             │
+├──────────────────┬──────────────────────────────────────┬────────────────────┤
+│ NAVIGATION       │ PROJECTS                             │ INSPECTOR          │
+│ secondary        │ PRIMARY                              │ secondary          │
+│                  │                                      │                    │
+│ [ Search...    ] │ ┌──────────────┐  ┌──────────────┐ │ Selected project   │
+│                  │ │ Project A    │  │ Project B    │ │                    │
+│ Projects         │ │ active       │  │ dormant      │ │ Status             │
+│ Archive          │ └──────────────┘  └──────────────┘ │ Active             │
+│ Settings         │                                      │                    │
+│                  │ ┌──────────────┐  ┌──────────────┐ │ Description        │
+│                  │ │ Project C    │  │ Project D    │ │ ...                │
+│                  │ │ queued       │  │ maintenance  │ │                    │
+│                  │ └──────────────┘  └──────────────┘ │                    │
+└──────────────────┴──────────────────────────────────────┴────────────────────┘
+
+Intent visible in this projection:
+- project collection is dominant
+- navigation and inspector are subordinate
+- three major regions are immediately legible
+- exact pixels, typography, colors, and toolkit widgets are deliberately absent
