@@ -161,9 +161,9 @@ See:
 - [`docs/m8-pressure-evidence.md`](docs/m8-pressure-evidence.md)
 - [`docs/m8-acceptance-matrix.md`](docs/m8-acceptance-matrix.md)
 
-## Current design work — M9 screen density fidelity
+## M9 — screen density fidelity
 
-Accepted canonical screens already author both `comfortable` and `dense` screen density, but the field is currently an unchecked source string and does not drive egui projection. M9 makes that existing semantic distinction truthful without turning density into a second layout system.
+Accepted canonical screens author both `comfortable` and `dense` screen density. M9 resolves that field into typed screen semantics and projects it through a centralized egui micro-layout policy without turning density into a second layout system.
 
 ```text
 authored screen density
@@ -175,9 +175,11 @@ semantic / concept inspection
 backend-local micro-layout policy
 ```
 
-M9 is limited to local rhythm inside M4-planned regions. It must not rescale major geometry, authored spacing tokens, typography, palette, fixtures, actions, or collection presentation.
+Density remains limited to local rhythm inside M4-planned regions: region inset, local item/element spacing, control padding/minimum interaction height, and card-local compactness. It does not rescale major geometry, authored spacing tokens, typography, palette, fixtures, actions, or collection presentation.
 
-The A/B pressure pair isolates the variable:
+Human A/B QA accepted the isolated pressure pair: Comfortable visibly preserves more breathing room while Dense is noticeably tighter with the same major geometry, typography, content, and presentation.
+
+Pressure pair:
 
 - [`specimens/density-pressure-comfortable.toml`](specimens/density-pressure-comfortable.toml)
 - [`specimens/density-pressure-dense.toml`](specimens/density-pressure-dense.toml)
@@ -204,4 +206,4 @@ See:
 - M6 — accepted
 - M7 — accepted
 - M8 — accepted
-- M9 — screen-density fidelity formalized; implementation not yet started
+- M9 — accepted
