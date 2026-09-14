@@ -135,9 +135,9 @@ See:
 - [`docs/m7-implementation-boundary.md`](docs/m7-implementation-boundary.md)
 - [`docs/m7-stop-condition.md`](docs/m7-stop-condition.md)
 
-## Current design work — M8 collection presentation fidelity
+## M8 — collection presentation fidelity
 
-The accepted Project Browser authors two different collection presentations: navigation is a `list`, while projects are `adaptive_cards`. M8 now resolves that field into typed collection-presentation semantics, validates compatibility/defaulting, exposes the distinction in semantic/concept projections, and gives egui separate list and wrapping adaptive-card renderers.
+The accepted Project Browser authors two different collection presentations: navigation is a `list`, while projects are `adaptive_cards`. M8 resolves that field into typed collection-presentation semantics, validates compatibility/defaulting, exposes the distinction in semantic/concept projections, and gives egui separate list and wrapping adaptive-card renderers.
 
 ```text
 authored collection presentation
@@ -149,7 +149,7 @@ semantic / concept inspection
 backend honors list vs adaptive cards
 ```
 
-Implementation is complete in `main`; human visual QA of the canonical selectors remains before acceptance/closure.
+Human QA accepted the canonical Project Browser projection after correcting the non-visual fallback to inherit the active egui theme instead of rendering over a transparent root.
 
 See:
 
@@ -171,4 +171,4 @@ See:
 - M5 — accepted
 - M6 — accepted
 - M7 — accepted
-- M8 — implementation complete; human visual QA pending
+- M8 — accepted
