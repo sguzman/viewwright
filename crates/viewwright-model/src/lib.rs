@@ -604,7 +604,15 @@ pub struct ResolvedScreen {
 pub fn parse_and_resolve(source: &str) -> Result<ResolvedBlueprint, BlueprintError> {
     resolve(toml::from_str(source)?)
 }
+fn validate_nonblank_id(id: &str, context: &str, errors: &mut Vec<String>) {
+    if id.trim().is_empty() {
+        errors.push(format!(
+            "{context}: must contain at least one non-whitespace character"
+        ));
+    }
+}
 fn add_id(ids: &mut HashSet<String>, errors: &mut Vec<String>, id: &str, kind: &str) {
+    validate_nonblank_id(id, &format!("{kind}.id"), errors);
     if !ids.insert(id.to_owned()) {
         errors.push(format!("duplicate id '{id}' ({kind})"));
     }
@@ -753,6 +761,7 @@ fn surface(value: Option<&String>, id: &str, errors: &mut Vec<String>) -> Surfac
 pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintError> {
     let mut errors = Vec::new();
     let mut ids = HashSet::new();
+    validate_nonblank_id(&source.screen.id, "screen.id", &mut errors);
     let density = match source.screen.density.as_str() {
         "comfortable" => Density::Comfortable,
         "dense" => Density::Dense,
@@ -788,7 +797,11 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
             surface: surface(r.surface.as_ref(), &r.id, &mut errors),
         });
     }
-    let region_ids: HashSet<_> = regions.iter().map(|r| r.id.as_str()).collect();
+    let region_ids: HashSet<_> = regions
+        .iter()
+        .filter(|r| !r.id.trim().is_empty())
+        .map(|r| r.id.as_str())
+        .collect();
     let mut elements = Vec::new();
     for e in &source.element {
         add_id(&mut ids, &mut errors, &e.id, "element");
@@ -826,8 +839,17 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
             action,
         });
     }
-    let composition_ids: HashSet<_> = source.composition.iter().map(|c| c.id.as_str()).collect();
-    let element_ids: HashSet<_> = elements.iter().map(|e| e.id.as_str()).collect();
+    let composition_ids: HashSet<_> = source
+        .composition
+        .iter()
+        .filter(|c| !c.id.trim().is_empty())
+        .map(|c| c.id.as_str())
+        .collect();
+    let element_ids: HashSet<_> = elements
+        .iter()
+        .filter(|e| !e.id.trim().is_empty())
+        .map(|e| e.id.as_str())
+        .collect();
     let mut compositions = Vec::new();
     for c in &source.composition {
         add_id(&mut ids, &mut errors, &c.id, "composition");
@@ -907,13 +929,13 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
     let root = match source.screen.root.as_deref() {
         None => {
             errors.push("screen.root: missing explicit composition reference".into());
-            String::new()
+            None
         }
         Some(root) if !composition_ids.contains(root) => {
             errors.push(format!("screen.root: '{root}' is not a composition"));
-            String::new()
+            None
         }
-        Some(root) => root.to_owned(),
+        Some(root) => Some(root.to_owned()),
     };
 
     let mut owners: HashMap<&str, &str> = HashMap::new();
@@ -941,11 +963,12 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
             } else {
                 owners.insert(child_id, composition.id.as_str());
             }
-            if !root.is_empty() && matches!(child, CompositionChild::Composition(id) if id == &root)
+            if matches!(child, CompositionChild::Composition(id) if Some(id.as_str()) == root.as_deref())
             {
                 errors.push(format!(
                     "composition '{}': root composition '{}' cannot be a child",
-                    composition.id, root
+                    composition.id,
+                    root.as_deref().unwrap_or_default()
                 ));
             }
         }
@@ -978,8 +1001,8 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
         visiting.remove(id);
     }
     let by_id: HashMap<_, _> = compositions.iter().map(|c| (c.id.as_str(), c)).collect();
-    if !root.is_empty() {
-        visit(&root, &by_id, &mut visiting, &mut visited, &mut errors);
+    if let Some(root) = root.as_deref() {
+        visit(root, &by_id, &mut visiting, &mut visited, &mut errors);
     }
     let mut resolved_fixtures = Vec::new();
     for f in &source.fixture {
@@ -1033,6 +1056,14 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
                 let resolved_items = items
                     .iter()
                     .filter_map(|item| {
+                        validate_nonblank_id(
+                            &item.id,
+                            &format!("fixture '{}': collection item id '{}'", f.id, item.id),
+                            &mut errors,
+                        );
+                        if item.id.trim().is_empty() {
+                            return None;
+                        }
                         if !item_ids.insert(item.id.clone()) {
                             errors.push(format!(
                                 "fixture '{}': duplicate collection item id '{}' for '{}'",
@@ -1102,6 +1133,14 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
                 let resolved_nodes: Vec<_> = nodes
                     .iter()
                     .filter_map(|node| {
+                        validate_nonblank_id(
+                            &node.id,
+                            &format!("fixture '{}': tree node id '{}'", f.id, node.id),
+                            &mut errors,
+                        );
+                        if node.id.trim().is_empty() {
+                            return None;
+                        }
                         if !node_ids.insert(node.id.clone()) {
                             errors.push(format!(
                                 "fixture '{}': duplicate tree node id '{}' for '{}'",
@@ -1226,7 +1265,7 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
             dominant,
             avoid: source.design.avoid,
         },
-        root,
+        root: root.expect("validated root"),
         regions,
         compositions,
         elements,
@@ -1514,6 +1553,114 @@ mod tests {
     fn authored_element_label_is_preserved_exactly() {
         let blueprint = parse_and_resolve(&labeled_element_source(Some("Find projects…"))).unwrap();
         assert_eq!(blueprint.elements[0].label, "Find projects…");
+    }
+
+    fn global_id_source(
+        screen: &str,
+        region: &str,
+        element: &str,
+        composition: &str,
+        fixture: &str,
+    ) -> String {
+        format!(
+            "[screen]\nid='{screen}'\npurpose='x'\nroot='root'\n[[region]]\nid='{region}'\nrole='navigation'\nimportance='primary'\n[[region]]\nid='other'\nrole='inspector'\nimportance='secondary'\n[[element]]\nid='{element}'\nregion='{region}'\nkind='text'\nimportance='primary'\nlabel='Text'\n[[composition]]\nid='{composition}'\nkind='split'\nchildren=['{region}','other']\n[[fixture]]\nid='{fixture}'\nstate='ready'"
+        )
+    }
+
+    #[test]
+    fn structural_global_ids_must_be_nonblank() {
+        let cases = [
+            ("screen.id", "", "screen"),
+            ("screen.id", "   ", "screen"),
+            ("region.id", "", "region"),
+            ("region.id", "   ", "region"),
+            ("element.id", "", "element"),
+            ("element.id", "   ", "element"),
+            ("composition.id", "", "composition"),
+            ("composition.id", "   ", "composition"),
+            ("fixture.id", "", "fixture"),
+            ("fixture.id", "   ", "fixture"),
+        ];
+        for (context, value, field) in cases {
+            let source = match field {
+                "screen" => global_id_source(value, "region", "element", "root", "fixture"),
+                "region" => global_id_source("screen", value, "element", "root", "fixture"),
+                "element" => global_id_source("screen", "region", value, "root", "fixture"),
+                "composition" => global_id_source("screen", "region", "element", value, "fixture"),
+                "fixture" => global_id_source("screen", "region", "element", "root", value),
+                _ => unreachable!(),
+            };
+            let error = parse_and_resolve(&source).unwrap_err().to_string();
+            assert!(
+                error.contains(context),
+                "{context} was not diagnosed: {error}"
+            );
+        }
+    }
+
+    fn collection_id_source(id: &str) -> String {
+        format!(
+            "[screen]\nid='screen'\npurpose='x'\nroot='root'\n[[region]]\nid='content'\nrole='primary_content'\nimportance='primary'\n[[region]]\nid='other'\nrole='status'\nimportance='secondary'\n[[element]]\nid='collection'\nregion='content'\nkind='collection'\nimportance='primary'\nlabel='Items'\n[[composition]]\nid='root'\nkind='split'\nchildren=['content','other']\n[[fixture]]\nid='fixture'\nstate='ready'\n[[fixture.content]]\nelement='collection'\nitems=[{{id='{id}',label='X'}}]"
+        )
+    }
+
+    #[test]
+    fn collection_item_ids_must_be_nonblank() {
+        for id in ["", "   "] {
+            let error = parse_and_resolve(&collection_id_source(id))
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains("collection item id") && error.contains("non-whitespace"));
+        }
+    }
+
+    fn tree_id_source(id: &str) -> String {
+        format!(
+            "[screen]\nid='screen'\npurpose='x'\nroot='root'\n[[region]]\nid='content'\nrole='primary_content'\nimportance='primary'\n[[region]]\nid='other'\nrole='status'\nimportance='secondary'\n[[element]]\nid='tree'\nregion='content'\nkind='tree'\nimportance='primary'\nlabel='Outline'\n[[composition]]\nid='root'\nkind='split'\nchildren=['content','other']\n[[fixture]]\nid='fixture'\nstate='ready'\n[[fixture.content]]\nelement='tree'\nnodes=[{{id='{id}',label='Node'}}]"
+        )
+    }
+
+    #[test]
+    fn tree_node_ids_must_be_nonblank() {
+        for id in ["", "   "] {
+            let error = parse_and_resolve(&tree_id_source(id))
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains("tree node id") && error.contains("non-whitespace"));
+        }
+    }
+
+    #[test]
+    fn valid_structural_ids_and_root_are_preserved_exactly() {
+        let source = global_id_source(
+            " screen ",
+            " reader panel ",
+            "element with spaces",
+            "root",
+            "fixture",
+        );
+        let blueprint = parse_and_resolve(&source).unwrap();
+        assert_eq!(blueprint.screen.id, " screen ");
+        assert_eq!(blueprint.regions[0].id, " reader panel ");
+        assert_eq!(blueprint.elements[0].id, "element with spaces");
+        assert_eq!(blueprint.elements[0].region, " reader panel ");
+        assert_eq!(blueprint.root, "root");
+        assert_eq!(blueprint.fixtures[0].id, "fixture");
+    }
+
+    #[test]
+    fn blank_composition_and_root_references_do_not_use_empty_sentinel() {
+        let empty = "[screen]\nid='screen'\npurpose='x'\nroot=''\n[[region]]\nid='a'\nrole='navigation'\nimportance='primary'\n[[region]]\nid='b'\nrole='inspector'\nimportance='secondary'\n[[composition]]\nid=''\nkind='split'\nchildren=['a','b']";
+        let error = parse_and_resolve(empty).unwrap_err().to_string();
+        assert!(error.contains("composition.id") && error.contains("screen.root"));
+
+        for root in ["", "   "] {
+            let source = format!(
+                "[screen]\nid='screen'\npurpose='x'\nroot='{root}'\n[[region]]\nid='a'\nrole='navigation'\nimportance='primary'\n[[region]]\nid='b'\nrole='inspector'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','b']"
+            );
+            let error = parse_and_resolve(&source).unwrap_err().to_string();
+            assert!(error.contains("screen.root"));
+        }
     }
 
     #[test]

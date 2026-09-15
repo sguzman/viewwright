@@ -301,6 +301,10 @@ M15 resolves `design.dominant` into typed semantic identity: a referenced region
 
 Director audit accepted the resolved design boundary, typed dominant-target identity, invalid-namespace rejection, freeform metadata preservation, and concept-output continuity without requiring human screenshot QA.
 
+## M16 — composition tree ownership fidelity
+
+M16 enforces unique structural ownership for composition children: duplicate siblings, multiple region or composition parents, and root-as-child references are rejected globally while unused declarations and cycle validation remain supported. Canonical screens and valid M4 geometry are unchanged.
+
 ## Status
 
 - M0 — accepted
@@ -319,3 +323,5 @@ Director audit accepted the resolved design boundary, typed dominant-target iden
 - M13 — accepted
 - M14 — accepted
 - M15 — accepted
+- M16 — accepted
+- M17 — implementation complete; director audit pending
