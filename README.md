@@ -215,6 +215,28 @@ See:
 - [`docs/m10-pressure-evidence.md`](docs/m10-pressure-evidence.md)
 - [`docs/m10-stop-condition.md`](docs/m10-stop-condition.md)
 
+## Current design work — M11 search input fidelity
+
+Canonical screens already author Search controls, but the egui backend currently gives their editable value frame lifetime by constructing a fresh empty string during every render. M11 makes the existing Search affordance truthfully editable across redraws without adding search execution or application state.
+
+```text
+resolved Search affordance + backend-local ephemeral state
+    ↓
+egui text input that survives redraws
+```
+
+Mutable query text remains outside canonical TOML, fixtures, and `ResolvedBlueprint`. The preview host owns a small explicit renderer state and clears/rebinds it when specimen or fixture selection changes. M11 does not filter collections, emit SearchChanged application events, persist query data, or generalize into form/application state management.
+
+See:
+
+- [`docs/m11-search-input-fidelity.md`](docs/m11-search-input-fidelity.md)
+- [`docs/m11-acceptance.md`](docs/m11-acceptance.md)
+- [`docs/m11-implementation-boundary.md`](docs/m11-implementation-boundary.md)
+- [`docs/m11-pressure-evidence.md`](docs/m11-pressure-evidence.md)
+- [`docs/m11-state-boundary.md`](docs/m11-state-boundary.md)
+- [`docs/m11-stop-condition.md`](docs/m11-stop-condition.md)
+- [`docs/m11-acceptance-matrix.md`](docs/m11-acceptance-matrix.md)
+
 ## Status
 
 - M0 — accepted
@@ -228,3 +250,4 @@ See:
 - M8 — accepted
 - M9 — accepted
 - M10 — accepted
+- M11 — search input fidelity formalized; implementation not yet started
