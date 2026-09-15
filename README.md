@@ -297,7 +297,9 @@ Director audit accepted the validation boundary, authored-label provenance, cano
 
 ## M15 — dominant target fidelity
 
-M15 resolves `design.dominant` into typed semantic identity: a referenced region or element becomes `DominantTarget::Region` or `DominantTarget::Element`. Character and avoid metadata remain preserved, and concept inspection continues to expose the dominant target by ID. Renderer and layout behavior are unchanged; director audit is pending.
+M15 resolves `design.dominant` into typed semantic identity: a referenced region or element becomes `DominantTarget::Region` or `DominantTarget::Element`. Character and avoid metadata remain preserved, and concept inspection continues to expose the dominant target by ID. Renderer and layout behavior are unchanged.
+
+Director audit accepted the resolved design boundary, typed dominant-target identity, invalid-namespace rejection, freeform metadata preservation, and concept-output continuity without requiring human screenshot QA.
 
 ## Status
 
@@ -316,4 +318,4 @@ M15 resolves `design.dominant` into typed semantic identity: a referenced region
 - M12 — accepted
 - M13 — accepted
 - M14 — accepted
-- M15 — implementation complete; director audit pending
+- M15 — accepted
