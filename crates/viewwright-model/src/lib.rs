@@ -781,6 +781,8 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
     validate_token_names(&source.tokens.spacing, "tokens.spacing", &mut errors);
     validate_token_names(&source.tokens.corners, "tokens.corners", &mut errors);
     validate_token_names(&source.tokens.color.values, "tokens.color", &mut errors);
+    validate_color_values(&source.tokens.color, &mut errors);
+    let token_validation_errors = errors.len();
     validate_nonblank_id(&source.screen.id, "screen.id", &mut errors);
     if source.screen.purpose.trim().is_empty() {
         errors.push("screen.purpose: must contain at least one non-whitespace character".into());
@@ -1296,10 +1298,9 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
             None
         }
     });
-    if !errors.is_empty() {
+    if errors.len() > token_validation_errors {
         return Err(BlueprintError::Validation(errors.join("\n")));
     }
-    validate_color_values(&source.tokens.color, &mut errors);
     let visual = resolve_visual(source.visual.as_ref(), &source.tokens, &mut errors);
     if !errors.is_empty() {
         return Err(BlueprintError::Validation(errors.join("\n")));
@@ -2330,6 +2331,20 @@ mod tests {
                 .to_string();
             assert!(error.contains("tokens.color") && error.contains("non-whitespace"));
         }
+    }
+
+    #[test]
+    fn invalid_color_name_and_value_report_both_diagnostics() {
+        let error = parse_and_resolve(&token_maps_source(
+            "valid = 8",
+            "valid = 4",
+            "\"\" = 'garbage'",
+        ))
+        .unwrap_err()
+        .to_string();
+        let name_offset = error.find("tokens.color: token name ''").unwrap();
+        let value_offset = error.find("color token '': expected #RRGGBB").unwrap();
+        assert!(name_offset < value_offset);
     }
 
     #[test]
