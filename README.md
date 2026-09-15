@@ -1,4 +1,4 @@
-# ViewWright
+# 🟩 ViewWright
 
 **Design the interface before implementing the widgets.**
 
