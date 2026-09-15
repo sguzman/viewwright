@@ -290,6 +290,53 @@ fn region_role(value: &str, id: &str, errors: &mut Vec<String>) -> RegionRole {
         }
     }
 }
+
+fn composition_kind(value: &str, id: &str, errors: &mut Vec<String>) -> CompositionKind {
+    match value {
+        "split" => CompositionKind::Split,
+        "row" => CompositionKind::Row,
+        "column" => CompositionKind::Column,
+        other => {
+            errors.push(format!(
+                "composition '{id}': unknown composition kind '{other}'"
+            ));
+            CompositionKind::Split
+        }
+    }
+}
+
+fn axis(value: Option<&str>, kind: CompositionKind, id: &str, errors: &mut Vec<String>) -> Axis {
+    let implied = match kind {
+        CompositionKind::Column => Axis::Vertical,
+        CompositionKind::Split | CompositionKind::Row => Axis::Horizontal,
+    };
+    let Some(value) = value else {
+        return implied;
+    };
+    let Some(axis) = (match value {
+        "horizontal" => Some(Axis::Horizontal),
+        "vertical" => Some(Axis::Vertical),
+        other => {
+            errors.push(format!(
+                "composition '{id}': unknown axis '{other}' (expected horizontal or vertical)"
+            ));
+            None
+        }
+    }) else {
+        return implied;
+    };
+    if kind == CompositionKind::Row && axis != Axis::Horizontal {
+        errors.push(format!(
+            "composition '{id}': row requires horizontal axis, got '{value}'"
+        ));
+    }
+    if kind == CompositionKind::Column && axis != Axis::Vertical {
+        errors.push(format!(
+            "composition '{id}': column requires vertical axis, got '{value}'"
+        ));
+    }
+    axis
+}
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ElementKind {
     Text,
@@ -397,12 +444,56 @@ pub enum CompositionChild {
 #[derive(Debug, Clone)]
 pub struct ResolvedComposition {
     pub id: String,
-    pub kind: String,
-    pub axis: String,
+    pub kind: CompositionKind,
+    pub axis: Axis,
     pub children: Vec<CompositionChild>,
     pub gap: u32,
     pub padding: u32,
     pub grow: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompositionKind {
+    Split,
+    Row,
+    Column,
+}
+
+impl CompositionKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Split => "split",
+            Self::Row => "row",
+            Self::Column => "column",
+        }
+    }
+}
+
+impl std::fmt::Display for CompositionKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Axis {
+    Horizontal,
+    Vertical,
+}
+
+impl Axis {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Horizontal => "horizontal",
+            Self::Vertical => "vertical",
+        }
+    }
+}
+
+impl std::fmt::Display for Axis {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
 }
 #[derive(Debug, Clone)]
 pub struct ResolvedFixture {
@@ -712,23 +803,8 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
                 c.id
             ));
         }
-        if !matches!(
-            c.kind.as_str(),
-            "row" | "column" | "stack" | "split" | "overlay"
-        ) {
-            errors.push(format!(
-                "composition '{}': unknown composition kind '{}'",
-                c.id, c.kind
-            ));
-        }
-        if let Some(axis) = &c.axis {
-            if axis != "horizontal" && axis != "vertical" {
-                errors.push(format!(
-                    "composition '{}': axis must be horizontal or vertical",
-                    c.id
-                ));
-            }
-        }
+        let composition_kind = composition_kind(&c.kind, &c.id, &mut errors);
+        let composition_axis = axis(c.axis.as_deref(), composition_kind, &c.id, &mut errors);
         let mut children = Vec::new();
         for child in &c.children {
             if region_ids.contains(child.as_str()) {
@@ -781,14 +857,8 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
         }
         compositions.push(ResolvedComposition {
             id: c.id.clone(),
-            kind: c.kind.clone(),
-            axis: c.axis.clone().unwrap_or_else(|| {
-                if c.kind == "column" {
-                    "vertical".into()
-                } else {
-                    "horizontal".into()
-                }
-            }),
+            kind: composition_kind,
+            axis: composition_axis,
             children,
             gap,
             padding,
@@ -1103,8 +1173,8 @@ impl ResolvedBlueprint {
                 "{:indent$}composition {} ({}, {})\n",
                 "",
                 c.id,
-                c.kind,
-                c.axis,
+                c.kind.as_str(),
+                c.axis.as_str(),
                 indent = indent
             ));
             for child in &c.children {
@@ -1275,6 +1345,77 @@ mod tests {
         let source = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='library'\nrole='sidebar'\nimportance='primary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['library']";
         let error = parse_and_resolve(source).unwrap_err().to_string();
         assert!(error.contains("region 'library'") && error.contains("unknown role 'sidebar'"));
+    }
+
+    fn composition_source(kind: &str, axis: Option<&str>) -> String {
+        let axis = axis
+            .map(|axis| format!("axis='{axis}'\n"))
+            .unwrap_or_default();
+        format!(
+            "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='first'\nrole='navigation'\nimportance='primary'\n[[region]]\nid='second'\nrole='inspector'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='{kind}'\n{axis}children=['first','second']"
+        )
+    }
+
+    #[test]
+    fn composition_kinds_and_axes_resolve_with_compatibility_rules() {
+        let resolved = |kind, axis| parse_and_resolve(&composition_source(kind, axis)).unwrap();
+        for (kind, axis, expected_kind, expected_axis) in [
+            (
+                "split",
+                Some("horizontal"),
+                CompositionKind::Split,
+                Axis::Horizontal,
+            ),
+            (
+                "split",
+                Some("vertical"),
+                CompositionKind::Split,
+                Axis::Vertical,
+            ),
+            ("split", None, CompositionKind::Split, Axis::Horizontal),
+            ("row", None, CompositionKind::Row, Axis::Horizontal),
+            (
+                "row",
+                Some("horizontal"),
+                CompositionKind::Row,
+                Axis::Horizontal,
+            ),
+            ("column", None, CompositionKind::Column, Axis::Vertical),
+            (
+                "column",
+                Some("vertical"),
+                CompositionKind::Column,
+                Axis::Vertical,
+            ),
+        ] {
+            let composition = &resolved(kind, axis).compositions[0];
+            assert_eq!(composition.kind, expected_kind);
+            assert_eq!(composition.axis, expected_axis);
+        }
+        let vertical = resolved("column", None).semantic_tree();
+        assert!(vertical.contains("composition root (column, vertical)"));
+    }
+
+    #[test]
+    fn unsupported_and_contradictory_compositions_are_rejected() {
+        for kind in ["stack", "overlay", "grid"] {
+            let error = parse_and_resolve(&composition_source(kind, None))
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains("composition 'root'") && error.contains(kind));
+        }
+        let row_error = parse_and_resolve(&composition_source("row", Some("vertical")))
+            .unwrap_err()
+            .to_string();
+        assert!(row_error.contains("composition 'root': row requires horizontal axis"));
+        let column_error = parse_and_resolve(&composition_source("column", Some("horizontal")))
+            .unwrap_err()
+            .to_string();
+        assert!(column_error.contains("composition 'root': column requires vertical axis"));
+        let axis_error = parse_and_resolve(&composition_source("split", Some("diagonal")))
+            .unwrap_err()
+            .to_string();
+        assert!(axis_error.contains("composition 'root': unknown axis 'diagonal'"));
     }
     #[test]
     fn collection_presentations_are_typed_validated_and_defaulted() {

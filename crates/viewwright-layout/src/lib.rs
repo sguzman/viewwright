@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use viewwright_model::{CompositionChild, ResolvedBlueprint};
+use viewwright_model::{Axis, CompositionChild, ResolvedBlueprint};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Rect {
@@ -63,7 +63,7 @@ fn layout_composition(blueprint: &ResolvedBlueprint, plan: &mut LayoutPlan, id: 
     };
     plan.compositions.insert(id.to_owned(), rect);
     let inner = rect.inset(composition.padding as f32);
-    let horizontal = composition.axis == "horizontal" || composition.kind == "row";
+    let horizontal = composition.axis == Axis::Horizontal;
     let gap = composition.gap as f32;
     let total_gap = gap * composition.children.len().saturating_sub(1) as f32;
     let fixed: f32 = composition
@@ -237,8 +237,8 @@ padding = "pad"
         b.compositions[0].grow = 0.0;
         b.compositions.push(viewwright_model::ResolvedComposition {
             id: "body".into(),
-            kind: "split".into(),
-            axis: "horizontal".into(),
+            kind: viewwright_model::CompositionKind::Split,
+            axis: Axis::Horizontal,
             children: vec![
                 CompositionChild::Region("a".into()),
                 CompositionChild::Region("b".into()),
