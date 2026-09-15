@@ -915,6 +915,42 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
         }
         Some(root) => root.to_owned(),
     };
+
+    let mut owners: HashMap<&str, &str> = HashMap::new();
+    for composition in &compositions {
+        let mut siblings = HashSet::new();
+        for child in &composition.children {
+            let (child_id, child_kind) = match child {
+                CompositionChild::Region(id) => (id.as_str(), "region"),
+                CompositionChild::Composition(id) => (id.as_str(), "composition"),
+            };
+            if !siblings.insert(child_id) {
+                errors.push(format!(
+                    "composition '{}': child '{}' is duplicated within its children",
+                    composition.id, child_id
+                ));
+                continue;
+            }
+            if let Some(first_parent) = owners.get(child_id) {
+                if *first_parent != composition.id {
+                    errors.push(format!(
+                        "{} '{}' has multiple composition parents: '{}' and '{}'",
+                        child_kind, child_id, first_parent, composition.id
+                    ));
+                }
+            } else {
+                owners.insert(child_id, composition.id.as_str());
+            }
+            if !root.is_empty() && matches!(child, CompositionChild::Composition(id) if id == &root)
+            {
+                errors.push(format!(
+                    "composition '{}': root composition '{}' cannot be a child",
+                    composition.id, root
+                ));
+            }
+        }
+    }
+
     let mut visiting = HashSet::new();
     let mut visited = HashSet::new();
     fn visit(
@@ -1709,6 +1745,42 @@ mod tests {
         assert!(e.contains("composition cycle detected"));
     }
     #[test]
+    fn duplicate_region_sibling_is_rejected() {
+        let e = parse_and_resolve("[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='a'\nrole='navigation'\nimportance='primary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','a']").unwrap_err().to_string();
+        assert!(
+            e.contains("composition 'root'") && e.contains("child 'a'") && e.contains("duplicated")
+        );
+    }
+    #[test]
+    fn duplicate_composition_sibling_is_rejected() {
+        let e = parse_and_resolve("[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='a'\nrole='navigation'\nimportance='primary'\n[[region]]\nid='b'\nrole='inspector'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['body','body']\n[[composition]]\nid='body'\nkind='split'\nchildren=['a','b']").unwrap_err().to_string();
+        assert!(
+            e.contains("composition 'root'")
+                && e.contains("child 'body'")
+                && e.contains("duplicated")
+        );
+    }
+    #[test]
+    fn region_multiple_parents_are_rejected() {
+        let e = parse_and_resolve("[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='shared_region'\nrole='navigation'\nimportance='primary'\n[[region]]\nid='a'\nrole='inspector'\nimportance='secondary'\n[[region]]\nid='b'\nrole='status'\nimportance='tertiary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['parent_a','parent_b']\n[[composition]]\nid='parent_a'\nkind='split'\nchildren=['shared_region','a']\n[[composition]]\nid='parent_b'\nkind='split'\nchildren=['shared_region','b']").unwrap_err().to_string();
+        assert!(e.contains("shared_region") && e.contains("parent_a") && e.contains("parent_b"));
+    }
+    #[test]
+    fn composition_multiple_parents_are_rejected() {
+        let e = parse_and_resolve("[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='a'\nrole='navigation'\nimportance='primary'\n[[region]]\nid='b'\nrole='inspector'\nimportance='secondary'\n[[region]]\nid='c'\nrole='status'\nimportance='tertiary'\n[[region]]\nid='d'\nrole='primary_content'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['parent_a','parent_b']\n[[composition]]\nid='parent_a'\nkind='split'\nchildren=['shared_body','a']\n[[composition]]\nid='parent_b'\nkind='split'\nchildren=['shared_body','b']\n[[composition]]\nid='shared_body'\nkind='split'\nchildren=['c','d']").unwrap_err().to_string();
+        assert!(e.contains("shared_body") && e.contains("parent_a") && e.contains("parent_b"));
+    }
+    #[test]
+    fn root_as_child_is_rejected_globally() {
+        let e = parse_and_resolve("[screen]\nid='x'\npurpose='x'\nroot='workspace'\n[[region]]\nid='a'\nrole='navigation'\nimportance='primary'\n[[region]]\nid='b'\nrole='inspector'\nimportance='secondary'\n[[region]]\nid='other'\nrole='status'\nimportance='tertiary'\n[[composition]]\nid='workspace'\nkind='split'\nchildren=['a','b']\n[[composition]]\nid='orphan'\nkind='split'\nchildren=['workspace','other']").unwrap_err().to_string();
+        assert!(e.contains("root composition 'workspace'") && e.contains("composition 'orphan'"));
+    }
+    #[test]
+    fn unused_declarations_without_ownership_conflicts_remain_allowed() {
+        let source = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='a'\nrole='navigation'\nimportance='primary'\n[[region]]\nid='b'\nrole='inspector'\nimportance='secondary'\n[[region]]\nid='unused_a'\nrole='status'\nimportance='tertiary'\n[[region]]\nid='unused_b'\nrole='primary_content'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','b']\n[[composition]]\nid='unused'\nkind='split'\nchildren=['unused_a','unused_b']";
+        assert!(parse_and_resolve(source).is_ok());
+    }
+    #[test]
     fn malformed_height_is_rejected() {
         let e = parse_and_resolve("[screen]\nid='x'\npurpose='x'\nroot='root'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','b']\n[[region]]\nid='a'\nrole='navigation'\nimportance='primary'\nheight='tall'\n[[region]]\nid='b'\nrole='inspector'\nimportance='secondary'").unwrap_err().to_string();
         assert!(e.contains("height 'a': size must be"));
@@ -1736,7 +1808,7 @@ mod tests {
     }
     #[test]
     fn fixture_content_validation_rejects_invalid_records() {
-        let base = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='r'\nrole='primary_content'\nimportance='primary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['r','r']\n[[element]]\nid='list'\nregion='r'\nkind='collection'\nimportance='primary'\n[[fixture]]\nid='f'\nstate='x'\n";
+        let base = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='r'\nrole='primary_content'\nimportance='primary'\n[[region]]\nid='other'\nrole='status'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['r','other']\n[[element]]\nid='list'\nregion='r'\nkind='collection'\nimportance='primary'\n[[fixture]]\nid='f'\nstate='x'\n";
         let missing = format!("{base}[[fixture.content]]\nelement='nope'\ntext='x'");
         assert!(parse_and_resolve(&missing)
             .unwrap_err()
@@ -1769,7 +1841,7 @@ mod tests {
     }
     #[test]
     fn fixture_content_unknown_and_duplicate_items_are_rejected() {
-        let base = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='r'\nrole='primary_content'\nimportance='primary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['r','r']\n[[element]]\nid='list'\nregion='r'\nkind='collection'\nimportance='primary'\n[[fixture]]\nid='f'\nstate='x'\n[[fixture.content]]\nelement='list'\nitems=[{id='a',label='A'},{id='a',label='A2'}]\n";
+        let base = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='r'\nrole='primary_content'\nimportance='primary'\n[[region]]\nid='other'\nrole='status'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['r','other']\n[[element]]\nid='list'\nregion='r'\nkind='collection'\nimportance='primary'\n[[fixture]]\nid='f'\nstate='x'\n[[fixture.content]]\nelement='list'\nitems=[{id='a',label='A'},{id='a',label='A2'}]\n";
         assert!(parse_and_resolve(base)
             .unwrap_err()
             .to_string()
@@ -2003,7 +2075,7 @@ mod tests {
 
     #[test]
     fn tree_and_document_fixture_validation_is_actionable() {
-        let base = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='r'\nrole='primary_content'\nimportance='primary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['r','r']\n[[element]]\nid='tree'\nregion='r'\nkind='tree'\nimportance='primary'\n[[element]]\nid='document'\nregion='r'\nkind='document'\nimportance='primary'\n[[fixture]]\nid='f'\nstate='x'\n";
+        let base = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='r'\nrole='primary_content'\nimportance='primary'\n[[region]]\nid='other'\nrole='status'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['r','other']\n[[element]]\nid='tree'\nregion='r'\nkind='tree'\nimportance='primary'\n[[element]]\nid='document'\nregion='r'\nkind='document'\nimportance='primary'\n[[fixture]]\nid='f'\nstate='x'\n";
         let check = |suffix: &str, expected: &str| {
             assert!(parse_and_resolve(&(base.to_owned() + suffix))
                 .unwrap_err()
