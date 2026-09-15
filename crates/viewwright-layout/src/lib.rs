@@ -121,19 +121,16 @@ fn fixed_size(blueprint: &ResolvedBlueprint, child: &CompositionChild, horizonta
     }
 }
 
-fn growth_weight(blueprint: &ResolvedBlueprint, child: &CompositionChild, horizontal: bool) -> f32 {
+fn growth_weight(
+    blueprint: &ResolvedBlueprint,
+    child: &CompositionChild,
+    _horizontal: bool,
+) -> f32 {
     match child {
         CompositionChild::Region(id) => blueprint
             .regions
             .iter()
             .find(|r| r.id == *id)
-            .filter(|r| {
-                if horizontal {
-                    r.width.is_none()
-                } else {
-                    r.height.is_none()
-                }
-            })
             .map(|r| r.grow)
             .unwrap_or(0.0),
         CompositionChild::Composition(id) => blueprint
@@ -300,6 +297,103 @@ padding = "pad"
             plan.region("bottom"),
             Some(Rect::new(5.0, 365.0, 490.0, 30.0))
         );
+    }
+
+    #[test]
+    fn horizontal_fixed_plus_grow_preserves_base_and_share() {
+        let source = r#"
+[screen]
+id = "horizontal"
+purpose = "layout"
+root = "root"
+[[region]]
+id = "fixed_grow"
+role = "controls"
+importance = "primary"
+width = "100px"
+grow = 1
+[[region]]
+id = "grow_only"
+role = "primary_content"
+importance = "secondary"
+grow = 1
+[[composition]]
+id = "root"
+kind = "split"
+axis = "horizontal"
+children = ["fixed_grow", "grow_only"]
+"#;
+        let b = parse_and_resolve(source).unwrap();
+        let plan = layout(&b, 600.0, 400.0);
+        assert_eq!(plan.region("fixed_grow").unwrap().width, 350.0);
+        assert_eq!(plan.region("grow_only").unwrap().width, 250.0);
+    }
+
+    #[test]
+    fn vertical_fixed_plus_grow_preserves_base_and_share() {
+        let source = r#"
+[screen]
+id = "vertical-growth"
+purpose = "layout"
+root = "root"
+[[region]]
+id = "fixed_grow"
+role = "controls"
+importance = "primary"
+height = "100px"
+grow = 1
+[[region]]
+id = "grow_only"
+role = "primary_content"
+importance = "secondary"
+grow = 3
+[[composition]]
+id = "root"
+kind = "column"
+axis = "vertical"
+children = ["fixed_grow", "grow_only"]
+"#;
+        let b = parse_and_resolve(source).unwrap();
+        let plan = layout(&b, 400.0, 600.0);
+        assert_eq!(plan.region("fixed_grow").unwrap().height, 225.0);
+        assert_eq!(plan.region("grow_only").unwrap().height, 375.0);
+    }
+
+    #[test]
+    fn multiple_fixed_plus_grow_regions_share_remaining_space_proportionally() {
+        let source = r#"
+[screen]
+id = "multiple-growth"
+purpose = "layout"
+root = "root"
+[[region]]
+id = "a"
+role = "controls"
+importance = "primary"
+width = "100px"
+grow = 1
+[[region]]
+id = "b"
+role = "primary_content"
+importance = "secondary"
+width = "200px"
+grow = 2
+[[region]]
+id = "c"
+role = "status"
+importance = "tertiary"
+grow = 1
+[[composition]]
+id = "root"
+kind = "split"
+axis = "horizontal"
+children = ["a", "b", "c"]
+"#;
+        let b = parse_and_resolve(source).unwrap();
+        let plan = layout(&b, 1000.0, 400.0);
+        assert_eq!(plan.region("a").unwrap().width, 275.0);
+        assert_eq!(plan.region("b").unwrap().width, 550.0);
+        assert_eq!(plan.region("c").unwrap().width, 175.0);
     }
 
     #[test]

@@ -317,6 +317,10 @@ M19 validates every authored `[tokens.color]` literal as the existing `#RRGGBB` 
 
 M20 requires `screen.purpose` to contain at least one non-whitespace character while preserving valid authored text exactly. The resolved model and semantic/concept projections remain unchanged for valid sources.
 
+## M21 — fixed-plus-grow allocation fidelity
+
+M21 preserves both a region's fixed main-axis base size and its positive `grow` share. Fixed-plus-grow allocation is corrected without changing source syntax, canonical geometry, or renderer behavior.
+
 ## Status
 
 - M0 — accepted
@@ -339,4 +343,5 @@ M20 requires `screen.purpose` to contain at least one non-whitespace character w
 - M17 — accepted
 - M18 — accepted
 - M19 — accepted
-- M20 — implementation complete; director audit pending
+- M20 — accepted
+- M21 — implementation complete; director audit pending
