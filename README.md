@@ -324,4 +324,4 @@ M16 enforces unique structural ownership for composition children: duplicate sib
 - M14 — accepted
 - M15 — accepted
 - M16 — accepted
-- M17 — implementation complete; director audit pending
+- M17 — accepted
