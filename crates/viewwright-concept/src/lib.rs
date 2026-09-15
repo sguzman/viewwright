@@ -15,7 +15,11 @@ pub fn render(b: &ResolvedBlueprint) -> String {
     }
     out.push_str(&format!(
         "\nHierarchy\n  dominant: {}\nComposition\n",
-        b.design.dominant.as_deref().unwrap_or("unspecified")
+        b.design
+            .dominant
+            .as_ref()
+            .map(|target| target.id())
+            .unwrap_or("unspecified")
     ));
     walk(&b.root, b, &mut out, 2);
     if let Some(v) = &b.visual {

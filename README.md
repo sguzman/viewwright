@@ -295,6 +295,10 @@ M14 requires every current element to author a nonblank `label`. The resolver pr
 
 Director audit accepted the validation boundary, authored-label provenance, canonical migration, and removal of all element-id label fallbacks without requiring human screenshot QA.
 
+## M15 — dominant target fidelity
+
+M15 resolves `design.dominant` into typed semantic identity: a referenced region or element becomes `DominantTarget::Region` or `DominantTarget::Element`. Character and avoid metadata remain preserved, and concept inspection continues to expose the dominant target by ID. Renderer and layout behavior are unchanged; director audit is pending.
+
 ## Status
 
 - M0 — accepted
@@ -312,3 +316,4 @@ Director audit accepted the validation boundary, authored-label provenance, cano
 - M12 — accepted
 - M13 — accepted
 - M14 — accepted
+- M15 — implementation complete; director audit pending

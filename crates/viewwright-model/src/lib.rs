@@ -54,6 +54,26 @@ pub struct DesignSource {
     #[serde(default)]
     pub avoid: Vec<String>,
 }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedDesign {
+    pub character: Vec<String>,
+    pub dominant: Option<DominantTarget>,
+    pub avoid: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DominantTarget {
+    Region(String),
+    Element(String),
+}
+
+impl DominantTarget {
+    pub fn id(&self) -> &str {
+        match self {
+            Self::Region(id) | Self::Element(id) => id,
+        }
+    }
+}
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TokensSource {
@@ -566,7 +586,7 @@ pub struct ResolvedTreeNode {
 #[derive(Debug, Clone)]
 pub struct ResolvedBlueprint {
     pub screen: ResolvedScreen,
-    pub design: DesignSource,
+    pub design: ResolvedDesign,
     pub root: String,
     pub regions: Vec<ResolvedRegion>,
     pub compositions: Vec<ResolvedComposition>,
@@ -1142,11 +1162,16 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
             content,
         });
     }
-    if let Some(d) = &source.design.dominant {
-        if !region_ids.contains(d.as_str()) && !element_ids.contains(d.as_str()) {
+    let dominant = source.design.dominant.as_ref().and_then(|d| {
+        if region_ids.contains(d.as_str()) {
+            Some(DominantTarget::Region(d.clone()))
+        } else if element_ids.contains(d.as_str()) {
+            Some(DominantTarget::Element(d.clone()))
+        } else {
             errors.push(format!("design.dominant: missing reference '{d}'"));
+            None
         }
-    }
+    });
     if !errors.is_empty() {
         return Err(BlueprintError::Validation(errors.join("\n")));
     }
@@ -1160,7 +1185,11 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
             purpose: source.screen.purpose,
             density,
         },
-        design: source.design,
+        design: ResolvedDesign {
+            character: source.design.character,
+            dominant,
+            avoid: source.design.avoid,
+        },
         root,
         regions,
         compositions,
@@ -1359,6 +1388,63 @@ mod tests {
                 .label,
             "project inspector"
         );
+    }
+
+    #[test]
+    fn canonical_dominant_targets_resolve_as_regions() {
+        for source in [
+            project(),
+            reader(),
+            include_str!("../../../specimens/reader-workspace-visual.toml"),
+            include_str!("../../../specimens/dependency-workbench.toml"),
+            include_str!("../../../specimens/density-pressure-comfortable.toml"),
+            include_str!("../../../specimens/density-pressure-dense.toml"),
+        ] {
+            let blueprint = parse_and_resolve(source).unwrap();
+            assert!(matches!(
+                blueprint.design.dominant,
+                Some(DominantTarget::Region(_))
+            ));
+        }
+    }
+
+    fn dominant_element_source(dominant: Option<&str>) -> String {
+        let dominant = dominant
+            .map(|dominant| format!("dominant='{dominant}'\n"))
+            .unwrap_or_default();
+        format!(
+            "[screen]\nid='x'\npurpose='x'\nroot='root'\n[design]\ncharacter=['Zed','alpha']\n{dominant}avoid=['z_avoid','A_avoid']\n[[region]]\nid='navigation'\nrole='navigation'\nimportance='secondary'\n[[region]]\nid='content'\nrole='primary_content'\nimportance='primary'\n[[element]]\nid='target'\nregion='navigation'\nkind='text'\nimportance='tertiary'\nlabel='Target copy'\n[[composition]]\nid='root'\nkind='split'\nchildren=['navigation','content']"
+        )
+    }
+
+    #[test]
+    fn dominant_targets_distinguish_elements_and_preserve_design_metadata() {
+        let blueprint = parse_and_resolve(&dominant_element_source(Some("target"))).unwrap();
+        assert_eq!(
+            blueprint.design.dominant,
+            Some(DominantTarget::Element("target".into()))
+        );
+        assert_eq!(blueprint.design.character, ["Zed", "alpha"]);
+        assert_eq!(blueprint.design.avoid, ["z_avoid", "A_avoid"]);
+
+        let omitted = parse_and_resolve(&dominant_element_source(None)).unwrap();
+        assert_eq!(omitted.design.dominant, None);
+    }
+
+    #[test]
+    fn invalid_dominant_namespaces_remain_rejected() {
+        for (target, replacement) in [
+            ("missing", "missing"),
+            ("workspace", "workspace"),
+            ("many_projects", "many_projects"),
+        ] {
+            let source = project().replace(
+                "dominant = \"projects\"",
+                &format!("dominant = \"{replacement}\""),
+            );
+            let error = parse_and_resolve(&source).unwrap_err().to_string();
+            assert!(error.contains("design.dominant") && error.contains(target));
+        }
     }
 
     fn labeled_element_source(label: Option<&str>) -> String {
