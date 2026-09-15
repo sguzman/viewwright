@@ -649,6 +649,26 @@ fn parse_color(value: &str) -> Option<Color> {
         None => None,
     }
 }
+fn validate_token_names<T>(tokens: &HashMap<String, T>, family: &str, errors: &mut Vec<String>) {
+    let mut names: Vec<_> = tokens.keys().map(String::as_str).collect();
+    names.sort_unstable();
+    for name in names {
+        if name.trim().is_empty() {
+            errors.push(format!(
+                "{family}: token name '{name}' must contain at least one non-whitespace character"
+            ));
+        }
+    }
+}
+fn validate_color_values(tokens: &ColorTokensSource, errors: &mut Vec<String>) {
+    let mut color_names: Vec<_> = tokens.values.keys().collect();
+    color_names.sort_unstable();
+    for name in color_names {
+        if parse_color(&tokens.values[name]).is_none() {
+            errors.push(format!("color token '{name}': expected #RRGGBB"));
+        }
+    }
+}
 fn color_ref(
     tokens: &ColorTokensSource,
     reference: &str,
@@ -758,6 +778,9 @@ fn surface(value: Option<&String>, id: &str, errors: &mut Vec<String>) -> Surfac
 pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintError> {
     let mut errors = Vec::new();
     let mut ids = HashSet::new();
+    validate_token_names(&source.tokens.spacing, "tokens.spacing", &mut errors);
+    validate_token_names(&source.tokens.corners, "tokens.corners", &mut errors);
+    validate_token_names(&source.tokens.color.values, "tokens.color", &mut errors);
     validate_nonblank_id(&source.screen.id, "screen.id", &mut errors);
     if source.screen.purpose.trim().is_empty() {
         errors.push("screen.purpose: must contain at least one non-whitespace character".into());
@@ -1276,13 +1299,7 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
     if !errors.is_empty() {
         return Err(BlueprintError::Validation(errors.join("\n")));
     }
-    let mut color_names: Vec<_> = source.tokens.color.values.keys().collect();
-    color_names.sort();
-    for name in color_names {
-        if parse_color(&source.tokens.color.values[name]).is_none() {
-            errors.push(format!("color token '{name}': expected #RRGGBB"));
-        }
-    }
+    validate_color_values(&source.tokens.color, &mut errors);
     let visual = resolve_visual(source.visual.as_ref(), &source.tokens, &mut errors);
     if !errors.is_empty() {
         return Err(BlueprintError::Validation(errors.join("\n")));
@@ -2271,6 +2288,137 @@ mod tests {
         format!(
             "[screen]\nid='x'\npurpose='x'\nroot='root'\n[tokens.color]\n{tokens}\n[[region]]\nid='a'\nrole='navigation'\nimportance='primary'\n[[region]]\nid='b'\nrole='inspector'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','b']"
         )
+    }
+
+    fn token_maps_source(spacing: &str, corners: &str, color: &str) -> String {
+        format!(
+            "[screen]\nid='x'\npurpose='x'\nroot='root'\n[tokens.spacing]\n{spacing}\n[tokens.corners]\n{corners}\n[tokens.color]\n{color}\n[[region]]\nid='a'\nrole='navigation'\nimportance='primary'\n[[region]]\nid='b'\nrole='inspector'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','b']"
+        )
+    }
+
+    #[test]
+    fn blank_spacing_and_corner_token_names_are_rejected() {
+        for name in ["", "   ", "\t", " \t "] {
+            let spacing = format!("{name:?} = 8");
+            let error = parse_and_resolve(&token_maps_source(
+                &spacing,
+                "valid = 4",
+                "valid = '#123456'",
+            ))
+            .unwrap_err()
+            .to_string();
+            assert!(error.contains("tokens.spacing") && error.contains("non-whitespace"));
+
+            let corners = format!("{name:?} = 4");
+            let error = parse_and_resolve(&token_maps_source(
+                "valid = 8",
+                &corners,
+                "valid = '#123456'",
+            ))
+            .unwrap_err()
+            .to_string();
+            assert!(error.contains("tokens.corners") && error.contains("non-whitespace"));
+        }
+    }
+
+    #[test]
+    fn blank_color_token_names_are_rejected_even_when_unused_and_without_visual() {
+        for name in ["", "   ", "\t", " \t "] {
+            let color = format!("{name:?} = '#FFFFFF'");
+            let error = parse_and_resolve(&token_maps_source("valid = 8", "valid = 4", &color))
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains("tokens.color") && error.contains("non-whitespace"));
+        }
+    }
+
+    #[test]
+    fn token_name_diagnostics_are_sorted_within_each_family() {
+        let source = token_maps_source(
+            "\"   \" = 8\n\"\" = 9",
+            "\"   \" = 4\n\"\" = 5",
+            "\"   \" = '#FFFFFF'\n\"\" = '#000000'",
+        );
+        let error = parse_and_resolve(&source).unwrap_err().to_string();
+        assert!(
+            error.find("tokens.spacing: token name ''").unwrap()
+                < error.find("tokens.spacing: token name '   '").unwrap()
+        );
+        assert!(
+            error.find("tokens.corners: token name ''").unwrap()
+                < error.find("tokens.corners: token name '   '").unwrap()
+        );
+        assert!(
+            error.find("tokens.color: token name ''").unwrap()
+                < error.find("tokens.color: token name '   '").unwrap()
+        );
+    }
+
+    #[test]
+    fn valid_token_names_and_exact_references_are_preserved() {
+        let source = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[tokens.spacing]\n\"  custom gap  \" = 12\n[tokens.corners]\n\"  custom corner  \" = 6\n[tokens.color]\n\"  custom color  \" = '#123456'\n[[region]]\nid='a'\nrole='navigation'\nimportance='primary'\n[[region]]\nid='b'\nrole='inspector'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','b']\ngap='  custom gap  '\n";
+        let blueprint = parse_and_resolve(source).unwrap();
+        assert_eq!(blueprint.compositions[0].gap, 12);
+        let mismatch = parse_and_resolve(&source.replace("'  custom gap  '", "'custom gap'"))
+            .unwrap_err()
+            .to_string();
+        assert!(mismatch.contains("missing spacing token 'custom gap'"));
+        let source_blueprint: SourceBlueprint = toml::from_str(source).unwrap();
+        assert!(source_blueprint
+            .tokens
+            .spacing
+            .contains_key("  custom gap  "));
+        assert!(source_blueprint
+            .tokens
+            .corners
+            .contains_key("  custom corner  "));
+        assert!(source_blueprint
+            .tokens
+            .color
+            .values
+            .contains_key("  custom color  "));
+    }
+
+    #[test]
+    fn valid_unused_spacing_corner_and_color_tokens_remain_legal() {
+        let source = token_maps_source(
+            "\"future spacing\" = 18",
+            "\"future corner\" = 9",
+            "\"future accent\" = '#123456'",
+        );
+        assert!(parse_and_resolve(&source).is_ok());
+    }
+
+    #[test]
+    fn canonical_sources_resolve_with_nonblank_token_names() {
+        for source in [
+            project(),
+            reader(),
+            include_str!("../../../specimens/reader-workspace-visual.toml"),
+            include_str!("../../../specimens/reader-workspace-visual-m7.toml"),
+            include_str!("../../../specimens/dependency-workbench.toml"),
+            include_str!("../../../specimens/density-pressure-comfortable.toml"),
+            include_str!("../../../specimens/density-pressure-dense.toml"),
+        ] {
+            let parsed: SourceBlueprint = toml::from_str(source).unwrap();
+            assert!(parsed
+                .tokens
+                .spacing
+                .keys()
+                .all(|name| !name.trim().is_empty()));
+            assert!(parsed
+                .tokens
+                .corners
+                .keys()
+                .all(|name| !name.trim().is_empty()));
+            assert!(parsed
+                .tokens
+                .color
+                .values
+                .keys()
+                .all(|name| !name.trim().is_empty()));
+            parse_and_resolve(source).unwrap();
+        }
     }
 
     #[test]

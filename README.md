@@ -329,6 +329,10 @@ M22 requires every authored `fixture.state` to contain at least one non-whitespa
 
 M23 requires authored collection-item and tree-node labels to contain at least one non-whitespace character while preserving valid label text exactly. Local fixture IDs remain authoritative for selection, parent relationships, and duplicate detection; renderer, projection, and layout behavior remain unchanged.
 
+## M24 — token name identity fidelity
+
+M24 requires spacing, corner, and color token names to contain at least one non-whitespace character while preserving valid names and exact token references. Token values, token families, visual resolution, and projections remain unchanged.
+
 ## Status
 
 - M0 — accepted
@@ -354,4 +358,5 @@ M23 requires authored collection-item and tree-node labels to contain at least o
 - M20 — accepted
 - M21 — accepted
 - M22 — accepted
-- M23 — implementation complete; director audit pending
+- M23 — accepted
+- M24 — implementation complete; director audit pending
