@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use egui::{CentralPanel, Color32, Context, FontId, Frame, RichText, Stroke, UiBuilder};
 use viewwright_layout::{layout, LayoutPlan, Rect as LayoutRect};
 use viewwright_model::{
@@ -14,6 +16,21 @@ pub struct InteractionEvent {
 #[derive(Debug, Default)]
 pub struct RenderOutput {
     pub activation: Option<InteractionEvent>,
+}
+
+#[derive(Debug, Default)]
+pub struct RenderState {
+    search_values: HashMap<String, String>,
+}
+
+impl RenderState {
+    pub fn clear(&mut self) {
+        self.search_values.clear();
+    }
+
+    pub fn search_value_mut(&mut self, element_id: &str) -> &mut String {
+        self.search_values.entry(element_id.to_owned()).or_default()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -55,7 +72,12 @@ impl DensityPolicy {
     }
 }
 
-pub fn show(ctx: &Context, blueprint: &ResolvedBlueprint, fixture: &str) -> RenderOutput {
+pub fn show(
+    ctx: &Context,
+    blueprint: &ResolvedBlueprint,
+    fixture: &str,
+    state: &mut RenderState,
+) -> RenderOutput {
     let mut output = RenderOutput::default();
     let root_fill = root_fill(ctx, blueprint);
     CentralPanel::default()
@@ -76,6 +98,7 @@ pub fn show(ctx: &Context, blueprint: &ResolvedBlueprint, fixture: &str) -> Rend
                     origin,
                     &mut output.activation,
                     density,
+                    state,
                 );
             });
         });
@@ -99,6 +122,7 @@ fn render_composition(
     origin: egui::Pos2,
     activation: &mut Option<InteractionEvent>,
     density: DensityPolicy,
+    state: &mut RenderState,
 ) {
     let Some(c) = b.compositions.iter().find(|c| c.id == id) else {
         return;
@@ -120,12 +144,12 @@ fn render_composition(
                 .max_rect(child_egui_rect),
             |ui| match child {
                 CompositionChild::Composition(id) => {
-                    render_composition(ui, id, b, fixture, plan, origin, activation, density)
+                    render_composition(ui, id, b, fixture, plan, origin, activation, density, state)
                 }
                 CompositionChild::Region(id) => {
                     if let Some(region) = b.regions.iter().find(|r| r.id == *id) {
                         render_region(
-                            ui, region, b, fixture, child_rect, origin, activation, density,
+                            ui, region, b, fixture, child_rect, origin, activation, density, state,
                         );
                     }
                 }
@@ -143,6 +167,7 @@ fn render_region(
     origin: egui::Pos2,
     activation: &mut Option<InteractionEvent>,
     density: DensityPolicy,
+    state: &mut RenderState,
 ) {
     let egui_rect = to_egui_rect(rect, origin);
     if let Some(v) = &b.visual {
@@ -186,12 +211,12 @@ fn render_region(
             if r.role == "commands" {
                 ui.horizontal_wrapped(|ui| {
                     for e in elements {
-                        render_element(ui, e, b, fixture, activation, density);
+                        render_element(ui, e, b, fixture, activation, density, state);
                     }
                 });
             } else {
                 for e in elements {
-                    render_element(ui, e, b, fixture, activation, density);
+                    render_element(ui, e, b, fixture, activation, density, state);
                 }
             }
         },
@@ -205,6 +230,7 @@ fn render_element(
     fixture: &str,
     activation: &mut Option<InteractionEvent>,
     density: DensityPolicy,
+    state: &mut RenderState,
 ) {
     ui.add_space(density.element_gap);
     if separate_element_label(e.kind) {
@@ -212,8 +238,7 @@ fn render_element(
     }
     match e.kind {
         ElementKind::Search => {
-            let mut query = String::new();
-            ui.text_edit_singleline(&mut query);
+            ui.text_edit_singleline(state.search_value_mut(&e.id));
         }
         ElementKind::Collection => render_collection(ui, e, b, fixture, b.visual.as_ref(), density),
         ElementKind::Document => {
@@ -558,6 +583,23 @@ mod tests {
         }
         assert!(!separate_element_label(ElementKind::Text));
         assert!(!separate_element_label(ElementKind::Preview));
+    }
+
+    #[test]
+    fn render_state_retains_independent_search_values_and_can_clear_them() {
+        let mut state = super::RenderState::default();
+        assert_eq!(state.search_value_mut("first"), "");
+
+        state.search_value_mut("first").push_str("abc");
+        assert_eq!(state.search_value_mut("first"), "abc");
+
+        state.search_value_mut("second").push_str("xyz");
+        assert_eq!(state.search_value_mut("first"), "abc");
+        assert_eq!(state.search_value_mut("second"), "xyz");
+
+        state.clear();
+        assert_eq!(state.search_value_mut("first"), "");
+        assert_eq!(state.search_value_mut("second"), "");
     }
 
     #[test]

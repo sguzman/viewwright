@@ -41,6 +41,7 @@ fn main() -> eframe::Result<()> {
                 screen: 2,
                 fixture: 0,
                 last_action: None,
+                render_state: viewwright_egui::RenderState::default(),
             }))
         }),
     )
@@ -51,7 +52,24 @@ struct App {
     screen: usize,
     fixture: usize,
     last_action: Option<viewwright_egui::InteractionEvent>,
+    render_state: viewwright_egui::RenderState,
 }
+
+impl App {
+    fn select_screen(&mut self, screen: usize) {
+        self.screen = screen;
+        self.fixture = 0;
+        self.last_action = None;
+        self.render_state.clear();
+    }
+
+    fn select_fixture(&mut self, fixture: usize) {
+        self.fixture = fixture;
+        self.last_action = None;
+        self.render_state.clear();
+    }
+}
+
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
         egui::TopBottomPanel::top("preview-host").show(ctx, |ui| {
@@ -72,6 +90,8 @@ impl eframe::App for App {
                 ));
             }
         });
+        let mut selected_screen = None;
+        let mut selected_fixture = None;
         egui::TopBottomPanel::bottom("fixtures").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.label("Specimen:");
@@ -80,30 +100,60 @@ impl eframe::App for App {
                         .selectable_label(i == self.screen, &b.screen.id)
                         .clicked()
                     {
-                        self.screen = i;
-                        self.fixture = 0;
-                        self.last_action = None;
+                        selected_screen = Some(i);
                     }
                 }
                 ui.separator();
                 ui.label("Fixture:");
                 for (i, f) in self.blueprints[self.screen].fixtures.iter().enumerate() {
                     if ui.selectable_label(i == self.fixture, &f.id).clicked() {
-                        self.fixture = i;
-                        self.last_action = None;
+                        selected_fixture = Some(i);
                     }
                 }
             });
         });
+        if let Some(screen) = selected_screen {
+            self.select_screen(screen);
+        } else if let Some(fixture) = selected_fixture {
+            self.select_fixture(fixture);
+        }
         let b = &self.blueprints[self.screen];
         let fixture = b
             .fixtures
             .get(self.fixture)
             .map(|f| f.id.as_str())
             .unwrap_or("default");
-        let output = viewwright_egui::show(ctx, b, fixture);
+        let output = viewwright_egui::show(ctx, b, fixture, &mut self.render_state);
         if let Some(event) = output.activation {
             self.last_action = Some(event);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::App;
+
+    #[test]
+    fn specimen_and_fixture_selection_clear_search_state() {
+        let mut app = App {
+            blueprints: Vec::new(),
+            screen: 0,
+            fixture: 0,
+            last_action: None,
+            render_state: viewwright_egui::RenderState::default(),
+        };
+
+        app.render_state
+            .search_value_mut("project_search")
+            .push_str("abc");
+        app.select_screen(1);
+        assert_eq!(app.render_state.search_value_mut("project_search"), "");
+
+        app.render_state
+            .search_value_mut("project_search")
+            .push_str("xyz");
+        app.select_fixture(2);
+        assert_eq!(app.render_state.search_value_mut("project_search"), "");
     }
 }

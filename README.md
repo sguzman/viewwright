@@ -250,4 +250,4 @@ See:
 - M8 — accepted
 - M9 — accepted
 - M10 — accepted
-- M11 — search input fidelity formalized; implementation not yet started
+- M11 — implementation complete; human QA pending
