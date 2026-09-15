@@ -195,11 +195,9 @@ See:
 - [`docs/m9-pressure-pair.md`](docs/m9-pressure-pair.md)
 - [`docs/m9-acceptance-matrix.md`](docs/m9-acceptance-matrix.md)
 
-## Current design work — M10 authored chrome fidelity
+## M10 — authored chrome fidelity
 
-Accepted previews still leak internal semantic scaffolding into authored UI. Region ids and ontology roles are painted as visible text, and command labels are duplicated because the renderer adds a generic element pre-label before rendering the button itself.
-
-M10 makes the projection cleaner without adding new authoring syntax:
+M10 removes backend-invented product chrome from the egui projection. Region ids and ontology roles remain available to semantic/debug and concept inspection instead of being painted into authored UI, while element labels are rendered according to their kind so commands own their labels exactly once.
 
 ```text
 internal semantic metadata ──→ semantic / concept inspection
@@ -207,7 +205,7 @@ internal semantic metadata ──→ semantic / concept inspection
 authored element label ──→ kind-appropriate visible presentation
 ```
 
-Region ids/roles must remain inspectable but stop masquerading as product chrome. Command labels belong on the command control exactly once. If visible region titles are needed later, they will require explicit authoring rather than inference from technical identifiers.
+Human QA accepted `reader_workspace_visual / reading`: region scaffolding was absent, command labels were not duplicated, meaningful authored content labels remained, and the accepted Reader palette/layout stayed intact. If visible region titles are needed later, they will require explicit authoring rather than inference from technical identifiers.
 
 See:
 
@@ -229,4 +227,4 @@ See:
 - M7 — accepted
 - M8 — accepted
 - M9 — accepted
-- M10 — authored chrome fidelity formalized; implementation not yet started
+- M10 — accepted
