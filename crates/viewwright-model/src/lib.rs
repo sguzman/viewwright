@@ -1078,6 +1078,12 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
                         if item.id.trim().is_empty() {
                             return None;
                         }
+                        if item.label.trim().is_empty() {
+                            errors.push(format!(
+                                "fixture '{}': collection item '{}' label must contain at least one non-whitespace character",
+                                f.id, item.id
+                            ));
+                        }
                         if !item_ids.insert(item.id.clone()) {
                             errors.push(format!(
                                 "fixture '{}': duplicate collection item id '{}' for '{}'",
@@ -1154,6 +1160,12 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
                         );
                         if node.id.trim().is_empty() {
                             return None;
+                        }
+                        if node.label.trim().is_empty() {
+                            errors.push(format!(
+                                "fixture '{}': tree node '{}' label must contain at least one non-whitespace character",
+                                f.id, node.id
+                            ));
                         }
                         if !node_ids.insert(node.id.clone()) {
                             errors.push(format!(
@@ -1667,6 +1679,50 @@ mod tests {
         }
     }
 
+    fn collection_label_source(label: &str) -> String {
+        collection_id_source("item").replace(
+            "items=[{id='item',label='X'}]",
+            &format!("items=[{{id='item',label='{label}'}}]"),
+        )
+    }
+
+    #[test]
+    fn collection_item_labels_must_be_nonblank() {
+        for label in ["", "   ", "\t", " \t "] {
+            let error = parse_and_resolve(&collection_label_source(label))
+                .unwrap_err()
+                .to_string();
+            assert!(
+                error.contains("fixture 'fixture'")
+                    && error.contains("collection item 'item'")
+                    && error.contains("label")
+                    && error.contains("non-whitespace")
+            );
+        }
+    }
+
+    #[test]
+    fn collection_item_labels_are_preserved_and_duplicates_are_allowed() {
+        let source = collection_label_source("  Project A  ").replace(
+            "items=[{id='item',label='  Project A  '}]",
+            "items=[{id='item',label='  Project A  '},{id='second',label='  Project A  '}]",
+        );
+        let blueprint = parse_and_resolve(&source).unwrap();
+        let items = match &blueprint.fixtures[0].content[0] {
+            ResolvedFixtureContent::Collection { items, .. } => items,
+            other => panic!("unexpected fixture content: {other:?}"),
+        };
+        assert_eq!(items[0].label, "  Project A  ");
+        assert_eq!(items[1].label, "  Project A  ");
+    }
+
+    #[test]
+    fn missing_collection_item_label_remains_a_parse_error() {
+        let source = collection_id_source("item").replace("label='X'", "");
+        let error = parse_and_resolve(&source).unwrap_err().to_string();
+        assert!(error.contains("TOML parse error"));
+    }
+
     fn tree_id_source(id: &str) -> String {
         format!(
             "[screen]\nid='screen'\npurpose='x'\nroot='root'\n[[region]]\nid='content'\nrole='primary_content'\nimportance='primary'\n[[region]]\nid='other'\nrole='status'\nimportance='secondary'\n[[element]]\nid='tree'\nregion='content'\nkind='tree'\nimportance='primary'\nlabel='Outline'\n[[composition]]\nid='root'\nkind='split'\nchildren=['content','other']\n[[fixture]]\nid='fixture'\nstate='ready'\n[[fixture.content]]\nelement='tree'\nnodes=[{{id='{id}',label='Node'}}]"
@@ -1681,6 +1737,50 @@ mod tests {
                 .to_string();
             assert!(error.contains("tree node id") && error.contains("non-whitespace"));
         }
+    }
+
+    fn tree_label_source(label: &str) -> String {
+        tree_id_source("node").replace(
+            "nodes=[{id='node',label='Node'}]",
+            &format!("nodes=[{{id='node',label='{label}'}}]"),
+        )
+    }
+
+    #[test]
+    fn tree_node_labels_must_be_nonblank() {
+        for label in ["", "   ", "\t", " \t "] {
+            let error = parse_and_resolve(&tree_label_source(label))
+                .unwrap_err()
+                .to_string();
+            assert!(
+                error.contains("fixture 'fixture'")
+                    && error.contains("tree node 'node'")
+                    && error.contains("label")
+                    && error.contains("non-whitespace")
+            );
+        }
+    }
+
+    #[test]
+    fn tree_node_labels_are_preserved_and_duplicates_are_allowed() {
+        let source = tree_label_source("  Chapter One  ").replace(
+            "nodes=[{id='node',label='  Chapter One  '}]",
+            "nodes=[{id='node',label='  Chapter One  '},{id='second',label='  Chapter One  '}]",
+        );
+        let blueprint = parse_and_resolve(&source).unwrap();
+        let nodes = match &blueprint.fixtures[0].content[0] {
+            ResolvedFixtureContent::Tree { nodes, .. } => nodes,
+            other => panic!("unexpected fixture content: {other:?}"),
+        };
+        assert_eq!(nodes[0].label, "  Chapter One  ");
+        assert_eq!(nodes[1].label, "  Chapter One  ");
+    }
+
+    #[test]
+    fn missing_tree_node_label_remains_a_parse_error() {
+        let source = tree_id_source("node").replace("label='Node'", "");
+        let error = parse_and_resolve(&source).unwrap_err().to_string();
+        assert!(error.contains("TOML parse error"));
     }
 
     fn fixture_state_source(state: &str) -> String {

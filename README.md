@@ -325,6 +325,10 @@ M21 preserves both a region's fixed main-axis base size and its positive `grow` 
 
 M22 requires every authored `fixture.state` to contain at least one non-whitespace character while preserving valid state text exactly. Fixture payload semantics, selection, renderer behavior, and layout remain unchanged.
 
+## M23 — local fixture label authorship fidelity
+
+M23 requires authored collection-item and tree-node labels to contain at least one non-whitespace character while preserving valid label text exactly. Local fixture IDs remain authoritative for selection, parent relationships, and duplicate detection; renderer, projection, and layout behavior remain unchanged.
+
 ## Status
 
 - M0 — accepted
@@ -349,4 +353,5 @@ M22 requires every authored `fixture.state` to contain at least one non-whitespa
 - M19 — accepted
 - M20 — accepted
 - M21 — accepted
-- M22 — implementation complete; director audit pending
+- M22 — accepted
+- M23 — implementation complete; director audit pending
