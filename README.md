@@ -337,6 +337,10 @@ M24 requires spacing, corner, and color token names to contain at least one non-
 
 M25 requires explicitly authored `design.character` and `design.avoid` entries to contain at least one non-whitespace character while preserving valid vocabulary text, order, and duplicates exactly. Omitted and explicitly empty lists remain valid; dominant-target semantics and projections remain unchanged.
 
+## M26 — property name authorship fidelity
+
+M26 requires authored property-sheet names to contain at least one non-whitespace character while preserving valid names, values, order, and duplicate names exactly. Property values remain unconstrained, and property-sheet rendering remains unchanged for valid sources.
+
 ## Status
 
 - M0 — accepted
@@ -364,4 +368,5 @@ M25 requires explicitly authored `design.character` and `design.avoid` entries t
 - M22 — accepted
 - M23 — accepted
 - M24 — accepted
-- M25 — implementation complete; director audit pending
+- M25 — accepted
+- M26 — implementation complete; director audit pending

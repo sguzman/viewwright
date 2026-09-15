@@ -1162,9 +1162,18 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
                     element: record.element.clone(),
                     properties: properties
                         .iter()
-                        .map(|p| ResolvedProperty {
-                            name: p.name.clone(),
-                            value: p.value.clone(),
+                        .enumerate()
+                        .map(|(index, p)| {
+                            if p.name.trim().is_empty() {
+                                errors.push(format!(
+                                    "fixture '{}': property[{}] for '{}' name must contain at least one non-whitespace character",
+                                    f.id, index, record.element
+                                ));
+                            }
+                            ResolvedProperty {
+                                name: p.name.clone(),
+                                value: p.value.clone(),
+                            }
                         })
                         .collect(),
                 });
@@ -2325,6 +2334,90 @@ mod tests {
             .to_string()
             .contains("text content"));
     }
+
+    fn property_source(properties: &str) -> String {
+        format!(
+            "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='content'\nrole='primary_content'\nimportance='primary'\n[[region]]\nid='other'\nrole='status'\nimportance='secondary'\n[[element]]\nid='details'\nregion='content'\nkind='property_sheet'\nimportance='primary'\nlabel='Details'\n[[composition]]\nid='root'\nkind='split'\nchildren=['content','other']\n[[fixture]]\nid='fixture'\nstate='ready'\n[[fixture.content]]\nelement='details'\nproperties={properties}"
+        )
+    }
+
+    #[test]
+    fn property_names_must_be_nonblank() {
+        for name in ["", "   ", "\t", " \t "] {
+            let quoted = format!("{name:?}");
+            let properties = format!("[{{name={quoted},value='x'}}]");
+            let error = parse_and_resolve(&property_source(&properties))
+                .unwrap_err()
+                .to_string();
+            assert!(
+                error.contains("fixture 'fixture'")
+                    && error.contains("property[0]")
+                    && error.contains("details")
+                    && error.contains("name")
+                    && error.contains("non-whitespace")
+            );
+        }
+    }
+
+    #[test]
+    fn property_names_and_values_preserve_order_exactly_and_allow_duplicates() {
+        let blueprint = parse_and_resolve(&property_source(
+            "[{name='  Status Label  ',value=''}, {name='Status Label',value='   '}, {name='Status Label',value='Secondary'}]",
+        ))
+        .unwrap();
+        let properties = match &blueprint.fixtures[0].content[0] {
+            ResolvedFixtureContent::Properties { properties, .. } => properties,
+            other => panic!("unexpected fixture content: {other:?}"),
+        };
+        assert_eq!(properties[0].name, "  Status Label  ");
+        assert_eq!(properties[0].value, "");
+        assert_eq!(properties[1].name, "Status Label");
+        assert_eq!(properties[1].value, "   ");
+        assert_eq!(properties[2].name, "Status Label");
+        assert_eq!(properties[2].value, "Secondary");
+    }
+
+    #[test]
+    fn empty_property_lists_remain_legal() {
+        let blueprint = parse_and_resolve(&property_source("[]")).unwrap();
+        assert!(matches!(
+            &blueprint.fixtures[0].content[0],
+            ResolvedFixtureContent::Properties { properties, .. } if properties.is_empty()
+        ));
+    }
+
+    #[test]
+    fn missing_property_name_remains_a_parse_error() {
+        let source = property_source("[{value='x'}]");
+        let error = parse_and_resolve(&source).unwrap_err().to_string();
+        assert!(error.contains("TOML parse error"));
+    }
+
+    #[test]
+    fn canonical_sources_resolve_with_nonblank_property_names() {
+        for source in [
+            project(),
+            reader(),
+            include_str!("../../../specimens/reader-workspace-visual.toml"),
+            include_str!("../../../specimens/reader-workspace-visual-m7.toml"),
+            include_str!("../../../specimens/dependency-workbench.toml"),
+            include_str!("../../../specimens/density-pressure-comfortable.toml"),
+            include_str!("../../../specimens/density-pressure-dense.toml"),
+        ] {
+            let parsed: SourceBlueprint = toml::from_str(source).unwrap();
+            for fixture in &parsed.fixture {
+                for content in &fixture.content {
+                    if let Some(properties) = &content.properties {
+                        assert!(properties
+                            .iter()
+                            .all(|property| !property.name.trim().is_empty()));
+                    }
+                }
+            }
+            parse_and_resolve(source).unwrap();
+        }
+    }
+
     #[test]
     fn fixture_content_unknown_and_duplicate_items_are_rejected() {
         let base = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='r'\nrole='primary_content'\nimportance='primary'\n[[region]]\nid='other'\nrole='status'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['r','other']\n[[element]]\nid='list'\nregion='r'\nkind='collection'\nimportance='primary'\n[[fixture]]\nid='f'\nstate='x'\n[[fixture.content]]\nelement='list'\nitems=[{id='a',label='A'},{id='a',label='A2'}]\n";
