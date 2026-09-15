@@ -1015,6 +1015,12 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
     let mut resolved_fixtures = Vec::new();
     for f in &source.fixture {
         add_id(&mut ids, &mut errors, &f.id, "fixture");
+        if f.state.trim().is_empty() {
+            errors.push(format!(
+                "fixture '{}': state must contain at least one non-whitespace character",
+                f.id
+            ));
+        }
         let mut seen_content = HashSet::new();
         let mut content = Vec::new();
         for record in &f.content {
@@ -1675,6 +1681,45 @@ mod tests {
                 .to_string();
             assert!(error.contains("tree node id") && error.contains("non-whitespace"));
         }
+    }
+
+    fn fixture_state_source(state: &str) -> String {
+        format!(
+            "[screen]\nid='screen'\npurpose='x'\nroot='root'\n[[region]]\nid='a'\nrole='navigation'\nimportance='primary'\n[[region]]\nid='b'\nrole='inspector'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','b']\n[[fixture]]\nid='fixture'\nstate='{state}'"
+        )
+    }
+
+    #[test]
+    fn fixture_state_must_be_nonblank() {
+        for state in ["", "   ", "\t", " \t "] {
+            let error = parse_and_resolve(&fixture_state_source(state))
+                .unwrap_err()
+                .to_string();
+            assert!(
+                error.contains("fixture 'fixture'")
+                    && error.contains("state")
+                    && error.contains("non-whitespace")
+            );
+        }
+    }
+
+    #[test]
+    fn authored_fixture_state_is_preserved_and_duplicate_states_are_allowed() {
+        let state = "  loaded document  ";
+        let source = fixture_state_source(state).replace(
+            "[[fixture]]\nid='fixture'\nstate='  loaded document  '",
+            "[[fixture]]\nid='fixture'\nstate='  loaded document  '\n[[fixture]]\nid='second'\nstate='  loaded document  '",
+        );
+        let blueprint = parse_and_resolve(&source).unwrap();
+        assert_eq!(blueprint.fixtures[0].state, state);
+        assert_eq!(blueprint.fixtures[1].state, state);
+    }
+
+    #[test]
+    fn missing_fixture_state_remains_a_parse_error() {
+        let source = fixture_state_source("ready").replace("\nstate='ready'", "");
+        let error = parse_and_resolve(&source).unwrap_err().to_string();
+        assert!(error.contains("missing field `state`") || error.contains("missing field 'state'"));
     }
 
     #[test]

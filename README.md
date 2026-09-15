@@ -321,6 +321,10 @@ M20 requires `screen.purpose` to contain at least one non-whitespace character w
 
 M21 preserves both a region's fixed main-axis base size and its positive `grow` share. Fixed-plus-grow allocation is corrected without changing source syntax, canonical geometry, or renderer behavior.
 
+## M22 — fixture state authorship fidelity
+
+M22 requires every authored `fixture.state` to contain at least one non-whitespace character while preserving valid state text exactly. Fixture payload semantics, selection, renderer behavior, and layout remain unchanged.
+
 ## Status
 
 - M0 — accepted
@@ -344,4 +348,5 @@ M21 preserves both a region's fixed main-axis base size and its positive `grow` 
 - M18 — accepted
 - M19 — accepted
 - M20 — accepted
-- M21 — implementation complete; director audit pending
+- M21 — accepted
+- M22 — implementation complete; director audit pending
