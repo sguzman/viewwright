@@ -263,6 +263,32 @@ See:
 - [`docs/m12-stop-condition.md`](docs/m12-stop-condition.md)
 - [`docs/m12-acceptance-matrix.md`](docs/m12-acceptance-matrix.md)
 
+## M13 — composition semantics fidelity
+
+M13 makes composition topology truthful after resolution. `CompositionKind` and `Axis` are typed, the supported kind vocabulary is limited to the topology actually implemented by M4 (`split`, `row`, and `column`), and previously accepted-but-unimplemented `stack` and `overlay` declarations are rejected.
+
+```text
+authored composition kind + axis
+    ↓
+validated typed CompositionKind + Axis
+    ↓
+semantic / concept inspection + M4 layout
+```
+
+`split` preserves the existing omitted-axis default to horizontal, `row` resolves horizontal, and `column` resolves vertical; contradictory explicit row/column axes fail validation. Director audit accepted the typed topology and canonical geometry regression coverage without requiring human screenshot QA.
+
+See:
+
+- [`docs/m13-composition-semantics-fidelity.md`](docs/m13-composition-semantics-fidelity.md)
+- [`docs/m13-acceptance.md`](docs/m13-acceptance.md)
+- [`docs/m13-schema-summary.md`](docs/m13-schema-summary.md)
+- [`docs/m13-implementation-boundary.md`](docs/m13-implementation-boundary.md)
+- [`docs/m13-pressure-evidence.md`](docs/m13-pressure-evidence.md)
+- [`docs/m13-stop-condition.md`](docs/m13-stop-condition.md)
+- [`docs/m13-acceptance-matrix.md`](docs/m13-acceptance-matrix.md)
+- [`docs/m13-roadmap-note.md`](docs/m13-roadmap-note.md)
+- [`docs/m13-implementation-plan.md`](docs/m13-implementation-plan.md)
+
 ## Status
 
 - M0 — accepted
@@ -278,3 +304,4 @@ See:
 - M10 — accepted
 - M11 — accepted
 - M12 — accepted
+- M13 — accepted
