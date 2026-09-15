@@ -1,0 +1,3 @@
+# M25 — Stop Condition
+
+Stop M25 once every explicitly authored `design.character` and `design.avoid` entry must be nonblank, valid strings remain exact and ordered, empty/omitted lists remain legal, duplicate entries remain legal, M15 dominant semantics remain unchanged, accepted canonical sources resolve without migration, and no broader design-taxonomy or copy-validation system has been introduced.
