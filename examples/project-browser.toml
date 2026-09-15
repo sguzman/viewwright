@@ -63,6 +63,7 @@ id = "navigation_items"
 region = "navigation"
 kind = "collection"
 importance = "secondary"
+label = "navigation items"
 presentation = "list"
 
 [[element]]
@@ -70,6 +71,7 @@ id = "project_collection"
 region = "projects"
 kind = "collection"
 importance = "primary"
+label = "project collection"
 presentation = "adaptive_cards"
 
 [[element]]
@@ -77,6 +79,7 @@ id = "project_inspector"
 region = "inspector"
 kind = "property_sheet"
 importance = "secondary"
+label = "project inspector"
 
 [[fixture]]
 id = "many_projects"

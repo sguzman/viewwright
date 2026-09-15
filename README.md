@@ -289,6 +289,12 @@ See:
 - [`docs/m13-roadmap-note.md`](docs/m13-roadmap-note.md)
 - [`docs/m13-implementation-plan.md`](docs/m13-implementation-plan.md)
 
+## M14 — element label authorship fidelity
+
+M14 requires every current element to author a nonblank `label`. The resolver now preserves authored label text exactly and rejects missing, empty, or whitespace-only labels; it no longer derives visible copy from element IDs. The three previously identified Project Browser labels were migrated with their exact former fallback text, preserving the accepted visible output.
+
+Status: implementation complete; director audit pending.
+
 ## Status
 
 - M0 — accepted
@@ -305,3 +311,4 @@ See:
 - M11 — accepted
 - M12 — accepted
 - M13 — accepted
+- M14 — implementation complete; director audit pending

@@ -371,6 +371,21 @@ fn kind(s: &str, where_: &str, errors: &mut Vec<String>) -> ElementKind {
         }
     }
 }
+fn element_label(value: Option<&String>, id: &str, errors: &mut Vec<String>) -> String {
+    match value {
+        Some(label) if !label.trim().is_empty() => label.clone(),
+        Some(_) => {
+            errors.push(format!(
+                "element '{id}': label must contain at least one non-whitespace character"
+            ));
+            String::new()
+        }
+        None => {
+            errors.push(format!("element '{id}': label is required"));
+            String::new()
+        }
+    }
+}
 fn collection_presentation(
     value: Option<&str>,
     element: &str,
@@ -786,7 +801,7 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
             region: e.region.clone(),
             kind: element_kind,
             importance: importance(&e.importance, &format!("element '{}'", e.id), &mut errors),
-            label: e.label.clone().unwrap_or_else(|| e.id.replace('_', " ")),
+            label: element_label(e.label.as_ref(), &e.id, &mut errors),
             presentation,
             action,
         });
@@ -1315,7 +1330,68 @@ mod tests {
     }
     #[test]
     fn project_browser_resolves() {
-        assert_eq!(parse_and_resolve(project()).unwrap().root, "workspace");
+        let blueprint = parse_and_resolve(project()).unwrap();
+        assert_eq!(blueprint.root, "workspace");
+        assert_eq!(
+            blueprint
+                .elements
+                .iter()
+                .find(|element| element.id == "navigation_items")
+                .unwrap()
+                .label,
+            "navigation items"
+        );
+        assert_eq!(
+            blueprint
+                .elements
+                .iter()
+                .find(|element| element.id == "project_collection")
+                .unwrap()
+                .label,
+            "project collection"
+        );
+        assert_eq!(
+            blueprint
+                .elements
+                .iter()
+                .find(|element| element.id == "project_inspector")
+                .unwrap()
+                .label,
+            "project inspector"
+        );
+    }
+
+    fn labeled_element_source(label: Option<&str>) -> String {
+        let label = label
+            .map(|label| format!("label='{label}'\n"))
+            .unwrap_or_default();
+        format!(
+            "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='navigation'\nrole='navigation'\nimportance='primary'\n[[region]]\nid='content'\nrole='primary_content'\nimportance='secondary'\n[[element]]\nid='internal_search_control'\nregion='navigation'\nkind='search'\nimportance='secondary'\n{label}[[composition]]\nid='root'\nkind='split'\nchildren=['navigation','content']"
+        )
+    }
+
+    #[test]
+    fn element_labels_require_authored_nonblank_text() {
+        let missing = parse_and_resolve(&labeled_element_source(None))
+            .unwrap_err()
+            .to_string();
+        assert!(missing.contains("element 'internal_search_control': label is required"));
+
+        for blank in ["", "   "] {
+            let error = parse_and_resolve(&labeled_element_source(Some(blank)))
+                .unwrap_err()
+                .to_string();
+            assert!(
+                error.contains("element 'internal_search_control'")
+                    && error.contains("non-whitespace")
+            );
+        }
+    }
+
+    #[test]
+    fn authored_element_label_is_preserved_exactly() {
+        let blueprint = parse_and_resolve(&labeled_element_source(Some("Find projects…"))).unwrap();
+        assert_eq!(blueprint.elements[0].label, "Find projects…");
     }
 
     #[test]
