@@ -239,6 +239,30 @@ See:
 - [`docs/m11-stop-condition.md`](docs/m11-stop-condition.md)
 - [`docs/m11-acceptance-matrix.md`](docs/m11-acceptance-matrix.md)
 
+## Current design work — M12 region role fidelity
+
+Accepted blueprints already use a stable semantic region-role vocabulary, but both source and resolved models still carry `region.role` as arbitrary strings. M12 makes the existing role field typed and validated so ontology and renderer behavior cannot silently drift through misspellings.
+
+```text
+authored region.role
+    ↓
+validated typed RegionRole
+    ↓
+semantic / concept inspection + backend consumption
+```
+
+M12 supports only the already-observed accepted roles: `commands`, `controls`, `navigation`, `primary_content`, `inspector`, and `status`. It adds no new TOML syntax and no intended visible behavior change.
+
+See:
+
+- [`docs/m12-region-role-fidelity.md`](docs/m12-region-role-fidelity.md)
+- [`docs/m12-acceptance.md`](docs/m12-acceptance.md)
+- [`docs/m12-schema-summary.md`](docs/m12-schema-summary.md)
+- [`docs/m12-implementation-boundary.md`](docs/m12-implementation-boundary.md)
+- [`docs/m12-pressure-evidence.md`](docs/m12-pressure-evidence.md)
+- [`docs/m12-stop-condition.md`](docs/m12-stop-condition.md)
+- [`docs/m12-acceptance-matrix.md`](docs/m12-acceptance-matrix.md)
+
 ## Status
 
 - M0 — accepted
@@ -253,3 +277,4 @@ See:
 - M9 — accepted
 - M10 — accepted
 - M11 — accepted
+- M12 — region role fidelity formalized; implementation not yet started
