@@ -305,6 +305,10 @@ Director audit accepted the resolved design boundary, typed dominant-target iden
 
 M16 enforces unique structural ownership for composition children: duplicate siblings, multiple region or composition parents, and root-as-child references are rejected globally while unused declarations and cycle validation remain supported. Canonical screens and valid M4 geometry are unchanged.
 
+## M18 — global composition cycle fidelity
+
+M18 validates composition cycles across every authored composition in deterministic source order, including disconnected and otherwise unreachable topology. Unused acyclic declarations remain valid, while the active `screen.root` continues to control layout and rendering.
+
 ## Status
 
 - M0 — accepted
@@ -325,3 +329,4 @@ M16 enforces unique structural ownership for composition children: duplicate sib
 - M15 — accepted
 - M16 — accepted
 - M17 — accepted
+- M18 — implementation complete; director audit pending

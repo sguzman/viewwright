@@ -1001,8 +1001,16 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
         visiting.remove(id);
     }
     let by_id: HashMap<_, _> = compositions.iter().map(|c| (c.id.as_str(), c)).collect();
-    if let Some(root) = root.as_deref() {
-        visit(root, &by_id, &mut visiting, &mut visited, &mut errors);
+    for composition in &compositions {
+        if !visited.contains(&composition.id) {
+            visit(
+                &composition.id,
+                &by_id,
+                &mut visiting,
+                &mut visited,
+                &mut errors,
+            );
+        }
     }
     let mut resolved_fixtures = Vec::new();
     for f in &source.fixture {
@@ -1890,6 +1898,46 @@ mod tests {
     fn cycle_is_rejected() {
         let e = parse_and_resolve("[screen]\nid='x'\npurpose='x'\nroot='a'\n[[composition]]\nid='a'\nkind='split'\nchildren=['b','r']\n[[composition]]\nid='b'\nkind='split'\nchildren=['a','r']\n[[region]]\nid='r'\nrole='primary_content'\nimportance='primary'").unwrap_err().to_string();
         assert!(e.contains("composition cycle detected"));
+    }
+    fn disconnected_composition_source(regions: &str, compositions: &str) -> String {
+        format!(
+            "[screen]\nid='x'\npurpose='x'\nroot='root'\n{regions}\n[[composition]]\nid='root'\nkind='split'\nchildren=['main','other']\n{compositions}"
+        )
+    }
+    #[test]
+    fn unreachable_two_node_composition_cycle_is_rejected() {
+        let source = disconnected_composition_source(
+            "[[region]]\nid='main'\nrole='primary_content'\nimportance='primary'\n[[region]]\nid='other'\nrole='status'\nimportance='secondary'\n[[region]]\nid='a'\nrole='navigation'\nimportance='tertiary'\n[[region]]\nid='b'\nrole='inspector'\nimportance='tertiary'",
+            "[[composition]]\nid='orphan_a'\nkind='split'\nchildren=['orphan_b','a']\n[[composition]]\nid='orphan_b'\nkind='split'\nchildren=['orphan_a','b']",
+        );
+        let error = parse_and_resolve(&source).unwrap_err().to_string();
+        assert!(error.contains("composition cycle detected") && error.contains("orphan_a"));
+    }
+    #[test]
+    fn unreachable_self_cycle_is_rejected() {
+        let source = disconnected_composition_source(
+            "[[region]]\nid='main'\nrole='primary_content'\nimportance='primary'\n[[region]]\nid='other'\nrole='status'\nimportance='secondary'\n[[region]]\nid='unused'\nrole='inspector'\nimportance='tertiary'",
+            "[[composition]]\nid='orphan'\nkind='split'\nchildren=['orphan','unused']",
+        );
+        let error = parse_and_resolve(&source).unwrap_err().to_string();
+        assert!(error.contains("composition cycle detected") && error.contains("orphan"));
+    }
+    #[test]
+    fn unreachable_longer_composition_cycle_is_rejected() {
+        let source = disconnected_composition_source(
+            "[[region]]\nid='main'\nrole='primary_content'\nimportance='primary'\n[[region]]\nid='other'\nrole='status'\nimportance='secondary'\n[[region]]\nid='a'\nrole='navigation'\nimportance='tertiary'\n[[region]]\nid='b'\nrole='inspector'\nimportance='tertiary'\n[[region]]\nid='c'\nrole='controls'\nimportance='tertiary'",
+            "[[composition]]\nid='a_parent'\nkind='split'\nchildren=['b_parent','a']\n[[composition]]\nid='b_parent'\nkind='split'\nchildren=['c_parent','b']\n[[composition]]\nid='c_parent'\nkind='split'\nchildren=['a_parent','c']",
+        );
+        let error = parse_and_resolve(&source).unwrap_err().to_string();
+        assert!(error.contains("composition cycle detected") && error.contains("a_parent"));
+    }
+    #[test]
+    fn disconnected_acyclic_composition_subtree_remains_valid() {
+        let source = disconnected_composition_source(
+            "[[region]]\nid='main'\nrole='primary_content'\nimportance='primary'\n[[region]]\nid='other'\nrole='status'\nimportance='secondary'\n[[region]]\nid='unused_a'\nrole='navigation'\nimportance='tertiary'\n[[region]]\nid='unused_b'\nrole='inspector'\nimportance='tertiary'\n[[region]]\nid='unused_c'\nrole='controls'\nimportance='tertiary'",
+            "[[composition]]\nid='unused_parent'\nkind='split'\nchildren=['unused_child','unused_a']\n[[composition]]\nid='unused_child'\nkind='split'\nchildren=['unused_b','unused_c']",
+        );
+        assert!(parse_and_resolve(&source).is_ok());
     }
     #[test]
     fn duplicate_region_sibling_is_rejected() {
