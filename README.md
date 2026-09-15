@@ -309,6 +309,10 @@ M16 enforces unique structural ownership for composition children: duplicate sib
 
 M18 validates composition cycles across every authored composition in deterministic source order, including disconnected and otherwise unreachable topology. Unused acyclic declarations remain valid, while the active `screen.root` continues to control layout and rendering.
 
+## M19 — color token literal fidelity
+
+M19 validates every authored `[tokens.color]` literal as the existing `#RRGGBB` form, including unused tokens and sources without a visual profile. Valid unused tokens remain legal, and resolved visual palettes are unchanged.
+
 ## Status
 
 - M0 — accepted
@@ -329,4 +333,5 @@ M18 validates composition cycles across every authored composition in determinis
 - M15 — accepted
 - M16 — accepted
 - M17 — accepted
-- M18 — implementation complete; director audit pending
+- M18 — accepted
+- M19 — implementation complete; director audit pending

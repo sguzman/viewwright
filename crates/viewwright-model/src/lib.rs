@@ -634,27 +634,19 @@ fn logical_size(
         }
     }
 }
-fn parse_color(value: &str, name: &str, errors: &mut Vec<String>) -> Color {
+fn parse_color(value: &str) -> Option<Color> {
     let valid = value
         .strip_prefix('#')
         .filter(|v| v.len() == 6)
         .and_then(|v| u32::from_str_radix(v, 16).ok());
     match valid {
-        Some(v) => Color {
+        Some(v) => Some(Color {
             r: (v >> 16) as u8,
             g: (v >> 8) as u8,
             b: v as u8,
             a: 255,
-        },
-        None => {
-            errors.push(format!("color token '{name}': expected #RRGGBB"));
-            Color {
-                r: 0,
-                g: 0,
-                b: 0,
-                a: 255,
-            }
-        }
+        }),
+        None => None,
     }
 }
 fn color_ref(
@@ -664,7 +656,12 @@ fn color_ref(
     errors: &mut Vec<String>,
 ) -> Color {
     match tokens.values.get(reference) {
-        Some(value) => parse_color(value, reference, errors),
+        Some(value) => parse_color(value).unwrap_or(Color {
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 255,
+        }),
         None => {
             errors.push(format!("visual.{role}: missing color token '{reference}'"));
             Color {
@@ -1257,6 +1254,13 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
     });
     if !errors.is_empty() {
         return Err(BlueprintError::Validation(errors.join("\n")));
+    }
+    let mut color_names: Vec<_> = source.tokens.color.values.keys().collect();
+    color_names.sort();
+    for name in color_names {
+        if parse_color(&source.tokens.color.values[name]).is_none() {
+            errors.push(format!("color token '{name}': expected #RRGGBB"));
+        }
     }
     let visual = resolve_visual(source.visual.as_ref(), &source.tokens, &mut errors);
     if !errors.is_empty() {
@@ -2082,6 +2086,50 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("unknown field"));
+    }
+    fn color_tokens_source(tokens: &str) -> String {
+        format!(
+            "[screen]\nid='x'\npurpose='x'\nroot='root'\n[tokens.color]\n{tokens}\n[[region]]\nid='a'\nrole='navigation'\nimportance='primary'\n[[region]]\nid='b'\nrole='inspector'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','b']"
+        )
+    }
+
+    #[test]
+    fn every_authored_color_token_is_validated_deterministically() {
+        let invalid_with_visual = include_str!("../../../specimens/reader-workspace-visual.toml")
+            .replace(
+                "canvas = \"#262B33\"",
+                "canvas = \"#262B33\"\nunused_bad = \"garbage\"",
+            );
+        let error = parse_and_resolve(&invalid_with_visual)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("color token 'unused_bad': expected #RRGGBB"));
+
+        let invalid_without_visual = color_tokens_source("future = 'garbage'");
+        let error = parse_and_resolve(&invalid_without_visual)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("color token 'future': expected #RRGGBB"));
+
+        let valid_unused = color_tokens_source("future = '#123456'");
+        assert!(parse_and_resolve(&valid_unused).is_ok());
+
+        let ordered = color_tokens_source("z_bad = 'garbage'\na_bad = 'garbage'");
+        let error = parse_and_resolve(&ordered).unwrap_err().to_string();
+        assert!(error.find("a_bad").unwrap() < error.find("z_bad").unwrap());
+    }
+
+    #[test]
+    fn referenced_malformed_and_missing_color_tokens_remain_rejected() {
+        let malformed = include_str!("../../../specimens/reader-workspace-visual.toml")
+            .replace("canvas = \"#262B33\"", "canvas = \"invalid\"");
+        let error = parse_and_resolve(&malformed).unwrap_err().to_string();
+        assert!(error.contains("color token 'canvas': expected #RRGGBB"));
+
+        let missing = include_str!("../../../specimens/reader-workspace-visual.toml")
+            .replace("canvas = \"canvas\"", "canvas = \"does_not_exist\"");
+        let error = parse_and_resolve(&missing).unwrap_err().to_string();
+        assert!(error.contains("visual.canvas: missing color token 'does_not_exist'"));
     }
     #[test]
     fn missing_visual_color_reference_is_rejected() {
