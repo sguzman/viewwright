@@ -282,7 +282,10 @@ fn render_element(
 }
 
 fn separate_element_label(kind: ElementKind) -> bool {
-    kind != ElementKind::Command
+    !matches!(
+        kind,
+        ElementKind::Command | ElementKind::Text | ElementKind::Preview
+    )
 }
 
 fn render_tree(
@@ -553,6 +556,8 @@ mod tests {
         ] {
             assert!(separate_element_label(kind));
         }
+        assert!(!separate_element_label(ElementKind::Text));
+        assert!(!separate_element_label(ElementKind::Preview));
     }
 
     #[test]
