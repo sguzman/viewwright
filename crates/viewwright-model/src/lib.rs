@@ -1068,9 +1068,14 @@ impl ResolvedBlueprint {
                     CompositionChild::Composition(child) => walk(child, b, out, indent + 2, seen),
                     CompositionChild::Region(region) => {
                         out.push_str(&format!(
-                            "{:indent$}region {}\n",
+                            "{:indent$}region {} (role {})\n",
                             "",
                             region,
+                            b.regions
+                                .iter()
+                                .find(|candidate| candidate.id == *region)
+                                .map(|candidate| candidate.role.as_str())
+                                .unwrap_or("unknown"),
                             indent = indent + 2
                         ));
                         for e in b.elements.iter().filter(|e| e.region == *region) {
@@ -1490,6 +1495,7 @@ mod tests {
         let debug = b.semantic_tree();
         assert!(debug.contains("document_outline: tree 5 nodes"));
         assert!(debug.contains("document_surface: document 'The Quiet Machine', 3 paragraphs"));
+        assert!(debug.contains("region library (role navigation)"));
     }
 
     #[test]

@@ -207,18 +207,16 @@ fn render_element(
     density: DensityPolicy,
 ) {
     ui.add_space(density.element_gap);
+    if separate_element_label(e.kind) {
+        ui.label(element_text(&e.label, e.importance, b.visual.as_ref()));
+    }
     match e.kind {
         ElementKind::Search => {
-            ui.label(element_text(&e.label, e.importance, b.visual.as_ref()));
             let mut query = String::new();
             ui.text_edit_singleline(&mut query);
         }
-        ElementKind::Collection => {
-            ui.label(element_text(&e.label, e.importance, b.visual.as_ref()));
-            render_collection(ui, e, b, fixture, b.visual.as_ref(), density)
-        }
+        ElementKind::Collection => render_collection(ui, e, b, fixture, b.visual.as_ref(), density),
         ElementKind::Document => {
-            ui.label(element_text(&e.label, e.importance, b.visual.as_ref()));
             if let Some(ResolvedFixtureContent::Document {
                 title, paragraphs, ..
             }) = content_for(b, fixture, &e.id)
@@ -231,7 +229,6 @@ fn render_element(
             }
         }
         ElementKind::PropertySheet => {
-            ui.label(element_text(&e.label, e.importance, b.visual.as_ref()));
             if let Some(ResolvedFixtureContent::Properties { properties, .. }) =
                 content_for(b, fixture, &e.id)
             {
@@ -272,20 +269,20 @@ fn render_element(
             }
         }
         ElementKind::Status => {
-            ui.label(element_text(&e.label, e.importance, b.visual.as_ref()));
             if let Some(ResolvedFixtureContent::Text { text, .. }) = content_for(b, fixture, &e.id)
             {
                 ui.label(text);
             }
         }
-        ElementKind::Tree => {
-            ui.label(element_text(&e.label, e.importance, b.visual.as_ref()));
-            render_tree(ui, e, b, fixture, b.visual.as_ref())
-        }
+        ElementKind::Tree => render_tree(ui, e, b, fixture, b.visual.as_ref()),
         ElementKind::Text | ElementKind::Preview => {
             ui.label(element_text(&e.label, e.importance, b.visual.as_ref()));
         }
     }
+}
+
+fn separate_element_label(kind: ElementKind) -> bool {
+    kind != ElementKind::Command
 }
 
 fn render_tree(
@@ -539,9 +536,24 @@ fn apply_density(ui: &mut egui::Ui, policy: DensityPolicy) {
 
 #[cfg(test)]
 mod tests {
-    use super::{root_fill, DensityPolicy};
+    use super::{root_fill, separate_element_label, DensityPolicy};
     use egui::{Color32, Context};
-    use viewwright_model::{parse_and_resolve, Density};
+    use viewwright_model::{parse_and_resolve, Density, ElementKind};
+
+    #[test]
+    fn command_labels_are_control_owned_while_content_labels_are_separate() {
+        assert!(!separate_element_label(ElementKind::Command));
+        for kind in [
+            ElementKind::Search,
+            ElementKind::Collection,
+            ElementKind::Tree,
+            ElementKind::PropertySheet,
+            ElementKind::Document,
+            ElementKind::Status,
+        ] {
+            assert!(separate_element_label(kind));
+        }
+    }
 
     #[test]
     fn density_policy_is_tighter_without_typography_or_screen_specific_rules() {

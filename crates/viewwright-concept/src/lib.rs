@@ -45,9 +45,10 @@ fn walk(id: &str, b: &ResolvedBlueprint, out: &mut String, depth: usize) {
             CompositionChild::Region(id) => {
                 let r = b.regions.iter().find(|r| r.id == *id).unwrap();
                 out.push_str(&format!(
-                    "{}{} — {:?}, {:?}\n",
+                    "{}{} — role {}, {:?}, {:?}\n",
                     " ".repeat(depth + 2),
                     id,
+                    r.role,
                     r.surface,
                     r.importance
                 ));
@@ -74,7 +75,8 @@ mod tests {
         assert_eq!(first, render(&blueprint));
         assert!(first.contains("dominant: reader"));
         assert!(first.contains("canvas: #262B33"));
-        assert!(first.contains("reader — Canvas, Primary"));
+        assert!(first.contains("reader — role primary_content, Canvas, Primary"));
+        assert!(first.contains("library — role navigation, Panel, Secondary"));
         assert!(first.contains("Document: Document"));
         let project = render(
             &parse_and_resolve(include_str!("../../../examples/project-browser.toml")).unwrap(),
