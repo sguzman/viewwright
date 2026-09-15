@@ -291,9 +291,9 @@ See:
 
 ## M14 — element label authorship fidelity
 
-M14 requires every current element to author a nonblank `label`. The resolver now preserves authored label text exactly and rejects missing, empty, or whitespace-only labels; it no longer derives visible copy from element IDs. The three previously identified Project Browser labels were migrated with their exact former fallback text, preserving the accepted visible output.
+M14 requires every current element to author a nonblank `label`. The resolver preserves authored label text exactly and rejects missing, empty, or whitespace-only labels; it no longer derives visible copy from element IDs. The three Project Browser labels that previously depended on the fallback were migrated with their exact former visible strings, so the accepted UI remains unchanged.
 
-Status: implementation complete; director audit pending.
+Director audit accepted the validation boundary, authored-label provenance, canonical migration, and removal of all element-id label fallbacks without requiring human screenshot QA.
 
 ## Status
 
@@ -311,4 +311,4 @@ Status: implementation complete; director audit pending.
 - M11 — accepted
 - M12 — accepted
 - M13 — accepted
-- M14 — implementation complete; director audit pending
+- M14 — accepted
