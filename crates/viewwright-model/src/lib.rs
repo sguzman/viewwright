@@ -783,6 +783,20 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
     validate_token_names(&source.tokens.color.values, "tokens.color", &mut errors);
     validate_color_values(&source.tokens.color, &mut errors);
     let token_validation_errors = errors.len();
+    for (index, value) in source.design.character.iter().enumerate() {
+        if value.trim().is_empty() {
+            errors.push(format!(
+                "design.character[{index}]: must contain at least one non-whitespace character"
+            ));
+        }
+    }
+    for (index, value) in source.design.avoid.iter().enumerate() {
+        if value.trim().is_empty() {
+            errors.push(format!(
+                "design.avoid[{index}]: must contain at least one non-whitespace character"
+            ));
+        }
+    }
     validate_nonblank_id(&source.screen.id, "screen.id", &mut errors);
     if source.screen.purpose.trim().is_empty() {
         errors.push("screen.purpose: must contain at least one non-whitespace character".into());
@@ -1555,6 +1569,81 @@ mod tests {
 
         let omitted = parse_and_resolve(&dominant_element_source(None)).unwrap();
         assert_eq!(omitted.design.dominant, None);
+    }
+
+    fn design_entries_source(character: &str, avoid: &str) -> String {
+        format!(
+            "[screen]\nid='x'\npurpose='x'\nroot='root'\n[design]\ncharacter={character}\navoid={avoid}\n[[region]]\nid='a'\nrole='navigation'\nimportance='primary'\n[[region]]\nid='b'\nrole='inspector'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','b']"
+        )
+    }
+
+    #[test]
+    fn design_vocabulary_entries_must_be_nonblank() {
+        for value in ["", "   ", "\t", " \t "] {
+            let character = format!("[{value:?}]");
+            let error = parse_and_resolve(&design_entries_source(&character, "['valid']"))
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains("design.character[0]") && error.contains("non-whitespace"));
+
+            let avoid = format!("[{value:?}]");
+            let error = parse_and_resolve(&design_entries_source("['valid']", &avoid))
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains("design.avoid[0]") && error.contains("non-whitespace"));
+        }
+    }
+
+    #[test]
+    fn design_vocabulary_preserves_order_text_and_duplicates() {
+        let blueprint = parse_and_resolve(&design_entries_source(
+            "['  first  ','second','second']",
+            "['  avoid  ','avoid','avoid']",
+        ))
+        .unwrap();
+        assert_eq!(
+            blueprint.design.character,
+            ["  first  ", "second", "second"]
+        );
+        assert_eq!(blueprint.design.avoid, ["  avoid  ", "avoid", "avoid"]);
+    }
+
+    #[test]
+    fn omitted_and_explicitly_empty_design_vocabulary_remain_legal() {
+        let omitted = parse_and_resolve(&token_maps_source("", "", "")).unwrap();
+        assert!(omitted.design.character.is_empty());
+        assert!(omitted.design.avoid.is_empty());
+        assert_eq!(omitted.design.dominant, None);
+
+        let empty = parse_and_resolve(&design_entries_source("[]", "[]")).unwrap();
+        assert!(empty.design.character.is_empty());
+        assert!(empty.design.avoid.is_empty());
+    }
+
+    #[test]
+    fn canonical_sources_resolve_with_nonblank_design_vocabulary() {
+        for source in [
+            project(),
+            reader(),
+            include_str!("../../../specimens/reader-workspace-visual.toml"),
+            include_str!("../../../specimens/reader-workspace-visual-m7.toml"),
+            include_str!("../../../specimens/dependency-workbench.toml"),
+            include_str!("../../../specimens/density-pressure-comfortable.toml"),
+            include_str!("../../../specimens/density-pressure-dense.toml"),
+        ] {
+            let parsed: SourceBlueprint = toml::from_str(source).unwrap();
+            assert!(parsed
+                .design
+                .character
+                .iter()
+                .all(|value| !value.trim().is_empty()));
+            assert!(parsed
+                .design
+                .avoid
+                .iter()
+                .all(|value| !value.trim().is_empty()));
+            parse_and_resolve(source).unwrap();
+        }
     }
 
     #[test]

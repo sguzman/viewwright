@@ -333,6 +333,10 @@ M23 requires authored collection-item and tree-node labels to contain at least o
 
 M24 requires spacing, corner, and color token names to contain at least one non-whitespace character while preserving valid names and exact token references. Token values, token families, visual resolution, and projections remain unchanged.
 
+## M25 — design vocabulary authorship fidelity
+
+M25 requires explicitly authored `design.character` and `design.avoid` entries to contain at least one non-whitespace character while preserving valid vocabulary text, order, and duplicates exactly. Omitted and explicitly empty lists remain valid; dominant-target semantics and projections remain unchanged.
+
 ## Status
 
 - M0 — accepted
@@ -359,4 +363,5 @@ M24 requires spacing, corner, and color token names to contain at least one non-
 - M21 — accepted
 - M22 — accepted
 - M23 — accepted
-- M24 — implementation complete; director audit pending
+- M24 — accepted
+- M25 — implementation complete; director audit pending
