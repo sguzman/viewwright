@@ -277,4 +277,4 @@ See:
 - M9 — accepted
 - M10 — accepted
 - M11 — accepted
-- M12 — region role fidelity formalized; implementation not yet started
+- M12 — implementation complete; audit pending

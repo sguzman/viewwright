@@ -4,7 +4,7 @@ use egui::{CentralPanel, Color32, Context, FontId, Frame, RichText, Stroke, UiBu
 use viewwright_layout::{layout, LayoutPlan, Rect as LayoutRect};
 use viewwright_model::{
     BorderPolicy, CollectionPresentation, Color, CompositionChild, Density, ElementKind,
-    Importance, ResolvedBlueprint, ResolvedFixtureContent, ResolvedRegion, SurfaceRole,
+    Importance, RegionRole, ResolvedBlueprint, ResolvedFixtureContent, ResolvedRegion, SurfaceRole,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -208,7 +208,7 @@ fn render_region(
             .max_rect(content),
         |ui| {
             let elements: Vec<_> = b.elements.iter().filter(|e| e.region == r.id).collect();
-            if r.role == "commands" {
+            if is_command_region(r.role) {
                 ui.horizontal_wrapped(|ui| {
                     for e in elements {
                         render_element(ui, e, b, fixture, activation, density, state);
@@ -221,6 +221,10 @@ fn render_region(
             }
         },
     );
+}
+
+fn is_command_region(role: RegionRole) -> bool {
+    role == RegionRole::Commands
 }
 
 fn render_element(
@@ -564,9 +568,9 @@ fn apply_density(ui: &mut egui::Ui, policy: DensityPolicy) {
 
 #[cfg(test)]
 mod tests {
-    use super::{root_fill, separate_element_label, DensityPolicy};
+    use super::{is_command_region, root_fill, separate_element_label, DensityPolicy};
     use egui::{Color32, Context};
-    use viewwright_model::{parse_and_resolve, Density, ElementKind};
+    use viewwright_model::{parse_and_resolve, Density, ElementKind, RegionRole};
 
     #[test]
     fn command_labels_are_control_owned_while_content_labels_are_separate() {
@@ -583,6 +587,12 @@ mod tests {
         }
         assert!(!separate_element_label(ElementKind::Text));
         assert!(!separate_element_label(ElementKind::Preview));
+    }
+
+    #[test]
+    fn command_flow_uses_typed_region_role() {
+        assert!(is_command_region(RegionRole::Commands));
+        assert!(!is_command_region(RegionRole::Controls));
     }
 
     #[test]

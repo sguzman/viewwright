@@ -382,7 +382,7 @@ mod tests {
 
     #[test]
     fn unused_surfaces_and_non_visual_blueprints_are_handled_cleanly() {
-        let source = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='r'\nrole='content'\nimportance='primary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['r','r']";
+        let source = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='r'\nrole='primary_content'\nimportance='primary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['r','r']";
         let blueprint = parse_and_resolve(source).unwrap();
         assert!(audit(&blueprint).is_none());
         let mut blueprint = visual_reader();

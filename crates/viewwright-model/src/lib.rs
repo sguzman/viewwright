@@ -183,6 +183,34 @@ pub enum Importance {
     Secondary,
     Tertiary,
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegionRole {
+    Commands,
+    Controls,
+    Navigation,
+    PrimaryContent,
+    Inspector,
+    Status,
+}
+
+impl RegionRole {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Commands => "commands",
+            Self::Controls => "controls",
+            Self::Navigation => "navigation",
+            Self::PrimaryContent => "primary_content",
+            Self::Inspector => "inspector",
+            Self::Status => "status",
+        }
+    }
+}
+
+impl std::fmt::Display for RegionRole {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActionId(String);
 
@@ -243,6 +271,22 @@ fn importance(s: &str, where_: &str, errors: &mut Vec<String>) -> Importance {
         _ => {
             errors.push(format!("{where_}: unknown importance '{s}'"));
             Importance::Tertiary
+        }
+    }
+}
+fn region_role(value: &str, id: &str, errors: &mut Vec<String>) -> RegionRole {
+    match value {
+        "commands" => RegionRole::Commands,
+        "controls" => RegionRole::Controls,
+        "navigation" => RegionRole::Navigation,
+        "primary_content" => RegionRole::PrimaryContent,
+        "inspector" => RegionRole::Inspector,
+        "status" => RegionRole::Status,
+        other => {
+            errors.push(format!(
+                "region '{id}': unknown role '{other}' (expected commands, controls, navigation, primary_content, inspector, or status)"
+            ));
+            RegionRole::PrimaryContent
         }
     }
 }
@@ -328,7 +372,7 @@ fn action_id(value: &str, element: &str, errors: &mut Vec<String>) -> Option<Act
 #[derive(Debug, Clone)]
 pub struct ResolvedRegion {
     pub id: String,
-    pub role: String,
+    pub role: RegionRole,
     pub importance: Importance,
     pub width: Option<u32>,
     pub height: Option<u32>,
@@ -606,7 +650,7 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
         }
         regions.push(ResolvedRegion {
             id: r.id.clone(),
-            role: r.role.clone(),
+            role: region_role(&r.role, &r.id, &mut errors),
             importance: importance(&r.importance, &format!("region '{}'", r.id), &mut errors),
             width: logical_size(r.width.as_ref(), "region width", &r.id, &mut errors),
             height: logical_size(r.height.as_ref(), "region height", &r.id, &mut errors),
@@ -1203,6 +1247,35 @@ mod tests {
     fn project_browser_resolves() {
         assert_eq!(parse_and_resolve(project()).unwrap().root, "workspace");
     }
+
+    #[test]
+    fn all_supported_region_roles_resolve_to_typed_values() {
+        let cases = [
+            ("commands", RegionRole::Commands),
+            ("controls", RegionRole::Controls),
+            ("navigation", RegionRole::Navigation),
+            ("primary_content", RegionRole::PrimaryContent),
+            ("inspector", RegionRole::Inspector),
+            ("status", RegionRole::Status),
+        ];
+        for (source_role, expected) in cases {
+            let source = format!(
+                "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='region'\nrole='{source_role}'\nimportance='primary'\n[[region]]\nid='other'\nrole='primary_content'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['region','other']"
+            );
+            let blueprint = parse_and_resolve(&source).unwrap();
+            assert_eq!(blueprint.regions[0].role, expected);
+            assert!(blueprint
+                .semantic_tree()
+                .contains(&format!("region region (role {source_role})")));
+        }
+    }
+
+    #[test]
+    fn unknown_region_role_is_rejected_with_region_and_value() {
+        let source = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='library'\nrole='sidebar'\nimportance='primary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['library']";
+        let error = parse_and_resolve(source).unwrap_err().to_string();
+        assert!(error.contains("region 'library'") && error.contains("unknown role 'sidebar'"));
+    }
     #[test]
     fn collection_presentations_are_typed_validated_and_defaulted() {
         let project_blueprint = parse_and_resolve(project()).unwrap();
@@ -1288,7 +1361,7 @@ mod tests {
                 .density,
             Density::Dense
         );
-        let omitted = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='a'\nrole='a'\nimportance='primary'\n[[region]]\nid='b'\nrole='b'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','b']";
+        let omitted = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='a'\nrole='navigation'\nimportance='primary'\n[[region]]\nid='b'\nrole='inspector'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','b']";
         assert_eq!(
             parse_and_resolve(omitted).unwrap().screen.density,
             Density::Comfortable
@@ -1329,17 +1402,17 @@ mod tests {
     }
     #[test]
     fn cycle_is_rejected() {
-        let e = parse_and_resolve("[screen]\nid='x'\npurpose='x'\nroot='a'\n[[composition]]\nid='a'\nkind='split'\nchildren=['b','r']\n[[composition]]\nid='b'\nkind='split'\nchildren=['a','r']\n[[region]]\nid='r'\nrole='content'\nimportance='primary'").unwrap_err().to_string();
+        let e = parse_and_resolve("[screen]\nid='x'\npurpose='x'\nroot='a'\n[[composition]]\nid='a'\nkind='split'\nchildren=['b','r']\n[[composition]]\nid='b'\nkind='split'\nchildren=['a','r']\n[[region]]\nid='r'\nrole='primary_content'\nimportance='primary'").unwrap_err().to_string();
         assert!(e.contains("composition cycle detected"));
     }
     #[test]
     fn malformed_height_is_rejected() {
-        let e = parse_and_resolve("[screen]\nid='x'\npurpose='x'\nroot='root'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','b']\n[[region]]\nid='a'\nrole='a'\nimportance='primary'\nheight='tall'\n[[region]]\nid='b'\nrole='b'\nimportance='secondary'").unwrap_err().to_string();
+        let e = parse_and_resolve("[screen]\nid='x'\npurpose='x'\nroot='root'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','b']\n[[region]]\nid='a'\nrole='navigation'\nimportance='primary'\nheight='tall'\n[[region]]\nid='b'\nrole='inspector'\nimportance='secondary'").unwrap_err().to_string();
         assert!(e.contains("height 'a': size must be"));
     }
     #[test]
     fn existing_bad_diagnostics_remain() {
-        let e = parse_and_resolve("[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='same'\nrole='a'\nimportance='primary'\n[[region]]\nid='same'\nrole='b'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['same','nope']\ngap='md'").unwrap_err().to_string();
+        let e = parse_and_resolve("[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='same'\nrole='navigation'\nimportance='primary'\n[[region]]\nid='same'\nrole='inspector'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['same','nope']\ngap='md'").unwrap_err().to_string();
         assert!(
             e.contains("duplicate id")
                 && e.contains("missing child")
@@ -1360,7 +1433,7 @@ mod tests {
     }
     #[test]
     fn fixture_content_validation_rejects_invalid_records() {
-        let base = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='r'\nrole='content'\nimportance='primary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['r','r']\n[[element]]\nid='list'\nregion='r'\nkind='collection'\nimportance='primary'\n[[fixture]]\nid='f'\nstate='x'\n";
+        let base = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='r'\nrole='primary_content'\nimportance='primary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['r','r']\n[[element]]\nid='list'\nregion='r'\nkind='collection'\nimportance='primary'\n[[fixture]]\nid='f'\nstate='x'\n";
         let missing = format!("{base}[[fixture.content]]\nelement='nope'\ntext='x'");
         assert!(parse_and_resolve(&missing)
             .unwrap_err()
@@ -1393,7 +1466,7 @@ mod tests {
     }
     #[test]
     fn fixture_content_unknown_and_duplicate_items_are_rejected() {
-        let base = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='r'\nrole='content'\nimportance='primary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['r','r']\n[[element]]\nid='list'\nregion='r'\nkind='collection'\nimportance='primary'\n[[fixture]]\nid='f'\nstate='x'\n[[fixture.content]]\nelement='list'\nitems=[{id='a',label='A'},{id='a',label='A2'}]\n";
+        let base = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='r'\nrole='primary_content'\nimportance='primary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['r','r']\n[[element]]\nid='list'\nregion='r'\nkind='collection'\nimportance='primary'\n[[fixture]]\nid='f'\nstate='x'\n[[fixture.content]]\nelement='list'\nitems=[{id='a',label='A'},{id='a',label='A2'}]\n";
         assert!(parse_and_resolve(base)
             .unwrap_err()
             .to_string()
@@ -1427,7 +1500,7 @@ mod tests {
     }
     #[test]
     fn malformed_visual_inputs_and_unknown_fields_are_rejected() {
-        let bad = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[tokens.color]\ncanvas='#nope'\n[visual]\ncanvas='canvas'\nsurface='canvas'\nsurface_raised='canvas'\ntext='canvas'\ntext_muted='canvas'\naccent='canvas'\nborder='canvas'\ncorner='missing'\nborder_policy='wrong'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','b']\n[[region]]\nid='a'\nrole='a'\nimportance='primary'\n[[region]]\nid='b'\nrole='b'\nimportance='secondary'";
+        let bad = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[tokens.color]\ncanvas='#nope'\n[visual]\ncanvas='canvas'\nsurface='canvas'\nsurface_raised='canvas'\ntext='canvas'\ntext_muted='canvas'\naccent='canvas'\nborder='canvas'\ncorner='missing'\nborder_policy='wrong'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','b']\n[[region]]\nid='a'\nrole='navigation'\nimportance='primary'\n[[region]]\nid='b'\nrole='inspector'\nimportance='secondary'";
         let e = parse_and_resolve(bad).unwrap_err().to_string();
         assert!(
             e.contains("expected #RRGGBB")
@@ -1554,7 +1627,7 @@ mod tests {
 
     #[test]
     fn action_identifier_and_command_fixture_validation_are_strict() {
-        let base = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='r'\nrole='commands'\nimportance='primary'\n[[region]]\nid='other'\nrole='content'\nimportance='secondary'\n[[element]]\nid='command'\nregion='r'\nkind='command'\nimportance='primary'\nlabel='Run'\naction='run.now'\n[[element]]\nid='text'\nregion='r'\nkind='text'\nimportance='secondary'\nlabel='Text'\n[[composition]]\nid='root'\nkind='split'\nchildren=['r','other']\n[[fixture]]\nid='f'\nstate='x'\n";
+        let base = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='r'\nrole='commands'\nimportance='primary'\n[[region]]\nid='other'\nrole='primary_content'\nimportance='secondary'\n[[element]]\nid='command'\nregion='r'\nkind='command'\nimportance='primary'\nlabel='Run'\naction='run.now'\n[[element]]\nid='text'\nregion='r'\nkind='text'\nimportance='secondary'\nlabel='Text'\n[[composition]]\nid='root'\nkind='split'\nchildren=['r','other']\n[[fixture]]\nid='f'\nstate='x'\n";
         let valid = base;
         let malformed_base = valid.replace("\naction='run.now'", "");
         assert!(
@@ -1627,7 +1700,7 @@ mod tests {
 
     #[test]
     fn tree_and_document_fixture_validation_is_actionable() {
-        let base = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='r'\nrole='content'\nimportance='primary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['r','r']\n[[element]]\nid='tree'\nregion='r'\nkind='tree'\nimportance='primary'\n[[element]]\nid='document'\nregion='r'\nkind='document'\nimportance='primary'\n[[fixture]]\nid='f'\nstate='x'\n";
+        let base = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='r'\nrole='primary_content'\nimportance='primary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['r','r']\n[[element]]\nid='tree'\nregion='r'\nkind='tree'\nimportance='primary'\n[[element]]\nid='document'\nregion='r'\nkind='document'\nimportance='primary'\n[[fixture]]\nid='f'\nstate='x'\n";
         let check = |suffix: &str, expected: &str| {
             assert!(parse_and_resolve(&(base.to_owned() + suffix))
                 .unwrap_err()
@@ -1678,7 +1751,7 @@ mod tests {
 
     #[test]
     fn invalid_growth_is_rejected_for_regions_and_compositions() {
-        let source = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='a'\nrole='a'\nimportance='primary'\ngrow=-1\n[[region]]\nid='b'\nrole='b'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','b']\ngrow=-2";
+        let source = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='a'\nrole='navigation'\nimportance='primary'\ngrow=-1\n[[region]]\nid='b'\nrole='inspector'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','b']\ngrow=-2";
         let error = parse_and_resolve(source).unwrap_err().to_string();
         assert!(error.contains("region 'a': grow must be finite and non-negative"));
         assert!(error.contains("composition 'root': grow must be finite and non-negative"));
@@ -1686,7 +1759,7 @@ mod tests {
 
     #[test]
     fn non_finite_growth_is_rejected_for_regions_and_compositions() {
-        let source = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='a'\nrole='a'\nimportance='primary'\n[[region]]\nid='b'\nrole='b'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','b']";
+        let source = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='a'\nrole='navigation'\nimportance='primary'\n[[region]]\nid='b'\nrole='inspector'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','b']";
         let mut source: SourceBlueprint = toml::from_str(source).unwrap();
         source.region[0].grow = Some(f32::NAN);
         source.composition[0].grow = Some(f32::INFINITY);
@@ -1697,7 +1770,7 @@ mod tests {
 
     #[test]
     fn zero_and_positive_composition_growth_resolve() {
-        let source = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='a'\nrole='a'\nimportance='primary'\n[[region]]\nid='b'\nrole='b'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','b']\ngrow=0";
+        let source = "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='a'\nrole='navigation'\nimportance='primary'\n[[region]]\nid='b'\nrole='inspector'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','b']\ngrow=0";
         let b = parse_and_resolve(source).unwrap();
         assert_eq!(b.compositions[0].grow, 0.0);
         let source = source.replace("grow=0", "grow=2.5");

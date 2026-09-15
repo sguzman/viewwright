@@ -162,17 +162,17 @@ gap = 10
 pad = 5
 [[region]]
 id = "fixed"
-role = "fixed"
+role = "controls"
 importance = "secondary"
 width = "100px"
 [[region]]
 id = "a"
-role = "a"
+role = "primary_content"
 importance = "primary"
 grow = 1
 [[region]]
 id = "b"
-role = "b"
+role = "primary_content"
 importance = "primary"
 grow = 2
 [[composition]]
@@ -273,7 +273,7 @@ importance = "secondary"
 height = "50px"
 [[region]]
 id = "middle"
-role = "content"
+role = "primary_content"
 importance = "primary"
 grow = 1
 [[region]]
