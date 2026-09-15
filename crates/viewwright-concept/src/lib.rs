@@ -75,6 +75,8 @@ mod tests {
         assert_eq!(first, render(&blueprint));
         assert!(first.contains("dominant: reader"));
         assert!(first.contains("canvas: #262B33"));
+        assert!(first.contains("workspace — vertical"));
+        assert!(first.contains("reading_body — horizontal"));
         assert!(first.contains("reader — role primary_content, Canvas, Primary"));
         assert!(first.contains("library — role navigation, Panel, Secondary"));
         assert!(first.contains("Document: Document"));
