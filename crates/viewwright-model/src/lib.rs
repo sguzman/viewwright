@@ -759,6 +759,9 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
     let mut errors = Vec::new();
     let mut ids = HashSet::new();
     validate_nonblank_id(&source.screen.id, "screen.id", &mut errors);
+    if source.screen.purpose.trim().is_empty() {
+        errors.push("screen.purpose: must contain at least one non-whitespace character".into());
+    }
     let density = match source.screen.density.as_str() {
         "comfortable" => Density::Comfortable,
         "dense" => Density::Dense,
@@ -1565,6 +1568,38 @@ mod tests {
     fn authored_element_label_is_preserved_exactly() {
         let blueprint = parse_and_resolve(&labeled_element_source(Some("Find projects…"))).unwrap();
         assert_eq!(blueprint.elements[0].label, "Find projects…");
+    }
+
+    fn purpose_source(purpose: &str) -> String {
+        format!(
+            "[screen]\nid='x'\npurpose='{purpose}'\nroot='root'\n[[region]]\nid='a'\nrole='navigation'\nimportance='primary'\n[[region]]\nid='b'\nrole='inspector'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','b']"
+        )
+    }
+
+    #[test]
+    fn screen_purpose_must_be_nonblank() {
+        for purpose in ["", "   ", "\t", " \t "] {
+            let error = parse_and_resolve(&purpose_source(purpose))
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains("screen.purpose") && error.contains("non-whitespace"));
+        }
+    }
+
+    #[test]
+    fn authored_screen_purpose_is_preserved_exactly() {
+        let purpose = "  Read documents deliberately  ";
+        let blueprint = parse_and_resolve(&purpose_source(purpose)).unwrap();
+        assert_eq!(blueprint.screen.purpose, purpose);
+    }
+
+    #[test]
+    fn missing_screen_purpose_remains_a_parse_error() {
+        let source = "[screen]\nid='x'\nroot='root'\n[[region]]\nid='a'\nrole='navigation'\nimportance='primary'\n[[region]]\nid='b'\nrole='inspector'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['a','b']";
+        let error = parse_and_resolve(source).unwrap_err().to_string();
+        assert!(
+            error.contains("missing field `purpose`") || error.contains("missing field 'purpose'")
+        );
     }
 
     fn global_id_source(

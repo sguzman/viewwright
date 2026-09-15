@@ -313,6 +313,10 @@ M18 validates composition cycles across every authored composition in determinis
 
 M19 validates every authored `[tokens.color]` literal as the existing `#RRGGBB` form, including unused tokens and sources without a visual profile. Valid unused tokens remain legal, and resolved visual palettes are unchanged.
 
+## M20 — screen purpose authorship fidelity
+
+M20 requires `screen.purpose` to contain at least one non-whitespace character while preserving valid authored text exactly. The resolved model and semantic/concept projections remain unchanged for valid sources.
+
 ## Status
 
 - M0 — accepted
@@ -334,4 +338,5 @@ M19 validates every authored `[tokens.color]` literal as the existing `#RRGGBB` 
 - M16 — accepted
 - M17 — accepted
 - M18 — accepted
-- M19 — implementation complete; director audit pending
+- M19 — accepted
+- M20 — implementation complete; director audit pending
