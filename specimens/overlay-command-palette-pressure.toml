@@ -1,0 +1,164 @@
+[screen]
+id = "overlay_command_palette_pressure"
+purpose = "Preview a project browser with a centered command palette overlay"
+density = "comfortable"
+root = "root_overlay"
+
+[design]
+character = ["quiet", "technical", "layered", "focused"]
+dominant = "palette_surface"
+avoid = ["modal_backdrop", "window_manager", "absolute_positioning", "decorative_overlay"]
+
+[tokens.spacing]
+sm = 8
+md = 12
+lg = 16
+
+[tokens.corners]
+small = 4
+medium = 8
+
+[tokens.color]
+canvas = "#20242B"
+surface = "#2A3038"
+surface_raised = "#363E49"
+text = "#F2F4F7"
+text_muted = "#B8C0CA"
+accent = "#9BCBE0"
+border = "#566170"
+
+[tokens.type]
+display = 22
+heading = 16
+body = 13
+caption = 11
+
+[visual]
+canvas = "canvas"
+surface = "surface"
+surface_raised = "surface_raised"
+text = "text"
+text_muted = "text_muted"
+accent = "accent"
+border = "border"
+corner = "medium"
+border_policy = "defined"
+
+[[region]]
+id = "navigation"
+role = "navigation"
+importance = "secondary"
+surface = "panel"
+width = "220px"
+
+[[region]]
+id = "projects"
+role = "primary_content"
+importance = "primary"
+surface = "canvas"
+grow = 1
+
+[[region]]
+id = "inspector"
+role = "inspector"
+importance = "tertiary"
+surface = "panel"
+width = "280px"
+
+[[region]]
+id = "palette_surface"
+role = "controls"
+importance = "primary"
+surface = "raised"
+width = "520px"
+height = "300px"
+
+[[composition]]
+id = "root_overlay"
+kind = "overlay"
+children = ["workspace", "palette_surface"]
+
+[[composition]]
+id = "workspace"
+kind = "split"
+axis = "horizontal"
+children = ["navigation", "projects", "inspector"]
+gap = "md"
+padding = "lg"
+
+[[element]]
+id = "navigation_items"
+region = "navigation"
+kind = "collection"
+importance = "secondary"
+label = "Navigation"
+presentation = "list"
+
+[[element]]
+id = "project_collection"
+region = "projects"
+kind = "collection"
+importance = "primary"
+label = "Projects"
+presentation = "adaptive_cards"
+
+[[element]]
+id = "project_inspector"
+region = "inspector"
+kind = "property_sheet"
+importance = "tertiary"
+label = "Project details"
+
+[[element]]
+id = "palette_search"
+region = "palette_surface"
+kind = "search"
+importance = "primary"
+label = "Search commands"
+
+[[element]]
+id = "palette_results"
+region = "palette_surface"
+kind = "collection"
+importance = "primary"
+label = "Commands"
+presentation = "list"
+
+[[fixture]]
+id = "palette_open"
+state = "command palette open"
+
+[[fixture.content]]
+element = "navigation_items"
+items = [
+  { id = "projects", label = "Projects" },
+  { id = "archive", label = "Archive" },
+  { id = "settings", label = "Settings" },
+]
+selected = "projects"
+
+[[fixture.content]]
+element = "project_collection"
+items = [
+  { id = "viewwright", label = "ViewWright · active" },
+  { id = "viewwitness", label = "ViewWitness · active" },
+  { id = "morphos", label = "Morphos · queued" },
+]
+selected = "viewwright"
+
+[[fixture.content]]
+element = "project_inspector"
+properties = [
+  { name = "Status", value = "Active" },
+  { name = "Scope", value = "UI authoring" },
+]
+
+[[fixture.content]]
+element = "palette_results"
+items = [
+  { id = "open_project", label = "Open project" },
+  { id = "new_project", label = "Create project" },
+  { id = "archive_project", label = "Archive selected project" },
+  { id = "settings", label = "Open settings" },
+]
+selected = "open_project"
