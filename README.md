@@ -373,6 +373,10 @@ M33 adds the first machine-readable ViewWright-owned expectation projection. `vi
 
 M34 projects exact ViewWright screen, root-reachable region, and semantic-element IDs into egui's AccessKit tree as non-visual generic-container author-identity anchors. The hierarchy is screen → regions → elements → ordinary egui accessibility nodes; region anchors carry the existing planned rectangle, while fixture-local item/node IDs remain unannotated. This adds observed author-identity evidence only: it does not alter M33's intended expectation model, visible rendering, layout, or interaction semantics, and introduces no ViewWitness dependency or comparison logic.
 
+## M35 — exact expectation/witness comparison
+
+M35 adds `viewwright-compare`, a pure typed comparator for the exact shared evidence in M33 `ViewWrightExpectation` and model-only ViewWitness `Witness` 0.1: logical viewport dimensions, exact screen/region/element author-ID presence and uniqueness, region bounds when observed, and semantic-element ownership through its immediate parent's author ID. Results preserve mismatches separately from evidence gaps, validate the pinned witness before comparison, and use deterministic expected-fact traversal. The ViewWitness dependency is pinned to the audited `f1930ab2a70175c46d12dd1e61501c3b4ae09408` revision with default features disabled. Tolerance, fuzzy/fallback matching, deferred semantics, element geometry, capture orchestration, and visible UI changes remain out of scope.
+
 ## Status
 
 - M0 — accepted
@@ -409,4 +413,5 @@ M34 projects exact ViewWright screen, root-reachable region, and semantic-elemen
 - M31 — accepted
 - M32 — accepted
 - M33 — accepted
-- M34 — implementation complete; director audit pending
+- M34 — accepted
+- M35 — implementation complete; director audit pending

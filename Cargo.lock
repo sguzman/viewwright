@@ -2622,6 +2622,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_json"
+version = "1.0.151"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c841b55ecdae098c80dcae9cf767f6f8a0c2cdb3416bbef72181df4d0fe73f14"
+dependencies = [
+ "itoa",
+ "memchr",
+ "serde",
+ "serde_core",
+ "zmij",
+]
+
+[[package]]
 name = "serde_repr"
 version = "0.1.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3179,6 +3192,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
+name = "viewwitness"
+version = "0.0.1"
+source = "git+https://github.com/sguzman/viewwitness?rev=f1930ab2a70175c46d12dd1e61501c3b4ae09408#f1930ab2a70175c46d12dd1e61501c3b4ae09408"
+dependencies = [
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+]
+
+[[package]]
 name = "viewwright-ascii"
 version = "0.1.0"
 dependencies = [
@@ -3189,6 +3212,17 @@ dependencies = [
 name = "viewwright-audit"
 version = "0.1.0"
 dependencies = [
+ "viewwright-model",
+]
+
+[[package]]
+name = "viewwright-compare"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "thiserror 2.0.20",
+ "viewwitness",
+ "viewwright-expectation",
  "viewwright-model",
 ]
 
@@ -4229,6 +4263,12 @@ name = "zlib-rs"
 version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34b31d188d9d685a4f9c7b46d6e36631b07058d2cfe190267adce54dc230bf12"
+
+[[package]]
+name = "zmij"
+version = "1.0.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
 
 [[package]]
 name = "zune-core"

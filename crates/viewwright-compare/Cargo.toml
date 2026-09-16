@@ -1,0 +1,13 @@
+[package]
+name = "viewwright-compare"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+viewwright-expectation = { path = "../viewwright-expectation" }
+viewwitness = { git = "https://github.com/sguzman/viewwitness", rev = "f1930ab2a70175c46d12dd1e61501c3b4ae09408", default-features = false }
+
+[dev-dependencies]
+serde_json = "1"
+viewwright-model = { path = "../viewwright-model" }
