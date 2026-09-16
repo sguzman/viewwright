@@ -1051,6 +1051,26 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
             );
         }
     }
+    let mut reachable_regions = HashSet::new();
+    if let Some(root_id) = root.as_deref() {
+        let mut reachable_compositions = HashSet::new();
+        let mut pending = vec![root_id.to_owned()];
+        while let Some(id) = pending.pop() {
+            if !reachable_compositions.insert(id.clone()) {
+                continue;
+            }
+            if let Some(composition) = by_id.get(id.as_str()) {
+                for child in &composition.children {
+                    match child {
+                        CompositionChild::Composition(child) => pending.push(child.clone()),
+                        CompositionChild::Region(region) => {
+                            reachable_regions.insert(region.clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
     let mut resolved_fixtures = Vec::new();
     for f in &source.fixture {
         add_id(&mut ids, &mut errors, &f.id, "fixture");
@@ -1325,8 +1345,24 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
     }
     let dominant = source.design.dominant.as_ref().and_then(|d| {
         if region_ids.contains(d.as_str()) {
+            if !reachable_regions.contains(d) {
+                errors.push(format!(
+                    "design.dominant: region '{}' is not reachable from screen.root '{}'",
+                    d,
+                    root.as_deref().unwrap_or_default()
+                ));
+            }
             Some(DominantTarget::Region(d.clone()))
         } else if element_ids.contains(d.as_str()) {
+            let element = elements.iter().find(|element| element.id == *d).unwrap();
+            if !reachable_regions.contains(element.region.as_str()) {
+                errors.push(format!(
+                    "design.dominant: element '{}' is not reachable because owning region '{}' is outside screen.root '{}'",
+                    d,
+                    element.region,
+                    root.as_deref().unwrap_or_default()
+                ));
+            }
             Some(DominantTarget::Element(d.clone()))
         } else {
             errors.push(format!("design.dominant: missing reference '{d}'"));
@@ -1566,6 +1602,73 @@ mod tests {
                 blueprint.design.dominant,
                 Some(DominantTarget::Region(_))
             ));
+        }
+    }
+
+    fn nested_dominant_source(dominant: &str) -> String {
+        format!(
+            "[screen]\nid='x'\npurpose='x'\nroot='workspace'\n[design]\ndominant='{dominant}'\n[[region]]\nid='navigation'\nrole='navigation'\nimportance='secondary'\n[[region]]\nid='nested_target'\nrole='primary_content'\nimportance='primary'\n[[region]]\nid='other'\nrole='status'\nimportance='tertiary'\n[[element]]\nid='target_element'\nregion='nested_target'\nkind='text'\nimportance='primary'\nlabel='Target'\n[[composition]]\nid='workspace'\nkind='split'\nchildren=['body','other']\n[[composition]]\nid='body'\nkind='split'\nchildren=['navigation','nested_target']"
+        )
+    }
+
+    #[test]
+    fn reachable_dominant_regions_and_elements_preserve_typed_identity() {
+        let direct = parse_and_resolve(&project()).unwrap();
+        assert_eq!(
+            direct.design.dominant,
+            Some(DominantTarget::Region("projects".into()))
+        );
+
+        let nested_region = parse_and_resolve(&nested_dominant_source("nested_target")).unwrap();
+        assert_eq!(
+            nested_region.design.dominant,
+            Some(DominantTarget::Region("nested_target".into()))
+        );
+
+        let nested_element = parse_and_resolve(&nested_dominant_source("target_element")).unwrap();
+        assert_eq!(
+            nested_element.design.dominant,
+            Some(DominantTarget::Element("target_element".into()))
+        );
+    }
+
+    #[test]
+    fn unreachable_dominant_region_is_rejected_without_global_reachability_rule() {
+        let source = "[screen]\nid='x'\npurpose='x'\nroot='workspace'\n[design]\ndominant='unused_region'\n[[region]]\nid='visible'\nrole='primary_content'\nimportance='primary'\n[[region]]\nid='other'\nrole='status'\nimportance='secondary'\n[[region]]\nid='unused_region'\nrole='inspector'\nimportance='tertiary'\n[[composition]]\nid='workspace'\nkind='split'\nchildren=['visible','other']";
+        let error = parse_and_resolve(source).unwrap_err().to_string();
+        assert!(
+            error.contains("design.dominant")
+                && error.contains("unused_region")
+                && error.contains("not reachable")
+                && error.contains("workspace")
+        );
+    }
+
+    #[test]
+    fn unreachable_dominant_element_is_rejected_through_its_owning_region() {
+        let source = "[screen]\nid='x'\npurpose='x'\nroot='workspace'\n[design]\ndominant='unused_details'\n[[region]]\nid='visible'\nrole='primary_content'\nimportance='primary'\n[[region]]\nid='other'\nrole='status'\nimportance='secondary'\n[[region]]\nid='unused_inspector'\nrole='inspector'\nimportance='tertiary'\n[[element]]\nid='unused_details'\nregion='unused_inspector'\nkind='text'\nimportance='tertiary'\nlabel='Details'\n[[composition]]\nid='workspace'\nkind='split'\nchildren=['visible','other']";
+        let error = parse_and_resolve(source).unwrap_err().to_string();
+        assert!(
+            error.contains("design.dominant")
+                && error.contains("unused_details")
+                && error.contains("unused_inspector")
+                && error.contains("not reachable")
+                && error.contains("workspace")
+        );
+    }
+
+    #[test]
+    fn canonical_dominant_targets_are_root_reachable() {
+        for source in [
+            project(),
+            reader(),
+            include_str!("../../../specimens/reader-workspace-visual.toml"),
+            include_str!("../../../specimens/reader-workspace-visual-m7.toml"),
+            include_str!("../../../specimens/dependency-workbench.toml"),
+            include_str!("../../../specimens/density-pressure-comfortable.toml"),
+            include_str!("../../../specimens/density-pressure-dense.toml"),
+        ] {
+            assert!(parse_and_resolve(source).is_ok());
         }
     }
 

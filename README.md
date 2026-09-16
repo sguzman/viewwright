@@ -349,6 +349,10 @@ M27 requires authored document titles to contain at least one non-whitespace cha
 
 M28 requires present fixture-backed status `text` payloads to contain at least one non-whitespace character while preserving valid text exactly. Omitted status content remains legal, and property values, document paragraphs, command reasons, and rendering remain unchanged.
 
+## M29 — dominant target reachability fidelity
+
+M29 requires an authored `design.dominant` region to occur in the root-reachable composition tree, or an authored dominant element's owning region to be root-reachable. Unrelated unused declarations remain legal, and dominance does not affect styling or layout.
+
 ## Status
 
 - M0 — accepted
@@ -379,4 +383,5 @@ M28 requires present fixture-backed status `text` payloads to contain at least o
 - M25 — accepted
 - M26 — accepted
 - M27 — accepted
-- M28 — implementation complete; director audit pending
+- M28 — accepted
+- M29 — implementation complete; director audit pending
