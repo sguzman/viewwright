@@ -357,6 +357,10 @@ M29 requires an authored `design.dominant` region to occur in the root-reachable
 
 M30 requires every authored fixture-content target to belong to an element whose owning region is reachable from the validated screen root. Direct and nested reachable targets remain valid, while unreachable targets are rejected without introducing global declaration reachability or mandatory fixture coverage. Missing or invalid roots suppress dependent reachability diagnostics, and fixture payload-family and kind semantics remain unchanged.
 
+## M31 — overlay composition pressure
+
+M31 re-admits one narrowly earned composition topology: an axisless `overlay` with exactly two ordered children, a base composition followed by a fixed-size floating region. The base fills the padded overlay surface, while the floating region is centered, painted above it, and does not consume linear layout space. Existing split, row, and column semantics remain unchanged; M31 does not introduce stack, arbitrary positioning, modality, or window management.
+
 ## Status
 
 - M0 — accepted
@@ -389,4 +393,5 @@ M30 requires every authored fixture-content target to belong to an element whose
 - M27 — accepted
 - M28 — accepted
 - M29 — accepted
-- M30 — implementation complete; director audit pending
+- M30 — accepted
+- M31 — implementation complete; director audit + human visual QA pending

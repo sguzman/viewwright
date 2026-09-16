@@ -1,4 +1,4 @@
-use viewwright_model::{CompositionChild, ResolvedBlueprint};
+use viewwright_model::{CompositionChild, CompositionKind, ResolvedBlueprint};
 
 pub fn render(b: &ResolvedBlueprint) -> String {
     let mut out = format!("ViewWright: {} — {}\n", b.screen.id, b.screen.purpose);
@@ -11,16 +11,54 @@ fn walk(id: &str, b: &ResolvedBlueprint, out: &mut String, depth: usize) {
         return;
     };
     let indent = "  ".repeat(depth);
-    out.push_str(&format!("{indent}+ {} ({}, {})\n", c.id, c.kind, c.axis));
-    for child in &c.children {
+    if let Some(axis) = c.axis {
+        out.push_str(&format!("{indent}+ {} ({}, {})\n", c.id, c.kind, axis));
+    } else {
+        out.push_str(&format!("{indent}+ {} ({}, axisless)\n", c.id, c.kind));
+    }
+    for (index, child) in c.children.iter().enumerate() {
+        let layer = if c.kind == CompositionKind::Overlay {
+            Some(if index == 0 { "base" } else { "floating" })
+        } else {
+            None
+        };
         match child {
-            CompositionChild::Composition(child) => walk(child, b, out, depth + 1),
+            CompositionChild::Composition(child) => {
+                if let Some(layer) = layer {
+                    out.push_str(&format!("{}  |-- {layer} layer\n", indent));
+                }
+                walk(child, b, out, depth + if layer.is_some() { 2 } else { 1 });
+            }
             CompositionChild::Region(region) => {
-                out.push_str(&format!("{}  |-- region {}\n", indent, region));
+                out.push_str(&format!(
+                    "{}  |-- {}region {}\n",
+                    indent,
+                    layer.map(|layer| format!("{layer} ")).unwrap_or_default(),
+                    region
+                ));
                 for e in b.elements.iter().filter(|e| e.region == *region) {
                     out.push_str(&format!("{}      * {} [{:?}]\n", indent, e.label, e.kind));
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::render;
+    use viewwright_model::parse_and_resolve;
+
+    #[test]
+    fn overlay_ascii_preserves_layer_order_without_axis() {
+        let blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/overlay-command-palette-pressure.toml"
+        ))
+        .unwrap();
+        let output = render(&blueprint);
+        assert!(output.contains("+ root_overlay (overlay, axisless)"));
+        assert!(output.contains("|-- base layer"));
+        assert!(output.contains("|-- floating region palette_surface"));
+        assert!(!output.contains("root_overlay (overlay, horizontal)"));
     }
 }

@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use viewwright_model::{Axis, CompositionChild, ResolvedBlueprint};
+use viewwright_model::{Axis, CompositionChild, CompositionKind, ResolvedBlueprint};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Rect {
@@ -63,7 +63,35 @@ fn layout_composition(blueprint: &ResolvedBlueprint, plan: &mut LayoutPlan, id: 
     };
     plan.compositions.insert(id.to_owned(), rect);
     let inner = rect.inset(composition.padding as f32);
-    let horizontal = composition.axis == Axis::Horizontal;
+    if composition.kind == CompositionKind::Overlay {
+        if composition.children.len() != 2 {
+            return;
+        }
+        if let CompositionChild::Composition(base) = &composition.children[0] {
+            layout_composition(blueprint, plan, base, inner);
+        }
+        if let CompositionChild::Region(floating) = &composition.children[1] {
+            if let Some(region) = blueprint
+                .regions
+                .iter()
+                .find(|region| region.id == *floating)
+            {
+                let width = region.width.unwrap_or(0) as f32;
+                let height = region.height.unwrap_or(0) as f32;
+                plan.regions.insert(
+                    floating.clone(),
+                    Rect::new(
+                        inner.x + (inner.width - width) / 2.0,
+                        inner.y + (inner.height - height) / 2.0,
+                        width,
+                        height,
+                    ),
+                );
+            }
+        }
+        return;
+    }
+    let horizontal = composition.axis == Some(Axis::Horizontal);
     let gap = composition.gap as f32;
     let total_gap = gap * composition.children.len().saturating_sub(1) as f32;
     let fixed: f32 = composition
@@ -235,7 +263,7 @@ padding = "pad"
         b.compositions.push(viewwright_model::ResolvedComposition {
             id: "body".into(),
             kind: viewwright_model::CompositionKind::Split,
-            axis: Axis::Horizontal,
+            axis: Some(Axis::Horizontal),
             children: vec![
                 CompositionChild::Region("a".into()),
                 CompositionChild::Region("b".into()),
@@ -454,5 +482,29 @@ children = ["a", "b", "c"]
         assert_eq!(project_plan.region("navigation").unwrap().width, 240.0);
         assert_eq!(project_plan.region("inspector").unwrap().width, 320.0);
         assert!(project_plan.region("projects").unwrap().width > 800.0);
+    }
+
+    #[test]
+    fn overlay_centers_fixed_floating_region_over_full_padded_base() {
+        let blueprint = viewwright_model::parse_and_resolve(include_str!(
+            "../../../specimens/overlay-command-palette-pressure.toml"
+        ))
+        .unwrap();
+        let plan = layout(&blueprint, 1440.0, 900.0);
+
+        assert_eq!(
+            plan.composition("root_overlay"),
+            Some(Rect::new(0.0, 0.0, 1440.0, 900.0))
+        );
+        assert_eq!(
+            plan.composition("workspace"),
+            Some(Rect::new(0.0, 0.0, 1440.0, 900.0))
+        );
+        assert_eq!(
+            plan.region("palette_surface"),
+            Some(Rect::new(460.0, 300.0, 520.0, 300.0))
+        );
+        assert_eq!(plan.region("navigation").unwrap().x, 16.0);
+        assert_eq!(plan.region("inspector").unwrap().x, 1144.0);
     }
 }

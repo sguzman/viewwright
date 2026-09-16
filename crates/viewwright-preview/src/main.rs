@@ -21,6 +21,10 @@ fn main() -> eframe::Result<()> {
             "../../../specimens/density-pressure-dense.toml"
         ))
         .expect("dense density pressure specimen must be valid"),
+        parse_and_resolve(include_str!(
+            "../../../specimens/overlay-command-palette-pressure.toml"
+        ))
+        .expect("overlay command palette pressure specimen must be valid"),
     ];
     for b in &blueprints {
         println!("{}\n{}", b.semantic_tree(), viewwright_ascii::render(b));

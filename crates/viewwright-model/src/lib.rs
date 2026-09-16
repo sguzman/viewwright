@@ -316,6 +316,7 @@ fn composition_kind(value: &str, id: &str, errors: &mut Vec<String>) -> Composit
         "split" => CompositionKind::Split,
         "row" => CompositionKind::Row,
         "column" => CompositionKind::Column,
+        "overlay" => CompositionKind::Overlay,
         other => {
             errors.push(format!(
                 "composition '{id}': unknown composition kind '{other}'"
@@ -325,13 +326,27 @@ fn composition_kind(value: &str, id: &str, errors: &mut Vec<String>) -> Composit
     }
 }
 
-fn axis(value: Option<&str>, kind: CompositionKind, id: &str, errors: &mut Vec<String>) -> Axis {
+fn axis(
+    value: Option<&str>,
+    kind: CompositionKind,
+    id: &str,
+    errors: &mut Vec<String>,
+) -> Option<Axis> {
+    if kind == CompositionKind::Overlay {
+        if let Some(value) = value {
+            errors.push(format!(
+                "composition '{id}': overlay does not support authored axis '{value}'"
+            ));
+        }
+        return None;
+    }
     let implied = match kind {
         CompositionKind::Column => Axis::Vertical,
         CompositionKind::Split | CompositionKind::Row => Axis::Horizontal,
+        CompositionKind::Overlay => unreachable!(),
     };
     let Some(value) = value else {
-        return implied;
+        return Some(implied);
     };
     let Some(axis) = (match value {
         "horizontal" => Some(Axis::Horizontal),
@@ -343,7 +358,7 @@ fn axis(value: Option<&str>, kind: CompositionKind, id: &str, errors: &mut Vec<S
             None
         }
     }) else {
-        return implied;
+        return Some(implied);
     };
     if kind == CompositionKind::Row && axis != Axis::Horizontal {
         errors.push(format!(
@@ -355,7 +370,7 @@ fn axis(value: Option<&str>, kind: CompositionKind, id: &str, errors: &mut Vec<S
             "composition '{id}': column requires vertical axis, got '{value}'"
         ));
     }
-    axis
+    Some(axis)
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ElementKind {
@@ -480,7 +495,7 @@ pub enum CompositionChild {
 pub struct ResolvedComposition {
     pub id: String,
     pub kind: CompositionKind,
-    pub axis: Axis,
+    pub axis: Option<Axis>,
     pub children: Vec<CompositionChild>,
     pub gap: u32,
     pub padding: u32,
@@ -492,6 +507,7 @@ pub enum CompositionKind {
     Split,
     Row,
     Column,
+    Overlay,
 }
 
 impl CompositionKind {
@@ -500,6 +516,7 @@ impl CompositionKind {
             Self::Split => "split",
             Self::Row => "row",
             Self::Column => "column",
+            Self::Overlay => "overlay",
         }
     }
 }
@@ -931,6 +948,54 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
                 c.id,
                 c.gap.as_ref().unwrap()
             ));
+        }
+        if composition_kind == CompositionKind::Overlay {
+            if c.gap.is_some() {
+                errors.push(format!(
+                    "composition '{}': overlay does not support authored gap",
+                    c.id
+                ));
+            }
+            if children.len() != 2 {
+                errors.push(format!(
+                    "composition '{}': overlay requires exactly two children",
+                    c.id
+                ));
+            } else {
+                if !matches!(children[0], CompositionChild::Composition(_)) {
+                    errors.push(format!(
+                        "composition '{}': overlay child 0 must be a composition",
+                        c.id
+                    ));
+                }
+                if !matches!(children[1], CompositionChild::Region(_)) {
+                    errors.push(format!(
+                        "composition '{}': overlay child 1 must be a region",
+                        c.id
+                    ));
+                }
+                if let CompositionChild::Region(id) = &children[1] {
+                    let floating = regions.iter().find(|region| region.id == *id).unwrap();
+                    if floating.width.is_none() {
+                        errors.push(format!(
+                            "composition '{}': overlay floating region '{}' requires fixed width",
+                            c.id, id
+                        ));
+                    }
+                    if floating.height.is_none() {
+                        errors.push(format!(
+                            "composition '{}': overlay floating region '{}' requires fixed height",
+                            c.id, id
+                        ));
+                    }
+                    if floating.grow > 0.0 {
+                        errors.push(format!(
+                            "composition '{}': overlay floating region '{}' cannot have positive grow",
+                            c.id, id
+                        ));
+                    }
+                }
+            }
         }
         let padding = c
             .padding
@@ -1420,21 +1485,52 @@ impl ResolvedBlueprint {
                 return;
             }
             let c = b.compositions.iter().find(|c| c.id == id).unwrap();
-            out.push_str(&format!(
-                "{:indent$}composition {} ({}, {})\n",
-                "",
-                c.id,
-                c.kind.as_str(),
-                c.axis.as_str(),
-                indent = indent
-            ));
-            for child in &c.children {
+            if let Some(axis) = c.axis {
+                out.push_str(&format!(
+                    "{:indent$}composition {} ({}, {})\n",
+                    "",
+                    c.id,
+                    c.kind.as_str(),
+                    axis.as_str(),
+                    indent = indent
+                ));
+            } else {
+                out.push_str(&format!(
+                    "{:indent$}composition {} ({}, axisless)\n",
+                    "",
+                    c.id,
+                    c.kind.as_str(),
+                    indent = indent
+                ));
+            }
+            for (index, child) in c.children.iter().enumerate() {
+                let layer = if c.kind == CompositionKind::Overlay {
+                    Some(if index == 0 { "base" } else { "floating" })
+                } else {
+                    None
+                };
                 match child {
-                    CompositionChild::Composition(child) => walk(child, b, out, indent + 2, seen),
+                    CompositionChild::Composition(child) => {
+                        if let Some(layer) = layer {
+                            out.push_str(&format!(
+                                "{:indent$}{layer} layer\n",
+                                "",
+                                indent = indent + 2
+                            ));
+                        }
+                        walk(
+                            child,
+                            b,
+                            out,
+                            indent + if layer.is_some() { 4 } else { 2 },
+                            seen,
+                        )
+                    }
                     CompositionChild::Region(region) => {
                         out.push_str(&format!(
-                            "{:indent$}region {} (role {})\n",
+                            "{:indent$}{}region {} (role {})\n",
                             "",
+                            layer.map(|layer| format!("{layer} ")).unwrap_or_default(),
                             region,
                             b.regions
                                 .iter()
@@ -2181,28 +2277,38 @@ mod tests {
                 "split",
                 Some("horizontal"),
                 CompositionKind::Split,
-                Axis::Horizontal,
+                Some(Axis::Horizontal),
             ),
             (
                 "split",
                 Some("vertical"),
                 CompositionKind::Split,
-                Axis::Vertical,
+                Some(Axis::Vertical),
             ),
-            ("split", None, CompositionKind::Split, Axis::Horizontal),
-            ("row", None, CompositionKind::Row, Axis::Horizontal),
+            (
+                "split",
+                None,
+                CompositionKind::Split,
+                Some(Axis::Horizontal),
+            ),
+            ("row", None, CompositionKind::Row, Some(Axis::Horizontal)),
             (
                 "row",
                 Some("horizontal"),
                 CompositionKind::Row,
-                Axis::Horizontal,
+                Some(Axis::Horizontal),
             ),
-            ("column", None, CompositionKind::Column, Axis::Vertical),
+            (
+                "column",
+                None,
+                CompositionKind::Column,
+                Some(Axis::Vertical),
+            ),
             (
                 "column",
                 Some("vertical"),
                 CompositionKind::Column,
-                Axis::Vertical,
+                Some(Axis::Vertical),
             ),
         ] {
             let composition = &resolved(kind, axis).compositions[0];
@@ -2215,7 +2321,7 @@ mod tests {
 
     #[test]
     fn unsupported_and_contradictory_compositions_are_rejected() {
-        for kind in ["stack", "overlay", "grid"] {
+        for kind in ["stack", "grid"] {
             let error = parse_and_resolve(&composition_source(kind, None))
                 .unwrap_err()
                 .to_string();
@@ -2234,6 +2340,119 @@ mod tests {
             .to_string();
         assert!(axis_error.contains("composition 'root': unknown axis 'diagonal'"));
     }
+
+    #[test]
+    fn overlay_resolves_as_axisless_two_layer_topology() {
+        let blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/overlay-command-palette-pressure.toml"
+        ))
+        .unwrap();
+        let overlay = blueprint
+            .compositions
+            .iter()
+            .find(|composition| composition.id == "root_overlay")
+            .unwrap();
+        assert_eq!(overlay.kind, CompositionKind::Overlay);
+        assert_eq!(overlay.axis, None);
+        assert!(matches!(
+            overlay.children.as_slice(),
+            [CompositionChild::Composition(base), CompositionChild::Region(floating)]
+                if base == "workspace" && floating == "palette_surface"
+        ));
+        let floating = blueprint
+            .regions
+            .iter()
+            .find(|region| region.id == "palette_surface")
+            .unwrap();
+        assert_eq!(floating.width, Some(520));
+        assert_eq!(floating.height, Some(300));
+        assert_eq!(floating.grow, 0.0);
+    }
+
+    #[test]
+    fn overlay_constraints_remain_narrow_and_explicit() {
+        let pressure = include_str!("../../../specimens/overlay-command-palette-pressure.toml");
+        let cases = [
+            (
+                pressure.replace(
+                    "kind = \"overlay\"\nchildren",
+                    "kind = \"overlay\"\naxis = \"horizontal\"\nchildren",
+                ),
+                "overlay does not support authored axis",
+            ),
+            (
+                pressure.replace(
+                    "kind = \"overlay\"\nchildren",
+                    "kind = \"overlay\"\ngap = \"md\"\nchildren",
+                ),
+                "overlay does not support authored gap",
+            ),
+            (
+                pressure.replace(
+                    "children = [\"workspace\", \"palette_surface\"]",
+                    "children = [\"workspace\"]",
+                ),
+                "overlay requires exactly two children",
+            ),
+            (
+                pressure.replace(
+                    "children = [\"workspace\", \"palette_surface\"]",
+                    "children = [\"workspace\", \"palette_surface\", \"palette_surface\"]",
+                ),
+                "overlay requires exactly two children",
+            ),
+            (
+                pressure.replace(
+                    "children = [\"workspace\", \"palette_surface\"]",
+                    "children = [\"navigation\", \"palette_surface\"]",
+                ),
+                "overlay child 0 must be a composition",
+            ),
+            (
+                pressure.replace(
+                    "children = [\"workspace\", \"palette_surface\"]",
+                    "children = [\"workspace\", \"workspace\"]",
+                ),
+                "overlay child 1 must be a region",
+            ),
+            (
+                pressure.replace("width = \"520px\"\n", ""),
+                "overlay floating region 'palette_surface' requires fixed width",
+            ),
+            (
+                pressure.replace("height = \"300px\"\n", ""),
+                "overlay floating region 'palette_surface' requires fixed height",
+            ),
+            (
+                pressure.replace(
+                    "width = \"520px\"\nheight = \"300px\"",
+                    "width = \"520px\"\ngrow = 1\nheight = \"300px\"",
+                ),
+                "overlay floating region 'palette_surface' cannot have positive grow",
+            ),
+        ];
+        for (source, diagnostic) in cases {
+            let error = parse_and_resolve(&source).unwrap_err().to_string();
+            assert!(error.contains(diagnostic), "missing {diagnostic}: {error}");
+        }
+        let stack = pressure.replace("kind = \"overlay\"", "kind = \"stack\"");
+        let error = parse_and_resolve(&stack).unwrap_err().to_string();
+        assert!(error.contains("unknown composition kind 'stack'"));
+    }
+
+    #[test]
+    fn overlay_projections_preserve_layers_without_fake_axis() {
+        let blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/overlay-command-palette-pressure.toml"
+        ))
+        .unwrap();
+        let semantic = blueprint.semantic_tree();
+        assert!(semantic.contains("composition root_overlay (overlay, axisless)"));
+        assert!(semantic.contains("base layer"));
+        assert!(semantic.contains("floating region palette_surface"));
+        assert!(!semantic.contains("root_overlay (overlay, horizontal)"));
+    }
+
     #[test]
     fn collection_presentations_are_typed_validated_and_defaulted() {
         let project_blueprint = parse_and_resolve(project()).unwrap();

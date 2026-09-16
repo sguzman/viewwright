@@ -1,4 +1,4 @@
-use viewwright_model::{CompositionChild, ResolvedBlueprint};
+use viewwright_model::{CompositionChild, CompositionKind, ResolvedBlueprint};
 
 pub fn render(b: &ResolvedBlueprint) -> String {
     let mut out = format!(
@@ -42,20 +42,67 @@ fn walk(id: &str, b: &ResolvedBlueprint, out: &mut String, depth: usize) {
     let Some(c) = b.compositions.iter().find(|c| c.id == id) else {
         return;
     };
-    out.push_str(&format!("{}{} — {}\n", " ".repeat(depth), c.id, c.axis));
-    for child in &c.children {
+    if let Some(axis) = c.axis {
+        out.push_str(&format!("{}{} — {}\n", " ".repeat(depth), c.id, axis));
+    } else {
+        out.push_str(&format!(
+            "{}{} — overlay (axisless)\n",
+            " ".repeat(depth),
+            c.id
+        ));
+    }
+    for (index, child) in c.children.iter().enumerate() {
+        let layer = if c.kind == CompositionKind::Overlay {
+            Some(if index == 0 { "base" } else { "floating" })
+        } else {
+            None
+        };
         match child {
-            CompositionChild::Composition(id) => walk(id, b, out, depth + 2),
+            CompositionChild::Composition(id) => {
+                if let Some(layer) = layer {
+                    let description = if layer == "base" {
+                        "fills the overlay inner rectangle"
+                    } else {
+                        "above base"
+                    };
+                    out.push_str(&format!(
+                        "{}{} layer — {description}\n",
+                        " ".repeat(depth + 2),
+                        layer
+                    ));
+                }
+                walk(id, b, out, depth + if layer.is_some() { 4 } else { 2 });
+            }
             CompositionChild::Region(id) => {
                 let r = b.regions.iter().find(|r| r.id == *id).unwrap();
-                out.push_str(&format!(
-                    "{}{} — role {}, {:?}, {:?}\n",
-                    " ".repeat(depth + 2),
-                    id,
-                    r.role,
-                    r.surface,
-                    r.importance
-                ));
+                if let Some(layer) = layer {
+                    let width = r
+                        .width
+                        .map(|width| format!("{width}px"))
+                        .unwrap_or_else(|| "unspecified".into());
+                    let height = r
+                        .height
+                        .map(|height| format!("{height}px"))
+                        .unwrap_or_else(|| "unspecified".into());
+                    out.push_str(&format!(
+                        "{}{} layer: {} — centered, fixed {width} × {height}, role {}, {:?}, {:?}\n",
+                        " ".repeat(depth + 2),
+                        layer,
+                        id,
+                        r.role,
+                        r.surface,
+                        r.importance
+                    ));
+                } else {
+                    out.push_str(&format!(
+                        "{}{} — role {}, {:?}, {:?}\n",
+                        " ".repeat(depth + 2),
+                        id,
+                        r.role,
+                        r.surface,
+                        r.importance
+                    ));
+                }
             }
         }
     }
@@ -94,5 +141,16 @@ mod tests {
                 .unwrap(),
         );
         assert!(dependency.contains("density: Dense"));
+        let overlay = render(
+            &parse_and_resolve(include_str!(
+                "../../../specimens/overlay-command-palette-pressure.toml"
+            ))
+            .unwrap(),
+        );
+        assert!(overlay.contains("root_overlay — overlay (axisless)"));
+        assert!(overlay.contains("base layer"));
+        assert!(overlay.contains("floating layer: palette_surface — centered"));
+        assert!(overlay.contains("520px × 300px"));
+        assert!(!overlay.contains("root_overlay — horizontal"));
     }
 }

@@ -127,7 +127,7 @@ fn render_composition(
     let Some(c) = b.compositions.iter().find(|c| c.id == id) else {
         return;
     };
-    for child in &c.children {
+    for (index, child) in c.children.iter().enumerate() {
         let child_id = match child {
             CompositionChild::Region(id) | CompositionChild::Composition(id) => id,
         };
@@ -138,6 +138,13 @@ fn render_composition(
             continue;
         };
         let child_egui_rect = to_egui_rect(child_rect, origin);
+        if c.kind == viewwright_model::CompositionKind::Overlay && index == 1 {
+            ui.interact(
+                child_egui_rect,
+                egui::Id::new(("overlay", id, child_id)),
+                egui::Sense::click(),
+            );
+        }
         ui.scope_builder(
             UiBuilder::new()
                 .id_salt((id, child_id))
