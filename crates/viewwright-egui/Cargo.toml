@@ -3,6 +3,6 @@ name = "viewwright-egui"
 version.workspace = true
 edition.workspace = true
 [dependencies]
-egui.workspace = true
+egui = { workspace = true, features = ["accesskit"] }
 viewwright-model = { path = "../viewwright-model" }
 viewwright-layout = { path = "../viewwright-layout" }

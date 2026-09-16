@@ -369,6 +369,10 @@ M32 adds an authored region-level overflow policy with `clip` and `scroll_y`, de
 
 M33 adds the first machine-readable ViewWright-owned expectation projection. `viewwright-expectation` builds a typed expectation from a resolved blueprint and an explicit logical viewport, taking reachable-region geometry from `viewwright-layout`, and serializes that model deterministically as YAML with format version `0.1` and `epistemic: intended`. It preserves typed dominant identity, reachable region and element semantics, resolved overflow, authored labels, and command actions. Unused declarations are omitted; element bounds, fixture payloads, mutable runtime state, observation claims, and ViewWitness witness structures are intentionally absent. This is a one-way intended artifact only: comparison, tolerance, observation/runtime identity bridging, fixture expectations, and responsive variants remain deferred.
 
+## M34 — authored observation identity bridge
+
+M34 projects exact ViewWright screen, root-reachable region, and semantic-element IDs into egui's AccessKit tree as non-visual generic-container author-identity anchors. The hierarchy is screen → regions → elements → ordinary egui accessibility nodes; region anchors carry the existing planned rectangle, while fixture-local item/node IDs remain unannotated. This adds observed author-identity evidence only: it does not alter M33's intended expectation model, visible rendering, layout, or interaction semantics, and introduces no ViewWitness dependency or comparison logic.
+
 ## Status
 
 - M0 — accepted
@@ -404,4 +408,5 @@ M33 adds the first machine-readable ViewWright-owned expectation projection. `vi
 - M30 — accepted
 - M31 — accepted
 - M32 — accepted
-- M33 — implementation complete; director audit pending
+- M33 — accepted
+- M34 — implementation complete; director audit pending
