@@ -1,0 +1,11 @@
+[package]
+name = "viewwright-expectation"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_yaml_ng.workspace = true
+thiserror.workspace = true
+viewwright-layout = { path = "../viewwright-layout" }
+viewwright-model = { path = "../viewwright-model" }

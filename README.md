@@ -365,6 +365,10 @@ M31 re-admits one narrowly earned composition topology: an axisless `overlay` wi
 
 M32 adds an authored region-level overflow policy with `clip` and `scroll_y`, defaulting omitted policies to Clip. Clip confines ordinary content to the planned region viewport; ScrollY keeps the region geometry and frame fixed while providing vertical scrolling for its inner content. Layout, horizontal scrolling, pagination, virtualization, responsive behavior, and persisted scroll state remain outside this milestone.
 
+## M33 — normative expectation export
+
+M33 adds the first machine-readable ViewWright-owned expectation projection. `viewwright-expectation` builds a typed expectation from a resolved blueprint and an explicit logical viewport, taking reachable-region geometry from `viewwright-layout`, and serializes that model deterministically as YAML with format version `0.1` and `epistemic: intended`. It preserves typed dominant identity, reachable region and element semantics, resolved overflow, authored labels, and command actions. Unused declarations are omitted; element bounds, fixture payloads, mutable runtime state, observation claims, and ViewWitness witness structures are intentionally absent. This is a one-way intended artifact only: comparison, tolerance, observation/runtime identity bridging, fixture expectations, and responsive variants remain deferred.
+
 ## Status
 
 - M0 — accepted
@@ -400,3 +404,4 @@ M32 adds an authored region-level overflow policy with `clip` and `scroll_y`, de
 - M30 — accepted
 - M31 — accepted
 - M32 — accepted
+- M33 — implementation complete; director audit pending

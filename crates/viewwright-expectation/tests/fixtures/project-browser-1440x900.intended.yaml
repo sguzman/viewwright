@@ -1,0 +1,59 @@
+viewwright_expectation_version: '0.1'
+epistemic: intended
+screen:
+  author_id: project_browser
+viewport:
+  width: 1440.0
+  height: 900.0
+dominant:
+  kind: region
+  author_id: projects
+regions:
+- author_id: navigation
+  role: navigation
+  importance: secondary
+  bounds:
+    x: 16.0
+    y: 16.0
+    width: 240.0
+    height: 868.0
+  overflow: clip
+- author_id: projects
+  role: primary_content
+  importance: primary
+  bounds:
+    x: 268.0
+    y: 16.0
+    width: 824.0
+    height: 868.0
+  overflow: clip
+- author_id: inspector
+  role: inspector
+  importance: secondary
+  bounds:
+    x: 1104.0
+    y: 16.0
+    width: 320.0
+    height: 868.0
+  overflow: clip
+elements:
+- author_id: project_search
+  region_author_id: navigation
+  kind: search
+  importance: secondary
+  label: Search projects
+- author_id: navigation_items
+  region_author_id: navigation
+  kind: collection
+  importance: secondary
+  label: navigation items
+- author_id: project_collection
+  region_author_id: projects
+  kind: collection
+  importance: primary
+  label: project collection
+- author_id: project_inspector
+  region_author_id: inspector
+  kind: property_sheet
+  importance: secondary
+  label: project inspector

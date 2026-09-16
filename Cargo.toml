@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/viewwright-model", "crates/viewwright-layout", "crates/viewwright-audit", "crates/viewwright-ascii", "crates/viewwright-egui", "crates/viewwright-preview", "crates/viewwright-concept"]
+members = ["crates/viewwright-model", "crates/viewwright-layout", "crates/viewwright-expectation", "crates/viewwright-audit", "crates/viewwright-ascii", "crates/viewwright-egui", "crates/viewwright-preview", "crates/viewwright-concept"]
 [workspace.package]
 edition = "2021"
 license = "MIT"
@@ -9,5 +9,6 @@ version = "0.1.0"
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
 thiserror = "2"
+serde_yaml_ng = "0.10"
 egui = "0.31"
 eframe = "0.31"
