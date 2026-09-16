@@ -394,4 +394,4 @@ M31 re-admits one narrowly earned composition topology: an axisless `overlay` wi
 - M28 — accepted
 - M29 — accepted
 - M30 — accepted
-- M31 — implementation complete; director audit + human visual QA pending
+- M31 — accepted
