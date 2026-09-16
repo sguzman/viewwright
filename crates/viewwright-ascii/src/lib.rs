@@ -1,4 +1,4 @@
-use viewwright_model::{CompositionChild, CompositionKind, ResolvedBlueprint};
+use viewwright_model::{CompositionChild, CompositionKind, OverflowPolicy, ResolvedBlueprint};
 
 pub fn render(b: &ResolvedBlueprint) -> String {
     let mut out = format!("ViewWright: {} — {}\n", b.screen.id, b.screen.purpose);
@@ -30,11 +30,22 @@ fn walk(id: &str, b: &ResolvedBlueprint, out: &mut String, depth: usize) {
                 walk(child, b, out, depth + if layer.is_some() { 2 } else { 1 });
             }
             CompositionChild::Region(region) => {
+                let overflow = b
+                    .regions
+                    .iter()
+                    .find(|candidate| candidate.id == *region)
+                    .map(|candidate| candidate.overflow)
+                    .unwrap_or(OverflowPolicy::Clip);
                 out.push_str(&format!(
-                    "{}  |-- {}region {}\n",
+                    "{}  |-- {}region {}{}\n",
                     indent,
                     layer.map(|layer| format!("{layer} ")).unwrap_or_default(),
-                    region
+                    region,
+                    if overflow == OverflowPolicy::ScrollY {
+                        " (overflow scroll_y)"
+                    } else {
+                        ""
+                    }
                 ));
                 for e in b.elements.iter().filter(|e| e.region == *region) {
                     out.push_str(&format!("{}      * {} [{:?}]\n", indent, e.label, e.kind));
@@ -60,5 +71,11 @@ mod tests {
         assert!(output.contains("|-- base layer"));
         assert!(output.contains("|-- floating region palette_surface"));
         assert!(!output.contains("root_overlay (overlay, horizontal)"));
+
+        let overflow = viewwright_model::parse_and_resolve(include_str!(
+            "../../../specimens/reader-overflow-pressure.toml"
+        ))
+        .unwrap();
+        assert!(render(&overflow).contains("region reader (overflow scroll_y)"));
     }
 }

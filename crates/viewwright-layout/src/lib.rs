@@ -507,4 +507,31 @@ children = ["a", "b", "c"]
         assert_eq!(plan.region("navigation").unwrap().x, 16.0);
         assert_eq!(plan.region("inspector").unwrap().x, 1144.0);
     }
+
+    #[test]
+    fn overflow_policy_does_not_change_layout_plan_geometry() {
+        let scroll = viewwright_model::parse_and_resolve(include_str!(
+            "../../../specimens/reader-overflow-pressure.toml"
+        ))
+        .unwrap();
+        let clip = viewwright_model::parse_and_resolve(
+            &include_str!("../../../specimens/reader-overflow-pressure.toml")
+                .replace("overflow = \"scroll_y\"", "overflow = \"clip\""),
+        )
+        .unwrap();
+        let scroll_plan = layout(&scroll, 1440.0, 900.0);
+        let clip_plan = layout(&clip, 1440.0, 900.0);
+        assert_eq!(scroll_plan, clip_plan);
+        for id in [
+            "workspace",
+            "reading_body",
+            "library",
+            "reader",
+            "inspector",
+            "transport",
+        ] {
+            assert_eq!(scroll_plan.region(id), clip_plan.region(id));
+            assert_eq!(scroll_plan.composition(id), clip_plan.composition(id));
+        }
+    }
 }

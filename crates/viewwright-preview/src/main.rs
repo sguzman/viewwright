@@ -25,6 +25,10 @@ fn main() -> eframe::Result<()> {
             "../../../specimens/overlay-command-palette-pressure.toml"
         ))
         .expect("overlay command palette pressure specimen must be valid"),
+        parse_and_resolve(include_str!(
+            "../../../specimens/reader-overflow-pressure.toml"
+        ))
+        .expect("reader overflow pressure specimen must be valid"),
     ];
     for b in &blueprints {
         println!("{}\n{}", b.semantic_tree(), viewwright_ascii::render(b));

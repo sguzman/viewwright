@@ -1,10 +1,13 @@
 use std::collections::HashMap;
 
-use egui::{CentralPanel, Color32, Context, FontId, Frame, RichText, Stroke, UiBuilder};
+use egui::{
+    CentralPanel, Color32, Context, FontId, Frame, RichText, ScrollArea, Stroke, UiBuilder,
+};
 use viewwright_layout::{layout, LayoutPlan, Rect as LayoutRect};
 use viewwright_model::{
     BorderPolicy, CollectionPresentation, Color, CompositionChild, Density, ElementKind,
-    Importance, RegionRole, ResolvedBlueprint, ResolvedFixtureContent, ResolvedRegion, SurfaceRole,
+    Importance, OverflowPolicy, RegionRole, ResolvedBlueprint, ResolvedFixtureContent,
+    ResolvedRegion, SurfaceRole,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -213,21 +216,49 @@ fn render_region(
         UiBuilder::new()
             .id_salt(("region", &r.id))
             .max_rect(content),
-        |ui| {
-            let elements: Vec<_> = b.elements.iter().filter(|e| e.region == r.id).collect();
-            if is_command_region(r.role) {
-                ui.horizontal_wrapped(|ui| {
-                    for e in elements {
-                        render_element(ui, e, b, fixture, activation, density, state);
-                    }
-                });
-            } else {
-                for e in elements {
-                    render_element(ui, e, b, fixture, activation, density, state);
-                }
+        |ui| match r.overflow {
+            OverflowPolicy::Clip => {
+                ui.set_clip_rect(content);
+                render_region_contents(ui, r, b, fixture, activation, density, state);
+            }
+            OverflowPolicy::ScrollY => {
+                ScrollArea::vertical()
+                    .id_salt(scroll_area_id(&b.screen.id, &r.id))
+                    .hscroll(false)
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        render_region_contents(ui, r, b, fixture, activation, density, state);
+                    });
             }
         },
     );
+}
+
+fn scroll_area_id(screen_id: &str, region_id: &str) -> egui::Id {
+    egui::Id::new(("region-scroll", screen_id, region_id))
+}
+
+fn render_region_contents(
+    ui: &mut egui::Ui,
+    r: &ResolvedRegion,
+    b: &ResolvedBlueprint,
+    fixture: &str,
+    activation: &mut Option<InteractionEvent>,
+    density: DensityPolicy,
+    state: &mut RenderState,
+) {
+    let elements: Vec<_> = b.elements.iter().filter(|e| e.region == r.id).collect();
+    if is_command_region(r.role) {
+        ui.horizontal_wrapped(|ui| {
+            for e in elements {
+                render_element(ui, e, b, fixture, activation, density, state);
+            }
+        });
+    } else {
+        for e in elements {
+            render_element(ui, e, b, fixture, activation, density, state);
+        }
+    }
 }
 
 fn is_command_region(role: RegionRole) -> bool {
@@ -575,7 +606,9 @@ fn apply_density(ui: &mut egui::Ui, policy: DensityPolicy) {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_command_region, root_fill, separate_element_label, DensityPolicy};
+    use super::{
+        is_command_region, root_fill, scroll_area_id, separate_element_label, DensityPolicy,
+    };
     use egui::{Color32, Context};
     use viewwright_model::{parse_and_resolve, Density, ElementKind, RegionRole};
 
@@ -672,5 +705,17 @@ mod tests {
         context.style_mut(|style| style.visuals.panel_fill = another_theme_fill);
         assert_eq!(root_fill(&context, &project), another_theme_fill);
         assert_eq!(root_fill(&context, &visual), Color32::from_rgb(38, 43, 51));
+    }
+
+    #[test]
+    fn scroll_area_identity_is_stable_and_region_scoped() {
+        assert_eq!(
+            scroll_area_id("reader_overflow_pressure", "reader"),
+            scroll_area_id("reader_overflow_pressure", "reader")
+        );
+        assert_ne!(
+            scroll_area_id("reader_overflow_pressure", "reader"),
+            scroll_area_id("reader_overflow_pressure", "library")
+        );
     }
 }

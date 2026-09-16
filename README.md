@@ -361,6 +361,10 @@ M30 requires every authored fixture-content target to belong to an element whose
 
 M31 re-admits one narrowly earned composition topology: an axisless `overlay` with exactly two ordered children, a base composition followed by a fixed-size floating region. The base fills the padded overlay surface, while the floating region is centered, painted above it, and does not consume linear layout space. Existing split, row, and column semantics remain unchanged; M31 does not introduce stack, arbitrary positioning, modality, or window management.
 
+## M32 — vertical region overflow pressure
+
+M32 adds an authored region-level overflow policy with `clip` and `scroll_y`, defaulting omitted policies to Clip. Clip confines ordinary content to the planned region viewport; ScrollY keeps the region geometry and frame fixed while providing vertical scrolling for its inner content. Layout, horizontal scrolling, pagination, virtualization, responsive behavior, and persisted scroll state remain outside this milestone.
+
 ## Status
 
 - M0 — accepted
@@ -395,3 +399,4 @@ M31 re-admits one narrowly earned composition topology: an axisless `overlay` wi
 - M29 — accepted
 - M30 — accepted
 - M31 — accepted
+- M32 — implementation complete; director audit + human scroll QA pending

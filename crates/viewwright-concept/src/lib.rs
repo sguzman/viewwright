@@ -1,4 +1,4 @@
-use viewwright_model::{CompositionChild, CompositionKind, ResolvedBlueprint};
+use viewwright_model::{CompositionChild, CompositionKind, OverflowPolicy, ResolvedBlueprint};
 
 pub fn render(b: &ResolvedBlueprint) -> String {
     let mut out = format!(
@@ -75,6 +75,11 @@ fn walk(id: &str, b: &ResolvedBlueprint, out: &mut String, depth: usize) {
             }
             CompositionChild::Region(id) => {
                 let r = b.regions.iter().find(|r| r.id == *id).unwrap();
+                let overflow = if r.overflow == OverflowPolicy::ScrollY {
+                    " — vertical scroll"
+                } else {
+                    ""
+                };
                 if let Some(layer) = layer {
                     let width = r
                         .width
@@ -85,7 +90,7 @@ fn walk(id: &str, b: &ResolvedBlueprint, out: &mut String, depth: usize) {
                         .map(|height| format!("{height}px"))
                         .unwrap_or_else(|| "unspecified".into());
                     out.push_str(&format!(
-                        "{}{} layer: {} — centered, fixed {width} × {height}, role {}, {:?}, {:?}\n",
+                        "{}{} layer: {} — centered, fixed {width} × {height}, role {}, {:?}, {:?}{overflow}\n",
                         " ".repeat(depth + 2),
                         layer,
                         id,
@@ -95,7 +100,7 @@ fn walk(id: &str, b: &ResolvedBlueprint, out: &mut String, depth: usize) {
                     ));
                 } else {
                     out.push_str(&format!(
-                        "{}{} — role {}, {:?}, {:?}\n",
+                        "{}{} — role {}, {:?}, {:?}{overflow}\n",
                         " ".repeat(depth + 2),
                         id,
                         r.role,
@@ -152,5 +157,15 @@ mod tests {
         assert!(overlay.contains("floating layer: palette_surface — centered"));
         assert!(overlay.contains("520px × 300px"));
         assert!(!overlay.contains("root_overlay — horizontal"));
+        let overflow = render(
+            &parse_and_resolve(include_str!(
+                "../../../specimens/reader-overflow-pressure.toml"
+            ))
+            .unwrap(),
+        );
+        assert!(
+            overflow.contains("reader — role primary_content, Canvas, Primary — vertical scroll")
+        );
+        assert!(!overflow.contains("reader — vertical scroll, pagination"));
     }
 }

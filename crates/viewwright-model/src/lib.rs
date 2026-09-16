@@ -122,6 +122,7 @@ pub struct RegionSource {
     pub height: Option<String>,
     pub grow: Option<f32>,
     pub surface: Option<String>,
+    pub overflow: Option<String>,
 }
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -247,6 +248,26 @@ pub enum SurfaceRole {
     Transparent,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OverflowPolicy {
+    Clip,
+    ScrollY,
+}
+
+impl OverflowPolicy {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Clip => "clip",
+            Self::ScrollY => "scroll_y",
+        }
+    }
+}
+
+impl std::fmt::Display for OverflowPolicy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BorderPolicy {
     None,
     Minimal,
@@ -307,6 +328,19 @@ fn region_role(value: &str, id: &str, errors: &mut Vec<String>) -> RegionRole {
                 "region '{id}': unknown role '{other}' (expected commands, controls, navigation, primary_content, inspector, or status)"
             ));
             RegionRole::PrimaryContent
+        }
+    }
+}
+
+fn overflow(value: Option<&str>, id: &str, errors: &mut Vec<String>) -> OverflowPolicy {
+    match value.unwrap_or("clip") {
+        "clip" => OverflowPolicy::Clip,
+        "scroll_y" => OverflowPolicy::ScrollY,
+        other => {
+            errors.push(format!(
+                "region '{id}': unknown overflow '{other}' (expected clip or scroll_y)"
+            ));
+            OverflowPolicy::Clip
         }
     }
 }
@@ -475,6 +509,7 @@ pub struct ResolvedRegion {
     pub height: Option<u32>,
     pub grow: f32,
     pub surface: SurfaceRole,
+    pub overflow: OverflowPolicy,
 }
 #[derive(Debug, Clone)]
 pub struct ResolvedElement {
@@ -851,6 +886,7 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
                 0.0
             },
             surface: surface(r.surface.as_ref(), &r.id, &mut errors),
+            overflow: overflow(r.overflow.as_deref(), &r.id, &mut errors),
         });
     }
     let region_ids: HashSet<_> = regions
@@ -1527,16 +1563,24 @@ impl ResolvedBlueprint {
                         )
                     }
                     CompositionChild::Region(region) => {
+                        let resolved = b.regions.iter().find(|candidate| candidate.id == *region);
+                        let overflow = resolved
+                            .map(|candidate| candidate.overflow)
+                            .unwrap_or(OverflowPolicy::Clip);
+                        let annotation = if overflow == OverflowPolicy::ScrollY {
+                            format!(", overflow {}", overflow.as_str())
+                        } else {
+                            String::new()
+                        };
                         out.push_str(&format!(
-                            "{:indent$}{}region {} (role {})\n",
+                            "{:indent$}{}region {} (role {}{})\n",
                             "",
                             layer.map(|layer| format!("{layer} ")).unwrap_or_default(),
                             region,
-                            b.regions
-                                .iter()
-                                .find(|candidate| candidate.id == *region)
+                            resolved
                                 .map(|candidate| candidate.role.as_str())
                                 .unwrap_or("unknown"),
+                            annotation,
                             indent = indent + 2
                         ));
                         for e in b.elements.iter().filter(|e| e.region == *region) {
@@ -2451,6 +2495,65 @@ mod tests {
         assert!(semantic.contains("base layer"));
         assert!(semantic.contains("floating region palette_surface"));
         assert!(!semantic.contains("root_overlay (overlay, horizontal)"));
+    }
+
+    fn overflow_source(value: Option<&str>) -> String {
+        let overflow = value.map_or_else(String::new, |value| format!("overflow='{value}'\n"));
+        format!(
+            "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='content'\nrole='primary_content'\nimportance='primary'\n{overflow}[[region]]\nid='other'\nrole='status'\nimportance='secondary'\n[[composition]]\nid='root'\nkind='split'\nchildren=['content','other']"
+        )
+    }
+
+    #[test]
+    fn region_overflow_defaults_and_validates_as_typed_policy() {
+        assert_eq!(
+            parse_and_resolve(&overflow_source(None)).unwrap().regions[0].overflow,
+            OverflowPolicy::Clip
+        );
+        assert_eq!(
+            parse_and_resolve(&overflow_source(Some("clip")))
+                .unwrap()
+                .regions[0]
+                .overflow,
+            OverflowPolicy::Clip
+        );
+        assert_eq!(
+            parse_and_resolve(&overflow_source(Some("scroll_y")))
+                .unwrap()
+                .regions[0]
+                .overflow,
+            OverflowPolicy::ScrollY
+        );
+        let scroll = parse_and_resolve(&overflow_source(Some("scroll_y"))).unwrap();
+        assert!(scroll
+            .semantic_tree()
+            .contains("region content (role primary_content, overflow scroll_y)"));
+        let error = parse_and_resolve(&overflow_source(Some("scroll")))
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("region 'content'") && error.contains("unknown overflow 'scroll'"));
+    }
+
+    #[test]
+    fn canonical_regions_without_overflow_remain_clip() {
+        for source in [
+            include_str!("../../../examples/project-browser.toml"),
+            include_str!("../../../specimens/reader-workspace.toml"),
+            include_str!("../../../specimens/reader-workspace-m5.toml"),
+            include_str!("../../../specimens/reader-workspace-visual.toml"),
+            include_str!("../../../specimens/reader-workspace-visual-m5.toml"),
+            include_str!("../../../specimens/reader-workspace-visual-m7.toml"),
+            include_str!("../../../specimens/dependency-workbench.toml"),
+            include_str!("../../../specimens/density-pressure-comfortable.toml"),
+            include_str!("../../../specimens/density-pressure-dense.toml"),
+            include_str!("../../../specimens/overlay-command-palette-pressure.toml"),
+        ] {
+            let blueprint = parse_and_resolve(source).unwrap();
+            assert!(blueprint
+                .regions
+                .iter()
+                .all(|region| region.overflow == OverflowPolicy::Clip));
+        }
     }
 
     #[test]
