@@ -345,6 +345,10 @@ M26 requires authored property-sheet names to contain at least one non-whitespac
 
 M27 requires authored document titles to contain at least one non-whitespace character while preserving valid titles exactly. Paragraph text remains unconstrained and ordered, including blank paragraphs and empty lists; valid document rendering remains unchanged.
 
+## M28 — status text authorship fidelity
+
+M28 requires present fixture-backed status `text` payloads to contain at least one non-whitespace character while preserving valid text exactly. Omitted status content remains legal, and property values, document paragraphs, command reasons, and rendering remain unchanged.
+
 ## Status
 
 - M0 — accepted
@@ -374,4 +378,5 @@ M27 requires authored document titles to contain at least one non-whitespace cha
 - M24 — accepted
 - M25 — accepted
 - M26 — accepted
-- M27 — implementation complete; director audit pending
+- M27 — accepted
+- M28 — implementation complete; director audit pending

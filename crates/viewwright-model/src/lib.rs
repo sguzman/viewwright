@@ -1185,6 +1185,12 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
                     ));
                     continue;
                 }
+                if text.trim().is_empty() {
+                    errors.push(format!(
+                        "fixture '{}': text for '{}' must contain at least one non-whitespace character",
+                        f.id, record.element
+                    ));
+                }
                 content.push(ResolvedFixtureContent::Text {
                     element: record.element.clone(),
                     text: text.clone(),
@@ -2495,6 +2501,64 @@ mod tests {
                 for content in &fixture.content {
                     if let Some(document) = &content.document {
                         assert!(!document.title.trim().is_empty());
+                    }
+                }
+            }
+            parse_and_resolve(source).unwrap();
+        }
+    }
+
+    fn status_source(text: &str, with_content: bool) -> String {
+        let content = if with_content {
+            format!("[[fixture.content]]\nelement='workspace_status'\ntext={text:?}")
+        } else {
+            String::new()
+        };
+        format!(
+            "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='content'\nrole='primary_content'\nimportance='primary'\n[[region]]\nid='other'\nrole='status'\nimportance='secondary'\n[[element]]\nid='workspace_status'\nregion='other'\nkind='status'\nimportance='secondary'\nlabel='Status'\n[[composition]]\nid='root'\nkind='split'\nchildren=['content','other']\n[[fixture]]\nid='fixture'\nstate='ready'\n{content}"
+        )
+    }
+
+    #[test]
+    fn status_text_payloads_must_be_nonblank() {
+        for text in ["", "   ", "\t", " \t "] {
+            let error = parse_and_resolve(&status_source(text, true))
+                .unwrap_err()
+                .to_string();
+            assert!(
+                error.contains("fixture 'fixture'")
+                    && error.contains("workspace_status")
+                    && error.contains("text")
+                    && error.contains("non-whitespace")
+            );
+        }
+    }
+
+    #[test]
+    fn status_text_is_preserved_exactly_and_omission_remains_legal() {
+        let blueprint = parse_and_resolve(&status_source("  Ready · now  ", true)).unwrap();
+        assert!(matches!(
+            &blueprint.fixtures[0].content[0],
+            ResolvedFixtureContent::Text { text, .. } if text == "  Ready · now  "
+        ));
+
+        let omitted = parse_and_resolve(&status_source("ignored", false)).unwrap();
+        assert!(omitted.fixtures[0].content.is_empty());
+    }
+
+    #[test]
+    fn canonical_sources_resolve_with_nonblank_status_text() {
+        for source in [
+            reader(),
+            include_str!("../../../specimens/reader-workspace-visual.toml"),
+            include_str!("../../../specimens/reader-workspace-visual-m7.toml"),
+            include_str!("../../../specimens/dependency-workbench.toml"),
+        ] {
+            let parsed: SourceBlueprint = toml::from_str(source).unwrap();
+            for fixture in &parsed.fixture {
+                for content in &fixture.content {
+                    if let Some(text) = &content.text {
+                        assert!(!text.trim().is_empty());
                     }
                 }
             }
