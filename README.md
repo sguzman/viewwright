@@ -353,6 +353,10 @@ M28 requires present fixture-backed status `text` payloads to contain at least o
 
 M29 requires an authored `design.dominant` region to occur in the root-reachable composition tree, or an authored dominant element's owning region to be root-reachable. Unrelated unused declarations remain legal, and dominance does not affect styling or layout.
 
+## M30 — fixture content reachability fidelity
+
+M30 requires every authored fixture-content target to belong to an element whose owning region is reachable from the validated screen root. Direct and nested reachable targets remain valid, while unreachable targets are rejected without introducing global declaration reachability or mandatory fixture coverage. Missing or invalid roots suppress dependent reachability diagnostics, and fixture payload-family and kind semantics remain unchanged.
+
 ## Status
 
 - M0 — accepted
@@ -384,4 +388,5 @@ M29 requires an authored `design.dominant` region to occur in the root-reachable
 - M26 — accepted
 - M27 — accepted
 - M28 — accepted
-- M29 — implementation complete; director audit pending
+- M29 — accepted
+- M30 — implementation complete; director audit pending

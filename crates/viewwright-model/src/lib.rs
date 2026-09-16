@@ -1097,6 +1097,16 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
                 ));
                 continue;
             };
+            if root.is_some() && !reachable_regions.contains(element.region.as_str()) {
+                errors.push(format!(
+                    "fixture '{}': content target '{}' is not reachable because owning region '{}' is outside screen.root '{}'",
+                    f.id,
+                    record.element,
+                    element.region,
+                    root.as_deref().unwrap_or_default()
+                ));
+                continue;
+            }
             let families = usize::from(record.items.is_some())
                 + usize::from(record.properties.is_some())
                 + usize::from(record.text.is_some())
@@ -2487,6 +2497,101 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("text content"));
+    }
+
+    fn fixture_content_reachability_source(root: Option<&str>, nested: bool) -> String {
+        let root = root.map_or_else(String::new, |root| format!("root='{root}'\n"));
+        let compositions = if nested {
+            "[[composition]]\nid='root'\nkind='split'\nchildren=['nested','root_status']\n[[composition]]\nid='nested'\nkind='split'\nchildren=['content','nested_status']"
+        } else {
+            "[[composition]]\nid='root'\nkind='split'\nchildren=['content','root_status']"
+        };
+        format!(
+            "[screen]\nid='x'\npurpose='x'\n{root}[[region]]\nid='content'\nrole='primary_content'\nimportance='primary'\n[[region]]\nid='root_status'\nrole='status'\nimportance='secondary'\n[[region]]\nid='nested_status'\nrole='status'\nimportance='tertiary'\n[[element]]\nid='target_status'\nregion='content'\nkind='status'\nimportance='primary'\nlabel='Target status'\n{compositions}\n[[fixture]]\nid='fixture'\nstate='ready'\n[[fixture.content]]\nelement='target_status'\ntext='Ready'"
+        )
+    }
+
+    #[test]
+    fn fixture_content_targets_direct_and_nested_reachable_regions() {
+        for source in [
+            fixture_content_reachability_source(Some("root"), false),
+            fixture_content_reachability_source(Some("root"), true),
+        ] {
+            assert!(parse_and_resolve(&source).is_ok());
+        }
+    }
+
+    #[test]
+    fn fixture_content_targeting_unreachable_region_is_rejected() {
+        let source = fixture_content_reachability_source(Some("root"), false)
+            .replace("region='content'", "region='unused'")
+            .replace(
+                "[[element]]",
+                "[[region]]\nid='unused'\nrole='inspector'\nimportance='tertiary'\n[[element]]",
+            );
+        let error = parse_and_resolve(&source).unwrap_err().to_string();
+        assert!(error.contains("fixture 'fixture'"));
+        assert!(error.contains("target 'target_status'"));
+        assert!(error.contains("owning region 'unused'"));
+        assert!(error.contains("outside screen.root 'root'"));
+    }
+
+    #[test]
+    fn fixture_content_reachability_is_gated_by_valid_root() {
+        for source in [
+            fixture_content_reachability_source(Some("missing"), false),
+            fixture_content_reachability_source(None, false),
+        ] {
+            let error = parse_and_resolve(&source).unwrap_err().to_string();
+            assert!(error.contains("screen.root"));
+            assert!(!error.contains("content target 'target_status'"));
+            assert!(!error.contains("screen.root ''"));
+        }
+    }
+
+    #[test]
+    fn missing_fixture_content_element_remains_a_missing_element_error() {
+        let source = fixture_content_reachability_source(Some("root"), false)
+            .replace("element='target_status'", "element='does_not_exist'");
+        let error = parse_and_resolve(&source).unwrap_err().to_string();
+        assert!(error.contains("content references missing element 'does_not_exist'"));
+        assert!(!error.contains("not reachable"));
+    }
+
+    #[test]
+    fn unused_non_target_elements_and_fixture_omission_remain_legal() {
+        let source = fixture_content_reachability_source(Some("root"), false)
+            .replace(
+                "[[fixture.content]]\nelement='target_status'\ntext='Ready'",
+                "",
+            )
+            .replace(
+                "[[element]]",
+                "[[region]]\nid='unused'\nrole='inspector'\nimportance='tertiary'\n[[element]]",
+            )
+            .replace(
+                "id='target_status'\nregion='content'",
+                "id='unused_element'\nregion='unused'",
+            );
+        assert!(parse_and_resolve(&source).is_ok());
+    }
+
+    #[test]
+    fn canonical_fixture_content_targets_remain_compatible() {
+        for source in [
+            include_str!("../../../examples/project-browser.toml"),
+            include_str!("../../../specimens/reader-workspace.toml"),
+            include_str!("../../../specimens/reader-workspace-m5.toml"),
+            include_str!("../../../specimens/reader-workspace-visual.toml"),
+            include_str!("../../../specimens/reader-workspace-visual-m5.toml"),
+            include_str!("../../../specimens/reader-workspace-visual-m7.toml"),
+            include_str!("../../../specimens/reader-workspace-visual-crushed.toml"),
+            include_str!("../../../specimens/dependency-workbench.toml"),
+            include_str!("../../../specimens/density-pressure-comfortable.toml"),
+            include_str!("../../../specimens/density-pressure-dense.toml"),
+        ] {
+            parse_and_resolve(source).unwrap();
+        }
     }
 
     fn property_source(properties: &str) -> String {
