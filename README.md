@@ -399,4 +399,4 @@ M32 adds an authored region-level overflow policy with `clip` and `scroll_y`, de
 - M29 — accepted
 - M30 — accepted
 - M31 — accepted
-- M32 — implementation complete; director audit + human scroll QA pending
+- M32 — accepted

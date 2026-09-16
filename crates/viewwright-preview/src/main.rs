@@ -101,7 +101,7 @@ impl eframe::App for App {
         let mut selected_screen = None;
         let mut selected_fixture = None;
         egui::TopBottomPanel::bottom("fixtures").show(ctx, |ui| {
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 ui.label("Specimen:");
                 for (i, b) in self.blueprints.iter().enumerate() {
                     if ui
@@ -111,7 +111,8 @@ impl eframe::App for App {
                         selected_screen = Some(i);
                     }
                 }
-                ui.separator();
+            });
+            ui.horizontal_wrapped(|ui| {
                 ui.label("Fixture:");
                 for (i, f) in self.blueprints[self.screen].fixtures.iter().enumerate() {
                     if ui.selectable_label(i == self.fixture, &f.id).clicked() {
