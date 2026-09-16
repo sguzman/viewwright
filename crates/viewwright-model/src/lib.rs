@@ -1345,7 +1345,7 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
     }
     let dominant = source.design.dominant.as_ref().and_then(|d| {
         if region_ids.contains(d.as_str()) {
-            if !reachable_regions.contains(d) {
+            if root.is_some() && !reachable_regions.contains(d) {
                 errors.push(format!(
                     "design.dominant: region '{}' is not reachable from screen.root '{}'",
                     d,
@@ -1355,7 +1355,7 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
             Some(DominantTarget::Region(d.clone()))
         } else if element_ids.contains(d.as_str()) {
             let element = elements.iter().find(|element| element.id == *d).unwrap();
-            if !reachable_regions.contains(element.region.as_str()) {
+            if root.is_some() && !reachable_regions.contains(element.region.as_str()) {
                 errors.push(format!(
                     "design.dominant: element '{}' is not reachable because owning region '{}' is outside screen.root '{}'",
                     d,
@@ -2083,6 +2083,45 @@ mod tests {
             );
             let error = parse_and_resolve(&source).unwrap_err().to_string();
             assert!(error.contains("screen.root"));
+        }
+    }
+
+    #[test]
+    fn dominant_reachability_requires_a_validated_root() {
+        let cases = [
+            (
+                "root='missing'\n",
+                "existing_region",
+                "region",
+                "design.dominant: region 'existing_region' is not reachable",
+            ),
+            (
+                "root='missing'\n",
+                "existing_element",
+                "element",
+                "design.dominant: element 'existing_element' is not reachable",
+            ),
+            (
+                "",
+                "existing_region",
+                "region",
+                "design.dominant: region 'existing_region' is not reachable",
+            ),
+        ];
+
+        for (root, dominant, kind, dependent_diagnostic) in cases {
+            let element = if kind == "element" {
+                "[[element]]\nid='existing_element'\nregion='existing_region'\nkind='text'\nimportance='primary'\nlabel='Existing element'\n"
+            } else {
+                ""
+            };
+            let source = format!(
+                "[screen]\nid='x'\npurpose='x'\n{root}[design]\ndominant='{dominant}'\n[[region]]\nid='existing_region'\nrole='primary_content'\nimportance='primary'\n[[region]]\nid='other'\nrole='status'\nimportance='secondary'\n{element}[[composition]]\nid='workspace'\nkind='split'\nchildren=['existing_region','other']"
+            );
+            let error = parse_and_resolve(&source).unwrap_err().to_string();
+            assert!(error.contains("screen.root"));
+            assert!(!error.contains(dependent_diagnostic));
+            assert!(!error.contains("screen.root ''"));
         }
     }
 
