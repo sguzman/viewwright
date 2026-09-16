@@ -1285,6 +1285,12 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
                     ));
                     continue;
                 }
+                if document.title.trim().is_empty() {
+                    errors.push(format!(
+                        "fixture '{}': document for '{}' title must contain at least one non-whitespace character",
+                        f.id, record.element
+                    ));
+                }
                 content.push(ResolvedFixtureContent::Document {
                     element: record.element.clone(),
                     title: document.title.clone(),
@@ -2411,6 +2417,84 @@ mod tests {
                         assert!(properties
                             .iter()
                             .all(|property| !property.name.trim().is_empty()));
+                    }
+                }
+            }
+            parse_and_resolve(source).unwrap();
+        }
+    }
+
+    fn document_source(title: &str, paragraphs: &str) -> String {
+        let title = format!("{title:?}");
+        format!(
+            "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='content'\nrole='primary_content'\nimportance='primary'\n[[region]]\nid='other'\nrole='status'\nimportance='secondary'\n[[element]]\nid='document_surface'\nregion='content'\nkind='document'\nimportance='primary'\nlabel='Document'\n[[composition]]\nid='root'\nkind='split'\nchildren=['content','other']\n[[fixture]]\nid='fixture'\nstate='ready'\n[[fixture.content]]\nelement='document_surface'\ndocument={{title={title},paragraphs={paragraphs}}}"
+        )
+    }
+
+    #[test]
+    fn document_titles_must_be_nonblank() {
+        for title in ["", "   ", "\t", " \t "] {
+            let error = parse_and_resolve(&document_source(title, "['paragraph']"))
+                .unwrap_err()
+                .to_string();
+            assert!(
+                error.contains("fixture 'fixture'")
+                    && error.contains("document_surface")
+                    && error.contains("title")
+                    && error.contains("non-whitespace")
+            );
+        }
+    }
+
+    #[test]
+    fn document_title_and_paragraphs_preserve_exact_order_and_blank_content() {
+        let blueprint = parse_and_resolve(&document_source(
+            "  The Quiet Machine  ",
+            "['first','','   ','third']",
+        ))
+        .unwrap();
+        let (title, paragraphs) = match &blueprint.fixtures[0].content[0] {
+            ResolvedFixtureContent::Document {
+                title, paragraphs, ..
+            } => (title, paragraphs),
+            other => panic!("unexpected fixture content: {other:?}"),
+        };
+        assert_eq!(title, "  The Quiet Machine  ");
+        assert_eq!(paragraphs, &["first", "", "   ", "third"]);
+    }
+
+    #[test]
+    fn empty_document_paragraph_lists_remain_legal() {
+        let blueprint = parse_and_resolve(&document_source("No document loaded", "[]")).unwrap();
+        assert!(matches!(
+            &blueprint.fixtures[0].content[0],
+            ResolvedFixtureContent::Document { title, paragraphs, .. }
+                if title == "No document loaded" && paragraphs.is_empty()
+        ));
+    }
+
+    #[test]
+    fn missing_document_title_remains_a_parse_error() {
+        let source = document_source("No document loaded", "[]").replace(
+            "document={title=\"No document loaded\",paragraphs=[]}",
+            "document={paragraphs=[]}",
+        );
+        let error = parse_and_resolve(&source).unwrap_err().to_string();
+        assert!(error.contains("TOML parse error"));
+    }
+
+    #[test]
+    fn canonical_sources_resolve_with_nonblank_document_titles() {
+        for source in [
+            reader(),
+            include_str!("../../../specimens/reader-workspace-visual.toml"),
+            include_str!("../../../specimens/reader-workspace-visual-m7.toml"),
+        ] {
+            let parsed: SourceBlueprint = toml::from_str(source).unwrap();
+            for fixture in &parsed.fixture {
+                for content in &fixture.content {
+                    if let Some(document) = &content.document {
+                        assert!(!document.title.trim().is_empty());
                     }
                 }
             }

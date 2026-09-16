@@ -341,6 +341,10 @@ M25 requires explicitly authored `design.character` and `design.avoid` entries t
 
 M26 requires authored property-sheet names to contain at least one non-whitespace character while preserving valid names, values, order, and duplicate names exactly. Property values remain unconstrained, and property-sheet rendering remains unchanged for valid sources.
 
+## M27 — document title authorship fidelity
+
+M27 requires authored document titles to contain at least one non-whitespace character while preserving valid titles exactly. Paragraph text remains unconstrained and ordered, including blank paragraphs and empty lists; valid document rendering remains unchanged.
+
 ## Status
 
 - M0 — accepted
@@ -369,4 +373,5 @@ M26 requires authored property-sheet names to contain at least one non-whitespac
 - M23 — accepted
 - M24 — accepted
 - M25 — accepted
-- M26 — implementation complete; director audit pending
+- M26 — accepted
+- M27 — implementation complete; director audit pending
