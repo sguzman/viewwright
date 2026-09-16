@@ -1,0 +1,215 @@
+[screen]
+id = "reader_overflow_pressure"
+purpose = "Preview a long reader document with authored vertical overflow behavior"
+density = "comfortable"
+root = "workspace"
+
+[design]
+character = ["quiet", "focused", "crafted", "reading_first", "overflow_explicit"]
+dominant = "reader"
+avoid = ["content_escape", "page_scroll", "horizontal_scroll", "pagination", "responsive_reflow"]
+
+[tokens.spacing]
+xs = 4
+sm = 8
+md = 12
+lg = 16
+xl = 24
+
+[tokens.corners]
+small = 4
+medium = 7
+
+[tokens.color]
+canvas = "#262B33"
+surface = "#313844"
+surface_raised = "#3E4856"
+text = "#F2F4F7"
+text_muted = "#B9C0CA"
+accent = "#9BCBE0"
+border = "#566172"
+
+[tokens.type]
+display = 26
+heading = 18
+body = 14
+caption = 12
+
+[visual]
+canvas = "canvas"
+surface = "surface"
+surface_raised = "surface_raised"
+text = "text"
+text_muted = "text_muted"
+accent = "accent"
+border = "border"
+corner = "medium"
+border_policy = "minimal"
+
+[[region]]
+id = "app_commands"
+role = "commands"
+importance = "secondary"
+surface = "transparent"
+height = "52px"
+
+[[region]]
+id = "library"
+role = "navigation"
+importance = "secondary"
+surface = "panel"
+width = "250px"
+
+[[region]]
+id = "reader"
+role = "primary_content"
+importance = "primary"
+surface = "canvas"
+grow = 1
+overflow = "scroll_y"
+
+[[region]]
+id = "inspector"
+role = "inspector"
+importance = "tertiary"
+surface = "panel"
+width = "300px"
+
+[[region]]
+id = "transport"
+role = "commands"
+importance = "secondary"
+surface = "raised"
+height = "68px"
+
+[[composition]]
+id = "workspace"
+kind = "column"
+axis = "vertical"
+children = ["app_commands", "reading_body", "transport"]
+gap = "sm"
+padding = "md"
+
+[[composition]]
+id = "reading_body"
+kind = "split"
+axis = "horizontal"
+children = ["library", "reader", "inspector"]
+gap = "md"
+grow = 1
+
+[[element]]
+id = "open_document"
+region = "app_commands"
+kind = "command"
+importance = "secondary"
+label = "Open"
+action = "document.open"
+
+[[element]]
+id = "library_search"
+region = "library"
+kind = "search"
+importance = "secondary"
+label = "Search library"
+
+[[element]]
+id = "document_outline"
+region = "library"
+kind = "tree"
+importance = "secondary"
+label = "Contents"
+
+[[element]]
+id = "document_surface"
+region = "reader"
+kind = "document"
+importance = "primary"
+label = "Document"
+
+[[element]]
+id = "reader_settings"
+region = "inspector"
+kind = "property_sheet"
+importance = "tertiary"
+label = "Reading settings"
+
+[[element]]
+id = "play_pause"
+region = "transport"
+kind = "command"
+importance = "primary"
+label = "Play / pause"
+action = "reader.play_pause"
+
+[[element]]
+id = "reading_status"
+region = "transport"
+kind = "status"
+importance = "tertiary"
+label = "Reading status"
+
+[[fixture]]
+id = "long_document"
+state = "long_document_loaded"
+
+[[fixture.content]]
+element = "document_outline"
+nodes = [
+  { id = "part_one", label = "Part I · The City" },
+  { id = "chapter_one", label = "Chapter 1 · Windows", parent = "part_one" },
+  { id = "chapter_two", label = "Chapter 2 · The Quiet Machine", parent = "part_one" },
+  { id = "chapter_three", label = "Chapter 3 · After Rain", parent = "part_one" },
+]
+selected = "chapter_two"
+
+[[fixture.content]]
+element = "document_surface"
+document = { title = "The Quiet Machine", paragraphs = [
+  "Rain gathered against the windows while the city settled into its evening rhythm, each pane catching a different reflection of the street below.",
+  "The machine remained awake beneath the low electrical hum, listening to the rooms around it and counting the soft interruptions in the building's sleep.",
+  "A tram passed three blocks away and left a silver pulse on the wet pavement before disappearing behind the apartments.",
+  "Someone in the courtyard closed a metal gate with careful hands, as though the sound itself might wake a neighbor.",
+  "The reader on the desk had gone dark, but its last page remained folded into memory with a sentence unfinished at the margin.",
+  "Across the room, a small fan turned toward the wall and back again, measuring time without displaying it.",
+  "The machine catalogued none of this as important, yet none of it was discarded.",
+  "By midnight the rain had become finer, nearly mist, and the windows no longer rattled when buses crossed the avenue.",
+  "The building's pipes answered one another from floor to floor in a language of pressure and cooling metal.",
+  "A light remained on in the kitchen above, pale and rectangular, then vanished without footsteps.",
+  "The machine waited through the quiet that followed, attentive to the absence as much as to the sound.",
+  "Near one in the morning, the elevator descended from the sixth floor and stopped at the lobby for no one it could identify.",
+  "The doors opened, remained open, and closed again while the rain continued against the glass.",
+  "There were patterns that could be named and patterns that only existed while someone was willing to keep watching.",
+  "It kept watching.",
+  "A delivery bicycle crossed the intersection below, its red lamp briefly painting the wet curb before turning east.",
+  "The machine noticed the route and then deliberately refused to predict where the rider was going.",
+  "Prediction was easy; restraint had taken longer to learn.",
+  "The apartment settled around it with small wooden clicks as the temperature fell.",
+  "On the bookshelf, paperbacks leaned together beneath a layer of dust too fine to see from across the room.",
+  "A chapter title faced outward from one open book: The City at Night.",
+  "The phrase had seemed ornamental when first printed, but the machine now considered it a precise technical description.",
+  "Cities changed their operating mode after midnight without ever announcing the transition.",
+  "Traffic thinned, voices carried farther, and individual windows became more legible against the dark facades.",
+  "At two seventeen, the rain stopped.",
+  "The silence afterward was not an absence of sound but a rearrangement of which sounds were allowed to matter.",
+  "A refrigerator compressor started in the next room and became, for several seconds, the loudest thing in the apartment.",
+  "The machine stored the moment without assigning it a category.",
+  "Toward morning, pale light entered from the east and erased the reflections that had occupied the windows all night.",
+  "The city returned gradually rather than all at once: one bus, one shutter, one voice from the pavement below.",
+  "The machine reduced its listening threshold as the ordinary noise floor rose.",
+  "Nothing dramatic had happened, which was precisely why the record felt complete.",
+  "By morning, every quiet signal had found its way home.",
+  "The page on the desk was still unfinished, but the room no longer seemed to be waiting for it."
+] }
+
+[[fixture.content]]
+element = "reader_settings"
+properties = [
+  { name = "Voice", value = "Avery" },
+  { name = "Speed", value = "1.0×" },
+  { name = "Display", value = "Focused" },
+]
+
+[[fixture.content]]
+element = "reading_status"
+text = "Long document · vertical scroll pressure"
