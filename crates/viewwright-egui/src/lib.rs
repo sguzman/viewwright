@@ -125,15 +125,40 @@ fn with_identity_anchor<R>(
     parent: Option<egui::Id>,
     render: impl FnOnce(&mut Ui, egui::Id) -> R,
 ) -> R {
-    let ctx = ui.ctx().clone();
-    let rect = ui.available_rect_before_wrap();
-    let mut builder = UiBuilder::new().id_salt(id).max_rect(rect);
+    let builder = identity_anchor_builder(ui, id, parent);
+    let mut anchor_ui = ui.new_child(builder);
+    let anchor_id = set_identity_anchor(&anchor_ui, author_id, bounds);
+    render(&mut anchor_ui, anchor_id)
+}
+
+fn with_flow_identity_anchor<R>(
+    ui: &mut Ui,
+    id: egui::Id,
+    author_id: &str,
+    parent: egui::Id,
+    render: impl FnOnce(&mut Ui, egui::Id) -> R,
+) -> R {
+    let builder = identity_anchor_builder(ui, id, Some(parent));
+    ui.scope_builder(builder, |anchor_ui| {
+        let anchor_id = set_identity_anchor(anchor_ui, author_id, None);
+        render(anchor_ui, anchor_id)
+    })
+    .inner
+}
+
+fn identity_anchor_builder(ui: &Ui, id: egui::Id, parent: Option<egui::Id>) -> UiBuilder {
+    let mut builder = UiBuilder::new()
+        .id_salt(id)
+        .max_rect(ui.available_rect_before_wrap());
     if let Some(parent) = parent {
         builder = builder.accessibility_parent(parent);
     }
-    let mut anchor_ui = ui.new_child(builder);
-    let anchor_id = anchor_ui.unique_id();
-    ctx.accesskit_node_builder(anchor_id, |node| {
+    builder
+}
+
+fn set_identity_anchor(ui: &Ui, author_id: &str, bounds: Option<egui::Rect>) -> egui::Id {
+    let anchor_id = ui.unique_id();
+    ui.ctx().accesskit_node_builder(anchor_id, |node| {
         node.set_role(egui::accesskit::Role::GenericContainer);
         node.set_author_id(author_id.to_owned());
         if let Some(bounds) = bounds {
@@ -145,7 +170,7 @@ fn with_identity_anchor<R>(
             });
         }
     });
-    render(&mut anchor_ui, anchor_id)
+    anchor_id
 }
 
 fn root_fill(ui: &Ui, blueprint: &ResolvedBlueprint) -> Color32 {
@@ -366,12 +391,11 @@ fn render_element(
     parent_anchor: egui::Id,
 ) {
     let anchor_id = ui.make_persistent_id(("viewwright-element", &e.id));
-    with_identity_anchor(
+    with_flow_identity_anchor(
         ui,
         anchor_id,
         &e.id,
-        None,
-        Some(parent_anchor),
+        parent_anchor,
         |ui, _element_anchor| {
             ui.add_space(density.element_gap);
             if separate_element_label(e.kind) {
@@ -835,6 +859,25 @@ mod tests {
         );
     }
 
+    fn rendered_node_bounds(
+        update: &accesskit::TreeUpdate,
+        role: accesskit::Role,
+        label: Option<&str>,
+    ) -> accesskit::Rect {
+        update
+            .nodes
+            .iter()
+            .map(|(_, node)| node)
+            .find(|node| {
+                node.role() == role
+                    && label.map_or(true, |label| {
+                        node.value() == Some(label) || node.label() == Some(label)
+                    })
+            })
+            .and_then(accesskit::Node::bounds)
+            .unwrap_or_else(|| panic!("expected rendered {role:?} node bounds for {label:?}"))
+    }
+
     #[test]
     fn command_labels_are_control_owned_while_content_labels_are_separate() {
         assert!(!separate_element_label(ElementKind::Command));
@@ -1008,6 +1051,46 @@ mod tests {
             assert_eq!(actual.y0, planned.y as f64);
             assert_eq!(actual.x1, (planned.x + planned.width) as f64);
             assert_eq!(actual.y1, (planned.y + planned.height) as f64);
+        }
+    }
+
+    #[test]
+    fn semantic_elements_consume_vertical_and_command_flow_layout_slots() {
+        let blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/reader-workspace-visual.toml"
+        ))
+        .unwrap();
+        let output = accesskit_output(&blueprint, "reading");
+        let update = update(&output);
+
+        let search = rendered_node_bounds(update, accesskit::Role::TextInput, None);
+        let outline = rendered_node_bounds(update, accesskit::Role::Label, Some("Contents"));
+        assert!(
+            search.y1 <= outline.y0,
+            "search control and next element label must not overlap: search={search:?}, outline={outline:?}"
+        );
+
+        let command_bounds = [
+            rendered_node_bounds(update, accesskit::Role::Button, Some("Play / pause")),
+            rendered_node_bounds(update, accesskit::Role::Button, Some("Voice")),
+            rendered_node_bounds(update, accesskit::Role::Button, Some("Speed")),
+            rendered_node_bounds(update, accesskit::Role::Label, Some("Reading status")),
+        ];
+        for ((first_id, first), (second_id, second)) in [
+            ("play_pause", command_bounds[0]),
+            ("voice", command_bounds[1]),
+            ("speed", command_bounds[2]),
+        ]
+        .into_iter()
+        .zip([
+            ("voice", command_bounds[1]),
+            ("speed", command_bounds[2]),
+            ("reading_status", command_bounds[3]),
+        ]) {
+            assert!(
+                first.x1 <= second.x0,
+                "command/status elements must advance horizontally in the 1440px viewport: {first_id}={first:?}, {second_id}={second:?}"
+            );
         }
     }
 
