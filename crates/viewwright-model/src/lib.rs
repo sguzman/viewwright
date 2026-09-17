@@ -669,6 +669,18 @@ fn add_id(ids: &mut HashSet<String>, errors: &mut Vec<String>, id: &str, kind: &
         errors.push(format!("duplicate id '{id}' ({kind})"));
     }
 }
+fn validate_screen_author_id_collision(
+    screen_id: &str,
+    declaration_id: &str,
+    kind: &str,
+    errors: &mut Vec<String>,
+) {
+    if screen_id == declaration_id {
+        errors.push(format!(
+            "screen.id '{screen_id}' conflicts with {kind} id '{declaration_id}' in observable author-id namespace"
+        ));
+    }
+}
 fn logical_size(
     value: Option<&String>,
     label: &str,
@@ -866,6 +878,7 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
     let spacing = &source.tokens.spacing;
     let mut regions = Vec::new();
     for r in &source.region {
+        validate_screen_author_id_collision(&source.screen.id, &r.id, "region", &mut errors);
         add_id(&mut ids, &mut errors, &r.id, "region");
         let grow = r.grow.unwrap_or(0.0);
         if !grow.is_finite() || grow < 0.0 {
@@ -896,6 +909,7 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
         .collect();
     let mut elements = Vec::new();
     for e in &source.element {
+        validate_screen_author_id_collision(&source.screen.id, &e.id, "element", &mut errors);
         add_id(&mut ids, &mut errors, &e.id, "element");
         if !region_ids.contains(e.region.as_str()) {
             errors.push(format!("element '{}': missing region '{}'", e.id, e.region));
@@ -2219,6 +2233,92 @@ mod tests {
         assert_eq!(blueprint.elements[0].region, " reader panel ");
         assert_eq!(blueprint.root, "root");
         assert_eq!(blueprint.fixtures[0].id, "fixture");
+    }
+
+    #[test]
+    fn screen_id_collisions_with_reachable_regions_and_elements_are_rejected() {
+        let region_source =
+            global_id_source("workspace", "workspace", "element", "root", "fixture");
+        let region_error = parse_and_resolve(&region_source).unwrap_err().to_string();
+        assert!(region_error.contains("screen.id 'workspace'"));
+        assert!(region_error.contains("region id 'workspace'"));
+        assert!(region_error.contains("observable author-id namespace"));
+
+        let element_source =
+            global_id_source("workspace", "region", "workspace", "root", "fixture");
+        let element_error = parse_and_resolve(&element_source).unwrap_err().to_string();
+        assert!(element_error.contains("screen.id 'workspace'"));
+        assert!(element_error.contains("element id 'workspace'"));
+        assert!(element_error.contains("observable author-id namespace"));
+    }
+
+    #[test]
+    fn screen_id_collisions_with_unused_regions_and_elements_are_rejected() {
+        let unused_region = format!(
+            "{}\n[[region]]\nid='workspace'\nrole='inspector'\nimportance='tertiary'\n",
+            global_id_source("workspace", "region", "element", "root", "fixture")
+        );
+        let region_error = parse_and_resolve(&unused_region).unwrap_err().to_string();
+        assert!(region_error.contains("screen.id 'workspace'"));
+        assert!(region_error.contains("region id 'workspace'"));
+
+        let unused_element = format!(
+            "{}\n[[region]]\nid='unused_region'\nrole='inspector'\nimportance='tertiary'\n[[element]]\nid='workspace'\nregion='unused_region'\nkind='text'\nimportance='tertiary'\nlabel='Unused text'\n",
+            global_id_source("workspace", "region", "element", "root", "fixture")
+        );
+        let element_error = parse_and_resolve(&unused_element).unwrap_err().to_string();
+        assert!(element_error.contains("screen.id 'workspace'"));
+        assert!(element_error.contains("element id 'workspace'"));
+    }
+
+    #[test]
+    fn screen_composition_and_fixture_namespaces_remain_separate() {
+        let same_composition = global_id_source("root", "region", "element", "root", "fixture");
+        assert!(parse_and_resolve(&same_composition).is_ok());
+
+        let same_fixture = global_id_source("fixture", "region", "element", "root", "fixture");
+        assert!(parse_and_resolve(&same_fixture).is_ok());
+    }
+
+    #[test]
+    fn local_collection_and_tree_ids_remain_separate_from_screen_identity() {
+        assert!(parse_and_resolve(&collection_id_source("screen")).is_ok());
+        assert!(parse_and_resolve(&tree_id_source("screen")).is_ok());
+    }
+
+    #[test]
+    fn observable_namespace_equality_is_exact_and_authored_ids_are_preserved() {
+        let case_distinct = global_id_source("Reader", "reader", "element", "root", "fixture");
+        let blueprint = parse_and_resolve(&case_distinct).unwrap();
+        assert_eq!(blueprint.screen.id, "Reader");
+        assert_eq!(blueprint.regions[0].id, "reader");
+
+        let composed = "cafe\u{301}";
+        let unicode_distinct = global_id_source("café", composed, "element", "root", "fixture");
+        let blueprint = parse_and_resolve(&unicode_distinct).unwrap();
+        assert_eq!(blueprint.screen.id, "café");
+        assert_eq!(blueprint.regions[0].id, composed);
+        assert_ne!(blueprint.screen.id, blueprint.regions[0].id);
+    }
+
+    #[test]
+    fn accepted_canonical_and_pressure_sources_resolve_without_identity_migration() {
+        for source in [
+            project(),
+            reader(),
+            include_str!("../../../specimens/reader-workspace-m5.toml"),
+            include_str!("../../../specimens/reader-workspace-visual.toml"),
+            include_str!("../../../specimens/reader-workspace-visual-m5.toml"),
+            include_str!("../../../specimens/reader-workspace-visual-m7.toml"),
+            include_str!("../../../specimens/reader-workspace-visual-crushed.toml"),
+            include_str!("../../../specimens/dependency-workbench.toml"),
+            include_str!("../../../specimens/density-pressure-comfortable.toml"),
+            include_str!("../../../specimens/density-pressure-dense.toml"),
+            include_str!("../../../specimens/overlay-command-palette-pressure.toml"),
+            include_str!("../../../specimens/reader-overflow-pressure.toml"),
+        ] {
+            parse_and_resolve(source).unwrap();
+        }
     }
 
     #[test]

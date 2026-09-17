@@ -377,6 +377,10 @@ M34 projects exact ViewWright screen, root-reachable region, and semantic-elemen
 
 M35 adds `viewwright-compare`, a pure typed comparator for the exact shared evidence in M33 `ViewWrightExpectation` and model-only ViewWitness `Witness` 0.1: logical viewport dimensions, exact screen/region/element author-ID presence and uniqueness, region bounds when observed, and semantic-element ownership through its immediate parent's author ID. Results preserve mismatches separately from evidence gaps, validate the pinned witness before comparison, and use deterministic expected-fact traversal. The ViewWitness dependency is pinned to the audited `f1930ab2a70175c46d12dd1e61501c3b4ae09408` revision with default features disabled. Tolerance, fuzzy/fallback matching, deferred semantics, element geometry, capture orchestration, and visible UI changes remain out of scope.
 
+## M36 — observable author-ID namespace fidelity
+
+M36 rejects an exact `screen.id` collision with any authored region or element ID during source resolution, including unused declarations, so the screen/region/element identities projected through M33 and M34 remain unambiguous for M35. Authored IDs are not rewritten; composition, fixture, and local collection/tree ID namespaces remain separate. No TOML/resolved-model fields, rendering, AccessKit, expectation-format, or comparator behavior changes.
+
 ## Status
 
 - M0 — accepted
@@ -414,4 +418,5 @@ M35 adds `viewwright-compare`, a pure typed comparator for the exact shared evid
 - M32 — accepted
 - M33 — accepted
 - M34 — accepted
-- M35 — implementation complete; director audit pending
+- M35 — accepted
+- M36 — implementation complete; director audit pending
