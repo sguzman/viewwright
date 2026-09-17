@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 
-use egui::{
-    CentralPanel, Color32, Context, FontId, Frame, RichText, ScrollArea, Stroke, Ui, UiBuilder,
-};
+use egui::{CentralPanel, Color32, FontId, Frame, RichText, ScrollArea, Stroke, Ui, UiBuilder};
 use viewwright_layout::{layout, LayoutPlan, Rect as LayoutRect};
 use viewwright_model::{
     BorderPolicy, CollectionPresentation, Color, CompositionChild, Density, ElementKind,
@@ -76,37 +74,45 @@ impl DensityPolicy {
 }
 
 pub fn show(
-    ctx: &Context,
+    ui: &mut Ui,
     blueprint: &ResolvedBlueprint,
     fixture: &str,
     state: &mut RenderState,
 ) -> RenderOutput {
     let mut output = RenderOutput::default();
-    let root_fill = root_fill(ctx, blueprint);
+    let root_fill = root_fill(ui, blueprint);
     CentralPanel::default()
         .frame(Frame::new().fill(root_fill).inner_margin(0.0))
-        .show(ctx, |ui| {
+        .show(ui, |ui| {
             let anchor_id = ui.make_persistent_id(("viewwright-screen", &blueprint.screen.id));
-            with_identity_anchor(ui, anchor_id, &blueprint.screen.id, None, |ui| {
-                ui.scope(|ui| {
-                    apply_visuals(ui, blueprint);
-                    let density = DensityPolicy::for_density(blueprint.screen.density);
-                    apply_density(ui, density);
-                    let plan = layout(blueprint, ui.available_width(), ui.available_height());
-                    let origin = ui.min_rect().min;
-                    render_composition(
-                        ui,
-                        &blueprint.root,
-                        blueprint,
-                        fixture,
-                        &plan,
-                        origin,
-                        &mut output.activation,
-                        density,
-                        state,
-                    );
-                });
-            });
+            with_identity_anchor(
+                ui,
+                anchor_id,
+                &blueprint.screen.id,
+                None,
+                None,
+                |ui, screen_id| {
+                    ui.scope(|ui| {
+                        apply_visuals(ui, blueprint);
+                        let density = DensityPolicy::for_density(blueprint.screen.density);
+                        apply_density(ui, density);
+                        let plan = layout(blueprint, ui.available_width(), ui.available_height());
+                        let origin = ui.min_rect().min;
+                        render_composition(
+                            ui,
+                            &blueprint.root,
+                            blueprint,
+                            fixture,
+                            &plan,
+                            origin,
+                            &mut output.activation,
+                            density,
+                            state,
+                            screen_id,
+                        );
+                    });
+                },
+            );
         });
     output
 }
@@ -116,10 +122,18 @@ fn with_identity_anchor<R>(
     id: egui::Id,
     author_id: &str,
     bounds: Option<egui::Rect>,
-    render: impl FnOnce(&mut Ui) -> R,
+    parent: Option<egui::Id>,
+    render: impl FnOnce(&mut Ui, egui::Id) -> R,
 ) -> R {
     let ctx = ui.ctx().clone();
-    ctx.accesskit_node_builder(id, |node| {
+    let rect = ui.available_rect_before_wrap();
+    let mut builder = UiBuilder::new().id_salt(id).max_rect(rect);
+    if let Some(parent) = parent {
+        builder = builder.accessibility_parent(parent);
+    }
+    let mut anchor_ui = ui.new_child(builder);
+    let anchor_id = anchor_ui.unique_id();
+    ctx.accesskit_node_builder(anchor_id, |node| {
         node.set_role(egui::accesskit::Role::GenericContainer);
         node.set_author_id(author_id.to_owned());
         if let Some(bounds) = bounds {
@@ -131,15 +145,15 @@ fn with_identity_anchor<R>(
             });
         }
     });
-    ctx.with_accessibility_parent(id, || render(ui))
+    render(&mut anchor_ui, anchor_id)
 }
 
-fn root_fill(ctx: &Context, blueprint: &ResolvedBlueprint) -> Color32 {
+fn root_fill(ui: &Ui, blueprint: &ResolvedBlueprint) -> Color32 {
     blueprint
         .visual
         .as_ref()
         .map(|v| color32(v.palette.canvas))
-        .unwrap_or_else(|| ctx.style().visuals.panel_fill)
+        .unwrap_or_else(|| ui.style().visuals.panel_fill)
 }
 
 fn render_composition(
@@ -152,6 +166,7 @@ fn render_composition(
     activation: &mut Option<InteractionEvent>,
     density: DensityPolicy,
     state: &mut RenderState,
+    parent_anchor: egui::Id,
 ) {
     let Some(c) = b.compositions.iter().find(|c| c.id == id) else {
         return;
@@ -179,13 +194,31 @@ fn render_composition(
                 .id_salt((id, child_id))
                 .max_rect(child_egui_rect),
             |ui| match child {
-                CompositionChild::Composition(id) => {
-                    render_composition(ui, id, b, fixture, plan, origin, activation, density, state)
-                }
+                CompositionChild::Composition(id) => render_composition(
+                    ui,
+                    id,
+                    b,
+                    fixture,
+                    plan,
+                    origin,
+                    activation,
+                    density,
+                    state,
+                    parent_anchor,
+                ),
                 CompositionChild::Region(id) => {
                     if let Some(region) = b.regions.iter().find(|r| r.id == *id) {
                         render_region(
-                            ui, region, b, fixture, child_rect, origin, activation, density, state,
+                            ui,
+                            region,
+                            b,
+                            fixture,
+                            child_rect,
+                            origin,
+                            activation,
+                            density,
+                            state,
+                            parent_anchor,
                         );
                     }
                 }
@@ -204,63 +237,90 @@ fn render_region(
     activation: &mut Option<InteractionEvent>,
     density: DensityPolicy,
     state: &mut RenderState,
+    parent_anchor: egui::Id,
 ) {
     let egui_rect = to_egui_rect(rect, origin);
     let anchor_id = ui.make_persistent_id(("viewwright-region", &b.screen.id, &r.id));
-    with_identity_anchor(ui, anchor_id, &r.id, Some(egui_rect), |ui| {
-        if let Some(v) = &b.visual {
-            let fill = match r.surface {
-                SurfaceRole::Canvas => v.palette.canvas,
-                SurfaceRole::Panel => v.palette.surface,
-                SurfaceRole::Raised => v.palette.surface_raised,
-                SurfaceRole::Transparent => Color {
-                    r: 0,
-                    g: 0,
-                    b: 0,
-                    a: 0,
+    with_identity_anchor(
+        ui,
+        anchor_id,
+        &r.id,
+        Some(egui_rect),
+        Some(parent_anchor),
+        |ui, region_anchor| {
+            if let Some(v) = &b.visual {
+                let fill = match r.surface {
+                    SurfaceRole::Canvas => v.palette.canvas,
+                    SurfaceRole::Panel => v.palette.surface,
+                    SurfaceRole::Raised => v.palette.surface_raised,
+                    SurfaceRole::Transparent => Color {
+                        r: 0,
+                        g: 0,
+                        b: 0,
+                        a: 0,
+                    },
+                };
+                let separated_surface =
+                    matches!(r.surface, SurfaceRole::Panel | SurfaceRole::Raised);
+                let stroke = match v.border_policy {
+                    BorderPolicy::None => Stroke::NONE,
+                    BorderPolicy::Minimal if r.surface == SurfaceRole::Raised => {
+                        Stroke::new(1.0_f32, color32(v.palette.border))
+                    }
+                    BorderPolicy::Defined if separated_surface => {
+                        Stroke::new(2.0_f32, color32(v.palette.border))
+                    }
+                    _ => Stroke::NONE,
+                };
+                ui.painter().add(
+                    Frame::new()
+                        .fill(color32(fill))
+                        .corner_radius(v.corner_radius.min(u8::MAX as u32) as u8)
+                        .stroke(stroke)
+                        .paint(egui_rect),
+                );
+            }
+            let content = egui_rect.shrink(density.region_inset);
+            ui.scope_builder(
+                UiBuilder::new()
+                    .id_salt(("region", &r.id))
+                    .max_rect(content),
+                |ui| match r.overflow {
+                    OverflowPolicy::Clip => {
+                        ui.set_clip_rect(content);
+                        render_region_contents(
+                            ui,
+                            r,
+                            b,
+                            fixture,
+                            activation,
+                            density,
+                            state,
+                            region_anchor,
+                        );
+                    }
+                    OverflowPolicy::ScrollY => {
+                        ScrollArea::vertical()
+                            .id_salt(scroll_area_id(&b.screen.id, &r.id))
+                            .hscroll(false)
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| {
+                                render_region_contents(
+                                    ui,
+                                    r,
+                                    b,
+                                    fixture,
+                                    activation,
+                                    density,
+                                    state,
+                                    region_anchor,
+                                );
+                            });
+                    }
                 },
-            };
-            let separated_surface = matches!(r.surface, SurfaceRole::Panel | SurfaceRole::Raised);
-            let stroke = match v.border_policy {
-                BorderPolicy::None => Stroke::NONE,
-                BorderPolicy::Minimal if r.surface == SurfaceRole::Raised => {
-                    Stroke::new(1.0_f32, color32(v.palette.border))
-                }
-                BorderPolicy::Defined if separated_surface => {
-                    Stroke::new(2.0_f32, color32(v.palette.border))
-                }
-                _ => Stroke::NONE,
-            };
-            ui.painter().add(
-                Frame::new()
-                    .fill(color32(fill))
-                    .corner_radius(v.corner_radius.min(u8::MAX as u32) as u8)
-                    .stroke(stroke)
-                    .paint(egui_rect),
             );
-        }
-        let content = egui_rect.shrink(density.region_inset);
-        ui.scope_builder(
-            UiBuilder::new()
-                .id_salt(("region", &r.id))
-                .max_rect(content),
-            |ui| match r.overflow {
-                OverflowPolicy::Clip => {
-                    ui.set_clip_rect(content);
-                    render_region_contents(ui, r, b, fixture, activation, density, state);
-                }
-                OverflowPolicy::ScrollY => {
-                    ScrollArea::vertical()
-                        .id_salt(scroll_area_id(&b.screen.id, &r.id))
-                        .hscroll(false)
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| {
-                            render_region_contents(ui, r, b, fixture, activation, density, state);
-                        });
-                }
-            },
-        );
-    });
+        },
+    );
 }
 
 fn scroll_area_id(screen_id: &str, region_id: &str) -> egui::Id {
@@ -275,17 +335,18 @@ fn render_region_contents(
     activation: &mut Option<InteractionEvent>,
     density: DensityPolicy,
     state: &mut RenderState,
+    parent_anchor: egui::Id,
 ) {
     let elements: Vec<_> = b.elements.iter().filter(|e| e.region == r.id).collect();
     if is_command_region(r.role) {
         ui.horizontal_wrapped(|ui| {
             for e in elements {
-                render_element(ui, e, b, fixture, activation, density, state);
+                render_element(ui, e, b, fixture, activation, density, state, parent_anchor);
             }
         });
     } else {
         for e in elements {
-            render_element(ui, e, b, fixture, activation, density, state);
+            render_element(ui, e, b, fixture, activation, density, state, parent_anchor);
         }
     }
 }
@@ -302,85 +363,93 @@ fn render_element(
     activation: &mut Option<InteractionEvent>,
     density: DensityPolicy,
     state: &mut RenderState,
+    parent_anchor: egui::Id,
 ) {
     let anchor_id = ui.make_persistent_id(("viewwright-element", &e.id));
-    with_identity_anchor(ui, anchor_id, &e.id, None, |ui| {
-        ui.add_space(density.element_gap);
-        if separate_element_label(e.kind) {
-            ui.label(element_text(&e.label, e.importance, b.visual.as_ref()));
-        }
-        match e.kind {
-            ElementKind::Search => {
-                ui.text_edit_singleline(state.search_value_mut(&e.id));
-            }
-            ElementKind::Collection => {
-                render_collection(ui, e, b, fixture, b.visual.as_ref(), density)
-            }
-            ElementKind::Document => {
-                if let Some(ResolvedFixtureContent::Document {
-                    title, paragraphs, ..
-                }) = content_for(b, fixture, &e.id)
-                {
-                    ui.label(element_text(title, e.importance, b.visual.as_ref()).strong());
-                    for paragraph in paragraphs {
-                        ui.add_space(density.paragraph_gap);
-                        ui.label(element_text(paragraph, e.importance, b.visual.as_ref()));
-                    }
-                }
-            }
-            ElementKind::PropertySheet => {
-                if let Some(ResolvedFixtureContent::Properties { properties, .. }) =
-                    content_for(b, fixture, &e.id)
-                {
-                    for property in properties {
-                        ui.horizontal(|ui| {
-                            ui.label(RichText::new(&property.name).strong());
-                            ui.label(&property.value);
-                        });
-                    }
-                }
-            }
-            ElementKind::Command => {
-                let label = if e.importance == Importance::Primary {
-                    if let Some(v) = &b.visual {
-                        RichText::new(&e.label)
-                            .size(v.type_scale.body as f32)
-                            .color(color32(v.palette.accent))
-                            .strong()
-                    } else {
-                        element_text(&e.label, e.importance, b.visual.as_ref())
-                    }
-                } else {
-                    RichText::new(&e.label)
-                };
-                let state = b.command_state(fixture, &e.id);
-                let response = ui.add_enabled(state.enabled, egui::Button::new(label));
-                if !state.enabled {
-                    if let Some(reason) = state.reason {
-                        response.on_hover_text(reason);
-                    }
-                } else if response.clicked() {
-                    if let Some(action) = &e.action {
-                        *activation = Some(InteractionEvent {
-                            element_id: e.id.clone(),
-                            action: action.as_str().to_owned(),
-                        });
-                    }
-                }
-            }
-            ElementKind::Status => {
-                if let Some(ResolvedFixtureContent::Text { text, .. }) =
-                    content_for(b, fixture, &e.id)
-                {
-                    ui.label(text);
-                }
-            }
-            ElementKind::Tree => render_tree(ui, e, b, fixture, b.visual.as_ref()),
-            ElementKind::Text | ElementKind::Preview => {
+    with_identity_anchor(
+        ui,
+        anchor_id,
+        &e.id,
+        None,
+        Some(parent_anchor),
+        |ui, _element_anchor| {
+            ui.add_space(density.element_gap);
+            if separate_element_label(e.kind) {
                 ui.label(element_text(&e.label, e.importance, b.visual.as_ref()));
             }
-        }
-    });
+            match e.kind {
+                ElementKind::Search => {
+                    ui.text_edit_singleline(state.search_value_mut(&e.id));
+                }
+                ElementKind::Collection => {
+                    render_collection(ui, e, b, fixture, b.visual.as_ref(), density)
+                }
+                ElementKind::Document => {
+                    if let Some(ResolvedFixtureContent::Document {
+                        title, paragraphs, ..
+                    }) = content_for(b, fixture, &e.id)
+                    {
+                        ui.label(element_text(title, e.importance, b.visual.as_ref()).strong());
+                        for paragraph in paragraphs {
+                            ui.add_space(density.paragraph_gap);
+                            ui.label(element_text(paragraph, e.importance, b.visual.as_ref()));
+                        }
+                    }
+                }
+                ElementKind::PropertySheet => {
+                    if let Some(ResolvedFixtureContent::Properties { properties, .. }) =
+                        content_for(b, fixture, &e.id)
+                    {
+                        for property in properties {
+                            ui.horizontal(|ui| {
+                                ui.label(RichText::new(&property.name).strong());
+                                ui.label(&property.value);
+                            });
+                        }
+                    }
+                }
+                ElementKind::Command => {
+                    let label = if e.importance == Importance::Primary {
+                        if let Some(v) = &b.visual {
+                            RichText::new(&e.label)
+                                .size(v.type_scale.body as f32)
+                                .color(color32(v.palette.accent))
+                                .strong()
+                        } else {
+                            element_text(&e.label, e.importance, b.visual.as_ref())
+                        }
+                    } else {
+                        RichText::new(&e.label)
+                    };
+                    let state = b.command_state(fixture, &e.id);
+                    let response = ui.add_enabled(state.enabled, egui::Button::new(label));
+                    if !state.enabled {
+                        if let Some(reason) = state.reason {
+                            response.on_hover_text(reason);
+                        }
+                    } else if response.clicked() {
+                        if let Some(action) = &e.action {
+                            *activation = Some(InteractionEvent {
+                                element_id: e.id.clone(),
+                                action: action.as_str().to_owned(),
+                            });
+                        }
+                    }
+                }
+                ElementKind::Status => {
+                    if let Some(ResolvedFixtureContent::Text { text, .. }) =
+                        content_for(b, fixture, &e.id)
+                    {
+                        ui.label(text);
+                    }
+                }
+                ElementKind::Tree => render_tree(ui, e, b, fixture, b.visual.as_ref()),
+                ElementKind::Text | ElementKind::Preview => {
+                    ui.label(element_text(&e.label, e.importance, b.visual.as_ref()));
+                }
+            }
+        },
+    );
 }
 
 fn separate_element_label(kind: ElementKind) -> bool {
@@ -680,9 +749,11 @@ mod tests {
             events,
             ..Default::default()
         };
-        context.run(raw_input, |context| {
-            super::show(context, blueprint, fixture, state);
-        })
+        let mut output = context.run_ui(raw_input, |ui| {
+            super::show(ui, blueprint, fixture, state);
+        });
+        output.textures_delta.clear();
+        output
     }
 
     fn interactive_frame(
@@ -701,9 +772,10 @@ mod tests {
             ..Default::default()
         };
         let mut activation = None;
-        let output = context.run(raw_input, |context| {
-            activation = super::show(context, blueprint, fixture, state).activation;
+        let mut output = context.run_ui(raw_input, |ui| {
+            activation = super::show(ui, blueprint, fixture, state).activation;
         });
+        output.textures_delta.clear();
         (output, activation)
     }
 
@@ -839,23 +911,34 @@ mod tests {
 
     #[test]
     fn root_fill_uses_active_theme_without_visual_and_authored_canvas_with_visual() {
-        let context = Context::default();
-        let theme_fill = Color32::from_rgb(12, 34, 56);
-        context.style_mut(|style| style.visuals.panel_fill = theme_fill);
+        let context = egui::Context::default();
         let project =
             parse_and_resolve(include_str!("../../../examples/project-browser.toml")).unwrap();
-        assert_eq!(root_fill(&context, &project), theme_fill);
-
         let visual = parse_and_resolve(include_str!(
             "../../../specimens/reader-workspace-visual.toml"
         ))
         .unwrap();
-        assert_eq!(root_fill(&context, &visual), Color32::from_rgb(38, 43, 51));
-
-        let another_theme_fill = Color32::from_rgb(210, 220, 230);
-        context.style_mut(|style| style.visuals.panel_fill = another_theme_fill);
-        assert_eq!(root_fill(&context, &project), another_theme_fill);
-        assert_eq!(root_fill(&context, &visual), Color32::from_rgb(38, 43, 51));
+        for (theme, theme_fill) in [
+            (egui::Theme::Light, Color32::from_rgb(12, 34, 56)),
+            (egui::Theme::Dark, Color32::from_rgb(210, 220, 230)),
+        ] {
+            context.set_theme(theme);
+            context.style_mut_of(theme, |style| style.visuals.panel_fill = theme_fill);
+            let mut output = context.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(1440.0, 900.0),
+                    )),
+                    ..Default::default()
+                },
+                |ui| {
+                    assert_eq!(root_fill(ui, &project), theme_fill);
+                    assert_eq!(root_fill(ui, &visual), Color32::from_rgb(38, 43, 51));
+                },
+            );
+            output.textures_delta.clear();
+        }
     }
 
     #[test]
@@ -1204,6 +1287,7 @@ items = [{ id = "fixture_item", label = "Fixture item" }]
                 egui::Event::MouseWheel {
                     unit: egui::MouseWheelUnit::Point,
                     delta: egui::vec2(0.0, -480.0),
+                    phase: egui::TouchPhase::Move,
                     modifiers: egui::Modifiers::NONE,
                 },
             ],

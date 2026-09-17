@@ -381,6 +381,10 @@ M35 adds `viewwright-compare`, a pure typed comparator for the exact shared evid
 
 M36 rejects an exact `screen.id` collision with any authored region or element ID during source resolution, including unused declarations, so the screen/region/element identities projected through M33 and M34 remain unambiguous for M35. Authored IDs are not rewritten; composition, fixture, and local collection/tree ID namespaces remain separate. No TOML/resolved-model fields, rendering, AccessKit, expectation-format, or comparator behavior changes.
 
+## M37 — egui / ViewWitness compatibility pressure
+
+M37 aligns the workspace on egui/eframe 0.36.2 and proves that an actual AccessKit-enabled ViewWright Project Browser `egui::FullOutput` converts directly through the pinned ViewWitness egui adapter into a valid 0.1 Witness with exact M34 author IDs. The adapter remains test-only in `viewwright-egui`; `viewwright-compare` stays model-only, and fixture-local collection IDs remain separate. No translator, capture service, paint/raster evidence, or M35 comparison behavior is added. Representative human visual QA is pending.
+
 ## Status
 
 - M0 — accepted
@@ -419,4 +423,5 @@ M36 rejects an exact `screen.id` collision with any authored region or element I
 - M33 — accepted
 - M34 — accepted
 - M35 — accepted
-- M36 — implementation complete; director audit pending
+- M36 — accepted
+- M37 — implementation complete; Director audit pending

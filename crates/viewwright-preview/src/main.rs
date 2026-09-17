@@ -79,8 +79,8 @@ impl App {
 }
 
 impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
-        egui::TopBottomPanel::top("preview-host").show(ctx, |ui| {
+    fn ui(&mut self, ui: &mut egui::Ui, _: &mut eframe::Frame) {
+        egui::Panel::top("preview-host").show(ui, |ui| {
             ui.heading("ViewWright Preview");
             ui.label(&self.blueprints[self.screen].screen.purpose);
             if let Some(audit) = viewwright_audit::audit(&self.blueprints[self.screen]) {
@@ -100,7 +100,7 @@ impl eframe::App for App {
         });
         let mut selected_screen = None;
         let mut selected_fixture = None;
-        egui::TopBottomPanel::bottom("fixtures").show(ctx, |ui| {
+        egui::Panel::bottom("fixtures").show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
                 ui.label("Specimen:");
                 for (i, b) in self.blueprints.iter().enumerate() {
@@ -132,7 +132,7 @@ impl eframe::App for App {
             .get(self.fixture)
             .map(|f| f.id.as_str())
             .unwrap_or("default");
-        let output = viewwright_egui::show(ctx, b, fixture, &mut self.render_state);
+        let output = viewwright_egui::show(ui, b, fixture, &mut self.render_state);
         if let Some(event) = output.activation {
             self.last_action = Some(event);
         }
