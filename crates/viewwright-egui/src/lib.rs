@@ -730,6 +730,10 @@ fn apply_visuals(ui: &mut egui::Ui, b: &ResolvedBlueprint) {
     style.visuals.widgets.noninteractive.fg_stroke.color = color32(v.palette.text_muted);
     style.visuals.widgets.hovered.bg_fill = color32(v.palette.surface_raised);
     style.visuals.widgets.active.bg_fill = color32(v.palette.accent);
+    style.visuals.widgets.inactive.weak_bg_fill = color32(v.palette.surface);
+    style.visuals.widgets.hovered.weak_bg_fill = color32(v.palette.surface_raised);
+    style.visuals.widgets.active.weak_bg_fill = color32(v.palette.surface_raised);
+    style.visuals.widgets.open.weak_bg_fill = color32(v.palette.surface_raised);
     style.text_styles.insert(
         egui::TextStyle::Heading,
         FontId::proportional(v.type_scale.heading as f32),
@@ -757,6 +761,7 @@ mod tests {
         apply_visuals, command_label_color, is_command_region, root_fill, scroll_area_id,
         separate_element_label, DensityPolicy, RenderState,
     };
+    use egui::widget_style::{Classes, WidgetState};
     use egui::{accesskit, Color32, Context, FullOutput, RawInput, Stroke};
     use std::collections::BTreeSet;
     use viewwright_layout::layout;
@@ -835,6 +840,71 @@ mod tests {
         assert_eq!(
             command_label_color(Importance::Secondary, true, Some(visual)),
             None
+        );
+    }
+
+    #[test]
+    fn button_style_uses_authored_fills_for_each_interaction_state() {
+        let blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/reader-workspace-visual.toml"
+        ))
+        .unwrap();
+        let visual = blueprint.visual.as_ref().unwrap();
+        let surface = Color32::from_rgb(
+            visual.palette.surface.r,
+            visual.palette.surface.g,
+            visual.palette.surface.b,
+        );
+        let raised = Color32::from_rgb(
+            visual.palette.surface_raised.r,
+            visual.palette.surface_raised.g,
+            visual.palette.surface_raised.b,
+        );
+        let context = Context::default();
+        let mut actual = None;
+        let mut output = context.run_ui(RawInput::default(), |ui| {
+            apply_visuals(ui, &blueprint);
+            let style = ui.style();
+            actual = Some([
+                style
+                    .button_style(&Classes::default(), WidgetState::Inactive)
+                    .frame
+                    .fill,
+                style
+                    .button_style(&Classes::default(), WidgetState::Hovered)
+                    .frame
+                    .fill,
+                style
+                    .button_style(&Classes::default(), WidgetState::Active)
+                    .frame
+                    .fill,
+                style
+                    .button_style(&Classes::default(), WidgetState::Noninteractive)
+                    .frame
+                    .fill,
+            ]);
+        });
+        output.textures_delta.clear();
+        assert_eq!(actual.unwrap(), [surface, raised, raised, surface]);
+        assert_ne!(surface, Color32::from_gray(230));
+
+        // The explicit primary-command text colors remain distinct from the
+        // active button frame, which stays on the authored raised surface.
+        assert_eq!(
+            command_label_color(Importance::Primary, true, Some(visual)),
+            Some(Color32::from_rgb(
+                visual.palette.accent.r,
+                visual.palette.accent.g,
+                visual.palette.accent.b,
+            ))
+        );
+        assert_eq!(
+            command_label_color(Importance::Primary, false, Some(visual)),
+            Some(Color32::from_rgb(
+                visual.palette.text_muted.r,
+                visual.palette.text_muted.g,
+                visual.palette.text_muted.b,
+            ))
         );
     }
 
