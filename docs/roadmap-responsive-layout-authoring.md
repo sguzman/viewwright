@@ -4,6 +4,14 @@ ViewWright should eventually make resize behavior an authored part of the UI con
 
 This roadmap item is intentionally **not yet a numbered milestone**. It records product intent and design constraints so future implementation can be pressure-driven rather than improvised.
 
+## v0.2 north-star pressure
+
+Lantern Leaf's archived EPUB + TTS reader concept is now the explicit ViewWright v0.2 north star. Responsive authoring is therefore no longer merely an indefinite possibility: it is a required v0.2 capability.
+
+The north-star concept currently supplies a strong wide desktop composition and the product requirement that controls, panes, and reading surfaces behave deliberately as space shrinks or expands. The next pressure work must author concrete `wide`, `compact`, and `narrow` outcomes rather than infer them from backend compression.
+
+This does **not** make the illustrative syntax below canonical. The exact responsive grammar must still be earned from the Lantern Leaf pressure specimen and validated against the existing ViewWright identity, reachability, layout, expectation, and observation contracts.
+
 ## Motivation
 
 Current specimens are often designed at generous desktop widths. That is useful for proving semantic structure, but window resizing is a first-class UI behavior: the same screen may need different geometry, ordering, density, or presentation when the available surface becomes narrower or shorter.

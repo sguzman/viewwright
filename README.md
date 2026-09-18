@@ -47,6 +47,21 @@ ViewWright owns the UI blueprint schema, semantic UI vocabulary, composition pri
 
 It does **not** own application business logic, arbitrary 2D/3D graphics, runtime UI observation, GUI automation, or persistence for the host application.
 
+## v0.2 trajectory — Lantern Leaf north star
+
+ViewWright 0.1.0 is a completed foundation, not the end of the project. The next development trajectory is explicitly driven by Lantern Leaf's archived EPUB + TTS reader concept in `sguzman/lantern-leaf/docs/concept-art/epub-tts-reader/`.
+
+That concept is the v0.2 north star because it pressures the exact surfaces ViewWright still needs to earn: nested semantic furnishing inside major regions, richer control and document semantics, stronger visual authorship, authored responsive variants, and a richer concept-art projection/round-trip. The Lantern Leaf furnishing is evidence and design pressure, not syntax to copy wholesale.
+
+The v0.2 goal is that one canonical ViewWright design can preserve the durable intent of the Lantern Leaf concept, preview it, describe it richly enough for concept-art generation, author deterministic wide/compact/narrow behavior, and keep those decisions inspectable and verifiable.
+
+See:
+
+- [`docs/v0.2/lantern-leaf-north-star.md`](docs/v0.2/lantern-leaf-north-star.md)
+- [`docs/v0.2/lantern-leaf-capability-matrix.md`](docs/v0.2/lantern-leaf-capability-matrix.md)
+- [`docs/v0.2/trajectory.md`](docs/v0.2/trajectory.md)
+- [`docs/v0.2/definition-of-done.md`](docs/v0.2/definition-of-done.md)
+
 ## Implemented foundation
 
 M0 established the first executable vertical slice:
