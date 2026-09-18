@@ -52,6 +52,13 @@ This is the likely first real schema expansion after M40.
 
 ## Stage 2 — semantic control families and representative state
 
+### Promotion: M42
+
+M41 removed the structural lie, leaving the next pressure cleanly exposed: inspector settings remain display-only property rows, while Voice/Speed remain command-shaped even though they represent values. Lantern Leaf's furnishing repeatedly uses finite choices, booleans, and bounded scalar values. M42 is therefore promoted narrowly around those three semantic families plus typed representative fixture state and typed host change reports.
+
+Progress/seek, color choice, tabs/content switching, media summaries, rich document state, richer visual authorship, and responsive variants remain later pressure.
+
+
 Pressure:
 
 - select/choice;

@@ -416,6 +416,10 @@ The companion [M40 baseline findings](docs/v0.2/m40-lantern-leaf-baseline-findin
 
 M41 is the first ViewWright v0.2 language expansion earned by the Lantern Leaf baseline. It introduces a region-local furnishing tree so local UI structure no longer has to be flattened into element order or inflated into fake major regions. Furnishings author row/column structure, spacing, fixed-plus-grow local slots, padding, and vertical overflow while existing semantic elements remain owned by their major region. Furnishings are structural like compositions: M41 does not add new control kinds or change M33/M34/M35 observation semantics.
 
+## M42 — semantic value controls and representative state
+
+M42 is the second ViewWright v0.2 language expansion earned by the furnished Lantern Leaf specimen. It replaces display-only/fake-command settings with three semantic value families above toolkit identity: finite `choice`, boolean `boolean`, and bounded numeric `scalar`. Typed fixture values seed isolated previews, egui provides backend-appropriate controls, and changed values are reported to the host as typed interaction evidence without making ViewWright the application state machine. Because the normative element-kind vocabulary expands, the canonical ViewWright expectation format advances from 0.1 to 0.2; M35 comparison semantics and ViewWitness remain unchanged.
+
 ## Status
 
 - M0 — accepted
@@ -460,3 +464,4 @@ M41 is the first ViewWright v0.2 language expansion earned by the Lantern Leaf b
 - M39 — accepted
 - M40 — accepted
 - M41 — accepted
+- M42 — authority defined; implementation pending
