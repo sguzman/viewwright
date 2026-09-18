@@ -24,6 +24,13 @@ Expected result: recognizable architecture, visibly under-furnished interior.
 
 ## Stage 1 — nested semantic furnishing
 
+### Promotion: M41
+
+M40 human QA earned this stage. The fake reader-toolbar region, squeezed chapter status, flattened TTS command surface, and vertically stacked `Voice` label are concrete evidence that ViewWright needs region-local structure and allocation below the major-region layer.
+
+M41 is therefore promoted narrowly as **nested furnishing layout**. It adds structural furnishing trees and local slot allocation using existing element kinds. Semantic control families remain Stage 2 work.
+
+
 Primary pressure:
 
 - toolbar → command clusters;

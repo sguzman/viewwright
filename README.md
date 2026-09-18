@@ -412,6 +412,10 @@ M40 adds `specimens/lantern-leaf-reader-baseline.toml`, an honest Lantern Leaf E
 
 The companion [M40 baseline findings](docs/v0.2/m40-lantern-leaf-baseline-findings.md) records flattened furnishing, unsupported controls and document/highlight semantics, missing visual assets and typography distinction, concept-projection loss, and absent compact/narrow behavior. Focused tests traverse semantic, ASCII, concept, layout, preview, expectation, real AccessKit/ViewWitness, and M35 exact comparison. No schema, resolved-model, renderer-semantic, comparator, or ViewWitness changes were made. The baseline's M35 comparison is exact; human/Director visual QA remains pending, and no visual parity is claimed.
 
+## M41 — nested furnishing layout
+
+M41 is the first ViewWright v0.2 language expansion earned by the Lantern Leaf baseline. It introduces a region-local furnishing tree so local UI structure no longer has to be flattened into element order or inflated into fake major regions. Furnishings author row/column structure, spacing, fixed-plus-grow local slots, padding, and vertical overflow while existing semantic elements remain owned by their major region. Furnishings are structural like compositions: M41 does not add new control kinds or change M33/M34/M35 observation semantics.
+
 ## Status
 
 - M0 — accepted
@@ -455,3 +459,4 @@ The companion [M40 baseline findings](docs/v0.2/m40-lantern-leaf-baseline-findin
 - M38 — accepted
 - M39 — accepted
 - M40 — accepted
+- M41 — authority defined; implementation pending
