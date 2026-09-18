@@ -79,6 +79,13 @@ Target:
 
 ## Stage 3 — reader/document presentation
 
+### Promotion: M43
+
+M42 made the surrounding settings and TTS values semantically truthful. That exposes the next asymmetry: the dominant reader is still one `document` element backed by a title plus anonymous paragraph strings. Lantern Leaf's north star explicitly distinguishes eyebrow, heading, paragraph, quote, divider, stable local block identity, and a current spoken range projected into the text. M43 is therefore promoted narrowly around rich document blocks and one representative spoken range.
+
+M43 does **not** yet bind reader settings to actual typography/layout, add font families, add authored highlight palette roles, implement TTS execution/auto-follow, or promote responsive work. Those remain later pressure after the richer reader exists.
+
+
 Pressure:
 
 - chapter eyebrow;

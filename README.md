@@ -420,6 +420,10 @@ M41 is the first ViewWright v0.2 language expansion earned by the Lantern Leaf b
 
 M42 is the second ViewWright v0.2 language expansion earned by the furnished Lantern Leaf specimen. It replaces display-only/fake-command settings with three semantic value families above toolkit identity: finite `choice`, boolean `boolean`, and bounded numeric `scalar`. Typed fixture values seed isolated previews, egui provides backend-appropriate controls, and changed values are reported to the host as typed interaction evidence without making ViewWright the application state machine. Because the normative element-kind vocabulary expands, the canonical ViewWright expectation format advances from 0.1 to 0.2; M35 comparison semantics and ViewWitness remain unchanged.
 
+## M43 — rich document blocks and spoken-range projection
+
+M43 turns the Lantern Leaf reader itself into a truthful semantic pressure surface. Existing simple documents remain valid, while rich document fixture content may author locally identified eyebrow, heading, paragraph, quote, and divider blocks plus one representative spoken text range. Document block IDs are stable within their document fixture content but remain fixture-local rather than new M34 author IDs. The egui projection renders the block hierarchy and a restrained derived spoken-range highlight; fixture-aware concept/ASCII output preserves the same structure. Expectation format 0.2, M35 comparison semantics, ViewWitness, application TTS execution, literary font binding, broader visual roles, and responsive authoring remain unchanged.
+
 ## Status
 
 - M0 — accepted
@@ -465,3 +469,4 @@ M42 is the second ViewWright v0.2 language expansion earned by the furnished Lan
 - M40 — accepted
 - M41 — accepted
 - M42 — accepted
+- M43 — authority defined; implementation pending
