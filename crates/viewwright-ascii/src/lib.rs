@@ -1,11 +1,48 @@
 use viewwright_model::{
     CompositionChild, CompositionKind, FurnishingChild, OverflowPolicy, ResolvedBlueprint,
+    ResolvedDocument, ResolvedDocumentBlock, ResolvedFixtureContent,
 };
 
 pub fn render(b: &ResolvedBlueprint) -> String {
     let mut out = format!("ViewWright: {} — {}\n", b.screen.id, b.screen.purpose);
     walk(&b.root, b, &mut out, 0);
     out
+}
+
+pub fn render_fixture(b: &ResolvedBlueprint, fixture_id: &str) -> Option<String> {
+    let fixture = b.fixtures.iter().find(|fixture| fixture.id == fixture_id)?;
+    let mut out = render(b);
+    for content in &fixture.content {
+        let ResolvedFixtureContent::Document { element, document } = content else {
+            continue;
+        };
+        let ResolvedDocument::Rich { blocks, spoken } = document else {
+            continue;
+        };
+        out.push_str(&format!("fixture {fixture_id} document {element}\n"));
+        for block in blocks {
+            match block {
+                ResolvedDocumentBlock::Heading { id, level, text } => {
+                    out.push_str(&format!("  {id} heading level {level}: {text}\n"))
+                }
+                ResolvedDocumentBlock::Eyebrow { id, text }
+                | ResolvedDocumentBlock::Paragraph { id, text }
+                | ResolvedDocumentBlock::Quote { id, text } => {
+                    out.push_str(&format!("  {id} {}: {text}\n", block.kind().as_str()))
+                }
+                ResolvedDocumentBlock::Divider { id } => {
+                    out.push_str(&format!("  {id} divider\n"));
+                }
+            }
+        }
+        if let Some(spoken) = spoken {
+            out.push_str(&format!(
+                "  spoken block {} range {}..{}\n",
+                spoken.block, spoken.start, spoken.end
+            ));
+        }
+    }
+    Some(out)
 }
 
 fn walk(id: &str, b: &ResolvedBlueprint, out: &mut String, depth: usize) {
@@ -130,7 +167,7 @@ fn element_semantics(element: &viewwright_model::ResolvedElement) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::render;
+    use super::{render, render_fixture};
     use viewwright_model::parse_and_resolve;
 
     #[test]
@@ -186,5 +223,26 @@ mod tests {
         assert!(output.contains("Dyslexia-friendly font [Boolean]"));
         assert!(!output.contains("Slider"));
         assert!(!output.contains("ComboBox"));
+    }
+
+    #[test]
+    fn m43_fixture_ascii_exposes_rich_document_blocks_and_spoken_range() {
+        let blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/lantern-leaf-reader-document.toml"
+        ))
+        .unwrap();
+        let output = render_fixture(&blueprint, "reading").unwrap();
+        for expected in [
+            "chapter_3 eyebrow",
+            "chapter_title heading level 1",
+            "opening_divider divider",
+            "p1 paragraph",
+            "p2 paragraph",
+            "p3 paragraph",
+            "closing_quote quote",
+            "spoken block p2 range 174..212",
+        ] {
+            assert!(output.contains(expected), "missing {expected:?}:\n{output}");
+        }
     }
 }

@@ -1,0 +1,602 @@
+[screen]
+id = "lantern_leaf_reader_document"
+purpose = "Read and listen to a richly structured chapter with representative speech state"
+density = "comfortable"
+root = "workspace"
+
+[design]
+character = ["dark", "restrained", "warm", "reading_first", "quiet"]
+dominant = "reader"
+avoid = ["toolbar_dominance", "uniform_visual_weight", "nested_card_soup", "control_clutter", "crushed_darkness"]
+
+[tokens.spacing]
+sm = 8
+md = 12
+lg = 20
+
+[tokens.corners]
+medium = 8
+
+[tokens.color]
+app_background = "#09100F"
+reading_surface = "#101716"
+raised_surface = "#141D1B"
+warm_text = "#F4F4EF"
+muted_text = "#909A94"
+jade = "#62E89C"
+quiet_border = "#26322E"
+
+[tokens.type]
+display = 30
+heading = 20
+body = 14
+caption = 11
+
+[visual]
+canvas = "app_background"
+surface = "reading_surface"
+surface_raised = "raised_surface"
+text = "warm_text"
+text_muted = "muted_text"
+accent = "jade"
+border = "quiet_border"
+corner = "medium"
+border_policy = "minimal"
+
+[[region]]
+id = "library"
+role = "navigation"
+importance = "secondary"
+surface = "panel"
+width = "260px"
+overflow = "scroll_y"
+
+[[region]]
+id = "reader"
+role = "primary_content"
+importance = "primary"
+surface = "panel"
+grow = 1
+furnishing = "reader_furnishing"
+
+[[region]]
+id = "inspector"
+role = "inspector"
+importance = "tertiary"
+surface = "raised"
+width = "330px"
+furnishing = "inspector_furnishing"
+
+[[region]]
+id = "tts_player"
+role = "commands"
+importance = "secondary"
+surface = "raised"
+height = "140px"
+furnishing = "tts_furnishing"
+
+[[composition]]
+id = "workspace"
+kind = "column"
+axis = "vertical"
+children = ["reading_body", "tts_player"]
+gap = "sm"
+padding = "sm"
+
+[[composition]]
+id = "reading_body"
+kind = "split"
+axis = "horizontal"
+children = ["library", "reader", "inspector"]
+gap = "md"
+grow = 1
+
+[[element]]
+id = "brand"
+region = "library"
+kind = "text"
+importance = "primary"
+label = "Leafline"
+
+[[element]]
+id = "brand_tagline"
+region = "library"
+kind = "status"
+importance = "tertiary"
+label = "Brand tagline"
+
+[[element]]
+id = "library_navigation"
+region = "library"
+kind = "collection"
+importance = "secondary"
+label = "Library navigation"
+presentation = "list"
+
+[[element]]
+id = "current_book"
+region = "library"
+kind = "property_sheet"
+importance = "secondary"
+label = "Current book"
+
+[[element]]
+id = "table_of_contents"
+region = "library"
+kind = "tree"
+importance = "secondary"
+label = "Table of contents"
+
+[[element]]
+id = "book_search"
+region = "reader"
+kind = "search"
+importance = "secondary"
+label = "Search in book"
+
+[[element]]
+id = "previous_chapter"
+region = "reader"
+kind = "command"
+importance = "tertiary"
+label = "Previous chapter"
+action = "chapter.previous"
+
+[[element]]
+id = "next_chapter"
+region = "reader"
+kind = "command"
+importance = "tertiary"
+label = "Next chapter"
+action = "chapter.next"
+
+[[element]]
+id = "chapter_status"
+region = "reader"
+kind = "status"
+importance = "tertiary"
+label = "Chapter position"
+
+[[element]]
+id = "bookmark_chapter"
+region = "reader"
+kind = "command"
+importance = "tertiary"
+label = "Bookmark chapter"
+action = "reader.bookmark"
+
+[[element]]
+id = "chapter_document"
+region = "reader"
+kind = "document"
+importance = "primary"
+label = "Current chapter"
+
+[[element]]
+id = "font_family"
+region = "inspector"
+kind = "choice"
+importance = "secondary"
+label = "Font Family"
+action = "reader.font_family.set"
+choice = { presentation = "select", options = [{ id = "literata", label = "Literata" }, { id = "source_serif", label = "Source Serif" }, { id = "georgia", label = "Georgia" }] }
+
+[[element]]
+id = "font_size"
+region = "inspector"
+kind = "scalar"
+importance = "secondary"
+label = "Font Size"
+action = "reader.font_size.set"
+scalar = { min = 12.0, max = 32.0, step = 1.0, unit = "px" }
+
+[[element]]
+id = "line_height"
+region = "inspector"
+kind = "scalar"
+importance = "secondary"
+label = "Line Height"
+action = "reader.line_height.set"
+scalar = { min = 1.2, max = 2.4, step = 0.1 }
+
+[[element]]
+id = "paragraph_spacing"
+region = "inspector"
+kind = "scalar"
+importance = "secondary"
+label = "Paragraph Spacing"
+action = "reader.paragraph_spacing.set"
+scalar = { min = 0.5, max = 2.5, step = 0.1 }
+
+[[element]]
+id = "page_margin"
+region = "inspector"
+kind = "scalar"
+importance = "secondary"
+label = "Page Margin"
+action = "reader.page_margin.set"
+scalar = { min = 24.0, max = 120.0, step = 4.0, unit = "px" }
+
+[[element]]
+id = "column_width"
+region = "inspector"
+kind = "scalar"
+importance = "secondary"
+label = "Column Width"
+action = "reader.column_width.set"
+scalar = { min = 420.0, max = 900.0, step = 10.0, unit = "px" }
+
+[[element]]
+id = "text_alignment"
+region = "inspector"
+kind = "choice"
+importance = "secondary"
+label = "Text Alignment"
+action = "reader.text_alignment.set"
+choice = { presentation = "segmented", options = [{ id = "left", label = "Left" }, { id = "justified", label = "Justified" }, { id = "centered", label = "Centered" }] }
+
+[[element]]
+id = "dyslexia_font"
+region = "inspector"
+kind = "boolean"
+importance = "secondary"
+label = "Dyslexia-friendly font"
+action = "reader.dyslexia_font.set"
+
+[[element]]
+id = "reading_flow"
+region = "inspector"
+kind = "choice"
+importance = "secondary"
+label = "Reading Flow"
+action = "reader.reading_flow.set"
+choice = { presentation = "segmented", options = [{ id = "continuous", label = "Continuous" }, { id = "paginated", label = "Paginated" }] }
+
+[[element]]
+id = "show_highlights"
+region = "inspector"
+kind = "boolean"
+importance = "secondary"
+label = "Show Highlights"
+action = "reader.show_highlights.set"
+
+[[element]]
+id = "show_notes"
+region = "inspector"
+kind = "boolean"
+importance = "secondary"
+label = "Show Notes"
+action = "reader.show_notes.set"
+
+[[element]]
+id = "show_bookmarks"
+region = "inspector"
+kind = "boolean"
+importance = "secondary"
+label = "Show Bookmarks"
+action = "reader.show_bookmarks.set"
+
+[[element]]
+id = "now_book"
+region = "tts_player"
+kind = "status"
+importance = "secondary"
+label = "Current book"
+
+[[element]]
+id = "now_chapter"
+region = "tts_player"
+kind = "status"
+importance = "tertiary"
+label = "Current chapter"
+
+[[element]]
+id = "playback_position"
+region = "tts_player"
+kind = "status"
+importance = "tertiary"
+label = "Playback position"
+
+[[element]]
+id = "skip_back"
+region = "tts_player"
+kind = "command"
+importance = "secondary"
+label = "Back 15 seconds"
+action = "reader.skip_back"
+
+[[element]]
+id = "play_pause"
+region = "tts_player"
+kind = "command"
+importance = "primary"
+label = "Play / pause"
+action = "reader.play_pause"
+
+[[element]]
+id = "skip_forward"
+region = "tts_player"
+kind = "command"
+importance = "secondary"
+label = "Forward 15 seconds"
+action = "reader.skip_forward"
+
+[[element]]
+id = "choose_voice"
+region = "tts_player"
+kind = "choice"
+importance = "secondary"
+label = "Voice"
+action = "reader.choose_voice"
+choice = { presentation = "select", options = [{ id = "aria", label = "Aria" }, { id = "willow", label = "Willow" }, { id = "rowan", label = "Rowan" }] }
+
+[[element]]
+id = "choose_speed"
+region = "tts_player"
+kind = "choice"
+importance = "secondary"
+label = "Speed"
+action = "reader.choose_speed"
+choice = { presentation = "select", options = [{ id = "0.9x", label = "0.9×" }, { id = "1.0x", label = "1.0×" }, { id = "1.2x", label = "1.2×" }, { id = "1.5x", label = "1.5×" }] }
+
+[[element]]
+id = "volume"
+region = "tts_player"
+kind = "scalar"
+importance = "secondary"
+label = "Volume"
+action = "reader.volume.set"
+scalar = { min = 0.0, max = 100.0, step = 1.0, unit = "%" }
+
+[[furnishing]]
+id = "reader_furnishing"
+kind = "column"
+children = ["toolbar_slot", "document_slot"]
+gap = "sm"
+padding = "sm"
+
+[[furnishing]]
+id = "toolbar_slot"
+kind = "row"
+children = ["search_slot", "toolbar_actions"]
+height = "52px"
+gap = "md"
+
+[[furnishing]]
+id = "search_slot"
+kind = "row"
+children = ["book_search"]
+grow = 1
+
+[[furnishing]]
+id = "toolbar_actions"
+kind = "row"
+children = ["previous_chapter", "next_chapter", "chapter_status", "bookmark_chapter"]
+width = "560px"
+gap = "sm"
+
+[[furnishing]]
+id = "document_slot"
+kind = "column"
+children = ["chapter_document"]
+grow = 1
+overflow = "scroll_y"
+
+[[furnishing]]
+id = "inspector_furnishing"
+kind = "column"
+children = ["type_controls", "layout_controls", "reading_controls", "annotation_controls"]
+gap = "sm"
+padding = "sm"
+overflow = "scroll_y"
+
+[[furnishing]]
+id = "type_controls"
+kind = "column"
+children = ["font_family", "font_size", "line_height", "paragraph_spacing"]
+height = "260px"
+gap = "sm"
+
+[[furnishing]]
+id = "layout_controls"
+kind = "column"
+children = ["page_margin", "column_width", "text_alignment"]
+height = "200px"
+gap = "sm"
+
+[[furnishing]]
+id = "reading_controls"
+kind = "column"
+children = ["dyslexia_font", "reading_flow"]
+height = "100px"
+gap = "sm"
+
+[[furnishing]]
+id = "annotation_controls"
+kind = "column"
+children = ["show_highlights", "show_notes", "show_bookmarks"]
+height = "120px"
+gap = "sm"
+
+[[furnishing]]
+id = "tts_furnishing"
+kind = "row"
+children = ["now_reading_slot", "transport_slot", "choices_slot"]
+gap = "md"
+padding = "sm"
+
+[[furnishing]]
+id = "now_reading_slot"
+kind = "column"
+children = ["now_book", "now_chapter"]
+width = "300px"
+gap = "sm"
+
+[[furnishing]]
+id = "transport_slot"
+kind = "column"
+children = ["playback_status_slot", "transport_controls_slot"]
+grow = 1
+gap = "sm"
+
+[[furnishing]]
+id = "playback_status_slot"
+kind = "row"
+children = ["playback_position"]
+height = "24px"
+
+[[furnishing]]
+id = "transport_controls_slot"
+kind = "row"
+children = ["skip_back", "play_pause", "skip_forward"]
+grow = 1
+gap = "sm"
+
+[[furnishing]]
+id = "choices_slot"
+kind = "column"
+children = ["choose_voice", "choose_speed", "volume"]
+width = "320px"
+gap = "sm"
+
+[[fixture]]
+id = "reading"
+state = "chapter_three_preview"
+
+[[fixture.content]]
+element = "brand_tagline"
+text = "Great stories live longer"
+
+[[fixture.content]]
+element = "library_navigation"
+items = [
+  { id = "library", label = "Library" },
+  { id = "search", label = "Search" },
+  { id = "highlights", label = "Highlights" },
+  { id = "bookmarks", label = "Bookmarks" },
+  { id = "notes", label = "Notes" },
+]
+selected = "library"
+
+[[fixture.content]]
+element = "current_book"
+properties = [
+  { name = "Title", value = "The Wandering Horizon" },
+  { name = "Author", value = "Elise Carter" },
+  { name = "Chapter", value = "3 of 14" },
+  { name = "Progress", value = "28%" },
+]
+
+[[fixture.content]]
+element = "table_of_contents"
+nodes = [
+  { id = "chapter_1", label = "1 · A Different Dawn" },
+  { id = "chapter_2", label = "2 · Maps and Motives" },
+  { id = "chapter_3", label = "3 · The Mountain Path" },
+  { id = "chapter_4", label = "4 · Valleys of Quiet" },
+  { id = "chapter_5", label = "5 · The Longer Road" },
+  { id = "chapter_6", label = "6 · Letters from Home" },
+  { id = "chapter_7", label = "7 · A Wilder Sky" },
+  { id = "chapter_8", label = "8 · Turning Points" },
+]
+selected = "chapter_3"
+
+[[fixture.content]]
+element = "chapter_status"
+text = "3 / 14 · 28%"
+
+[[fixture.content]]
+element = "chapter_document"
+document = { blocks = [
+  { id = "chapter_3", kind = "eyebrow", text = "CHAPTER 3" },
+  { id = "chapter_title", kind = "heading", level = 1, text = "The Mountain Path" },
+  { id = "opening_divider", kind = "divider" },
+  { id = "p1", kind = "paragraph", text = "The trail began before dawn, a thin ribbon of earth threading through pine and stone. The air was cold enough to make our breath visible, and everything felt sharper — the crunch of gravel, the distant rush of water, the steady rhythm of our own footsteps." },
+  { id = "p2", kind = "paragraph", text = "As the first light touched the ridge, the valley below unfolded like a map, rivers of mist curling between the trees. I stopped for a moment, taking it all in, reminded that some of the most important discoveries arrive not with noise, but with stillness." },
+  { id = "p3", kind = "paragraph", text = "We walked for hours, following the mountain's gentle insistence upward. Each turn revealed something new — a wider view, a quieter mind, a little more space between who I had been and who I was becoming. The journey was not just about reaching the top, but about learning to notice the beauty in the climb." },
+  { id = "closing_quote", kind = "quote", text = "Not all those who wander are lost, but many find exactly what they need." },
+], spoken = { block = "p2", start = 174, end = 212 } }
+
+[[fixture.content]]
+element = "font_family"
+choice = { selected = "literata" }
+
+[[fixture.content]]
+element = "font_size"
+scalar = { value = 18.0 }
+
+[[fixture.content]]
+element = "line_height"
+scalar = { value = 1.7 }
+
+[[fixture.content]]
+element = "paragraph_spacing"
+scalar = { value = 1.2 }
+
+[[fixture.content]]
+element = "page_margin"
+scalar = { value = 72.0 }
+
+[[fixture.content]]
+element = "column_width"
+scalar = { value = 690.0 }
+
+[[fixture.content]]
+element = "text_alignment"
+choice = { selected = "left" }
+
+[[fixture.content]]
+element = "dyslexia_font"
+boolean = { value = false }
+
+[[fixture.content]]
+element = "reading_flow"
+choice = { selected = "continuous" }
+
+[[fixture.content]]
+element = "show_highlights"
+boolean = { value = true }
+
+[[fixture.content]]
+element = "show_notes"
+boolean = { value = true }
+
+[[fixture.content]]
+element = "show_bookmarks"
+boolean = { value = true }
+
+[[fixture.content]]
+element = "now_book"
+text = "The Wandering Horizon"
+
+[[fixture.content]]
+element = "now_chapter"
+text = "Chapter 3 · The Mountain Path"
+
+[[fixture.content]]
+element = "playback_position"
+text = "6:24 elapsed · 12:36 remaining · chapter progress 28%"
+
+[[fixture.content]]
+element = "skip_back"
+command = { enabled = true }
+
+[[fixture.content]]
+element = "play_pause"
+command = { enabled = true }
+
+[[fixture.content]]
+element = "skip_forward"
+command = { enabled = true }
+
+[[fixture.content]]
+element = "choose_voice"
+choice = { selected = "aria" }
+
+[[fixture.content]]
+element = "choose_speed"
+choice = { selected = "1.2x" }
+
+[[fixture.content]]
+element = "volume"
+scalar = { value = 82.0 }

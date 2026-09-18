@@ -5,8 +5,8 @@ use viewwright_layout::{layout, LayoutPlan, Rect as LayoutRect};
 use viewwright_model::{
     BorderPolicy, ChoicePresentation, CollectionPresentation, Color, CompositionChild, Density,
     ElementKind, FurnishingChild, FurnishingKind, Importance, OverflowPolicy, RegionRole,
-    ResolvedBlueprint, ResolvedFixtureContent, ResolvedFurnishing, ResolvedRegion, ResolvedVisual,
-    SurfaceRole,
+    ResolvedBlueprint, ResolvedDocument, ResolvedDocumentBlock, ResolvedFixtureContent,
+    ResolvedFurnishing, ResolvedRegion, ResolvedVisual, SurfaceRole,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -623,6 +623,153 @@ fn is_command_region(role: RegionRole) -> bool {
     role == RegionRole::Commands
 }
 
+fn should_render_separate_label(kind: ElementKind, rich_document: bool) -> bool {
+    separate_element_label(kind) && !rich_document
+}
+
+fn render_document(
+    ui: &mut egui::Ui,
+    document: &ResolvedDocument,
+    blueprint: &ResolvedBlueprint,
+    importance: Importance,
+    density: DensityPolicy,
+) {
+    match document {
+        ResolvedDocument::Legacy { title, paragraphs } => {
+            ui.label(element_text(title, importance, blueprint.visual.as_ref()).strong());
+            for paragraph in paragraphs {
+                ui.add_space(density.paragraph_gap);
+                ui.label(element_text(
+                    paragraph,
+                    importance,
+                    blueprint.visual.as_ref(),
+                ));
+            }
+        }
+        ResolvedDocument::Rich { blocks, spoken } => {
+            for block in blocks {
+                match block {
+                    ResolvedDocumentBlock::Eyebrow { text, .. } => {
+                        ui.label(secondary_text(text, blueprint.visual.as_ref()).small());
+                    }
+                    ResolvedDocumentBlock::Heading { text, level, .. } => {
+                        let size = blueprint.visual.as_ref().map(|v| {
+                            (v.type_scale.heading as f32 - (*level as f32 - 1.0) * 1.5).max(12.0)
+                        });
+                        let mut rich = RichText::new(text).strong();
+                        if let Some(size) = size {
+                            rich = rich.size(size);
+                        }
+                        ui.label(rich);
+                    }
+                    ResolvedDocumentBlock::Paragraph { id, text }
+                    | ResolvedDocumentBlock::Quote { id, text } => {
+                        ui.add_space(density.paragraph_gap);
+                        if matches!(block, ResolvedDocumentBlock::Quote { .. }) {
+                            ui.indent(("document-quote", id), |ui| {
+                                render_rich_text(ui, text, id, spoken.as_ref(), blueprint)
+                            });
+                        } else {
+                            render_rich_text(ui, text, id, spoken.as_ref(), blueprint);
+                        }
+                    }
+                    ResolvedDocumentBlock::Divider { .. } => {
+                        ui.add_space(density.paragraph_gap);
+                        ui.separator();
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn secondary_text(text: &str, visual: Option<&ResolvedVisual>) -> RichText {
+    let rich = RichText::new(text);
+    visual
+        .map(|v| rich.clone().color(color32(v.palette.text_muted)))
+        .unwrap_or(rich)
+}
+
+fn render_rich_text(
+    ui: &mut egui::Ui,
+    text: &str,
+    block_id: &str,
+    spoken: Option<&viewwright_model::ResolvedSpokenRange>,
+    blueprint: &ResolvedBlueprint,
+) {
+    let Some(range) = spoken.filter(|range| range.block == block_id) else {
+        ui.label(element_text(
+            text,
+            Importance::Primary,
+            blueprint.visual.as_ref(),
+        ));
+        return;
+    };
+    let Some((prefix, highlighted, suffix)) = split_spoken_text(text, range.start, range.end)
+    else {
+        ui.label(element_text(
+            text,
+            Importance::Primary,
+            blueprint.visual.as_ref(),
+        ));
+        return;
+    };
+    let mut job = egui::text::LayoutJob::default();
+    let normal = egui::TextFormat {
+        font_id: FontId::proportional(
+            blueprint
+                .visual
+                .as_ref()
+                .map(|v| v.type_scale.body as f32)
+                .unwrap_or(14.0),
+        ),
+        color: blueprint
+            .visual
+            .as_ref()
+            .map(|v| color32(v.palette.text))
+            .unwrap_or(Color32::PLACEHOLDER),
+        ..Default::default()
+    };
+    let mut highlighted_format = normal.clone();
+    if let Some(visual) = blueprint.visual {
+        highlighted_format.background = highlight_fill(visual);
+        highlighted_format.color = color32(visual.palette.text);
+    }
+    job.append(&prefix, 0.0, normal.clone());
+    job.append(&highlighted, 0.0, highlighted_format);
+    job.append(&suffix, 0.0, normal);
+    ui.label(job);
+}
+
+fn split_spoken_text(text: &str, start: usize, end: usize) -> Option<(String, String, String)> {
+    if start >= end {
+        return None;
+    }
+    let chars: Vec<char> = text.chars().collect();
+    if end > chars.len() {
+        return None;
+    }
+    Some((
+        chars[..start].iter().collect(),
+        chars[start..end].iter().collect(),
+        chars[end..].iter().collect(),
+    ))
+}
+
+fn highlight_fill(visual: ResolvedVisual) -> Color32 {
+    const ACCENT_MIX: f32 = 0.14;
+    let base = visual.palette.surface;
+    let accent = visual.palette.accent;
+    let mix = |base: u8, accent: u8| {
+        (base as f32 + (accent as f32 - base as f32) * ACCENT_MIX).round() as u8
+    };
+    Color32::from_rgb(
+        mix(base.r, accent.r),
+        mix(base.g, accent.g),
+        mix(base.b, accent.b),
+    )
+}
+
 // Preserve the explicit traversal context rather than refactoring renderer behavior in M39.
 #[allow(clippy::too_many_arguments)]
 fn render_element(
@@ -646,7 +793,17 @@ fn render_element(
             if leading_gap > 0.0 {
                 ui.add_space(leading_gap);
             }
-            if separate_element_label(e.kind) {
+            let rich_document = matches!(
+                (e.kind, content_for(b, fixture, &e.id)),
+                (
+                    ElementKind::Document,
+                    Some(ResolvedFixtureContent::Document {
+                        document: ResolvedDocument::Rich { .. },
+                        ..
+                    })
+                )
+            );
+            if should_render_separate_label(e.kind, rich_document) {
                 ui.label(element_text(&e.label, e.importance, b.visual.as_ref()));
             }
             match e.kind {
@@ -657,15 +814,10 @@ fn render_element(
                     render_collection(ui, e, b, fixture, b.visual.as_ref(), density)
                 }
                 ElementKind::Document => {
-                    if let Some(ResolvedFixtureContent::Document {
-                        title, paragraphs, ..
-                    }) = content_for(b, fixture, &e.id)
+                    if let Some(ResolvedFixtureContent::Document { document, .. }) =
+                        content_for(b, fixture, &e.id)
                     {
-                        ui.label(element_text(title, e.importance, b.visual.as_ref()).strong());
-                        for paragraph in paragraphs {
-                            ui.add_space(density.paragraph_gap);
-                            ui.label(element_text(paragraph, e.importance, b.visual.as_ref()));
-                        }
+                        render_document(ui, document, b, e.importance, density);
                     }
                 }
                 ElementKind::PropertySheet => {
@@ -1429,6 +1581,71 @@ mod tests {
         .sqrt()
     }
 
+    #[test]
+    fn m43_spoken_range_split_uses_unicode_scalar_offsets_exactly() {
+        for (text, start, end) in [
+            ("abcdef", 0, 2),
+            ("aé😊bc", 1, 4),
+            ("abcdef", 2, 4),
+            ("abcdef", 4, 6),
+        ] {
+            let (prefix, highlighted, suffix) =
+                super::split_spoken_text(text, start, end).expect("valid scalar range");
+            assert_eq!(format!("{prefix}{highlighted}{suffix}"), text);
+            assert_eq!(highlighted.chars().count(), end - start);
+        }
+    }
+
+    #[test]
+    fn m43_highlight_is_derived_restrained_and_readable() {
+        let blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/lantern-leaf-reader-document.toml"
+        ))
+        .unwrap();
+        let visual = blueprint.visual.unwrap();
+        let highlight = super::highlight_fill(visual);
+        let surface = super::color32(visual.palette.surface);
+        let accent = super::color32(visual.palette.accent);
+        assert_ne!(highlight, surface);
+        assert_ne!(highlight, accent);
+        assert!(color_distance(highlight, surface) >= 10.0);
+        assert!(contrast_ratio(super::color32(visual.palette.text), highlight) >= 4.5);
+    }
+
+    #[test]
+    fn m43_real_document_paint_contains_only_the_spoken_range_highlight() {
+        let blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/lantern-leaf-reader-document.toml"
+        ))
+        .unwrap();
+        let visual = blueprint.visual.unwrap();
+        let expected = super::highlight_fill(visual);
+        let output = accesskit_output(&blueprint, "reading");
+        assert!(!super::should_render_separate_label(
+            ElementKind::Document,
+            true
+        ));
+        let highlighted = output.shapes.iter().any(|clipped| {
+            let egui::epaint::Shape::Text(text) = &clipped.shape else {
+                return false;
+            };
+            text.galley
+                .job
+                .text
+                .contains("some of the most important discoveries")
+                && text.galley.job.sections.iter().any(|section| {
+                    section.format.background == expected
+                        && section.format.background != Color32::TRANSPARENT
+                })
+        });
+        assert!(
+            highlighted,
+            "the real rich document paint should contain the spoken range fill"
+        );
+        let full_accent = super::color32(visual.palette.accent);
+        assert_ne!(expected, full_accent);
+    }
+
     fn interactive_frame(
         context: &Context,
         blueprint: &viewwright_model::ResolvedBlueprint,
@@ -1572,6 +1789,14 @@ mod tests {
         }
         assert!(!separate_element_label(ElementKind::Text));
         assert!(!separate_element_label(ElementKind::Preview));
+        assert!(!super::should_render_separate_label(
+            ElementKind::Document,
+            true
+        ));
+        assert!(super::should_render_separate_label(
+            ElementKind::Document,
+            false
+        ));
         assert!(separate_element_label(ElementKind::Choice));
         assert!(!separate_element_label(ElementKind::Boolean));
         assert!(separate_element_label(ElementKind::Scalar));
@@ -1866,6 +2091,33 @@ mod tests {
                 "choice option became an author ID: {option_id}"
             );
         }
+    }
+
+    #[test]
+    fn m43_rich_document_blocks_remain_fixture_local_not_author_ids() {
+        let blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/lantern-leaf-reader-document.toml"
+        ))
+        .unwrap();
+        let output = accesskit_output(&blueprint, "reading");
+        let update = update(&output);
+        let ids = author_ids(update);
+        assert!(ids.contains("chapter_document"));
+        for block in [
+            "chapter_3",
+            "chapter_title",
+            "opening_divider",
+            "p1",
+            "p2",
+            "p3",
+            "closing_quote",
+        ] {
+            assert!(
+                !ids.contains(block),
+                "document-local block leaked as author id: {block}"
+            );
+        }
+        assert_parent(update, "reader", "chapter_document");
     }
 
     #[test]

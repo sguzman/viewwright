@@ -1,5 +1,5 @@
 use viewwright_layout::layout;
-use viewwright_model::{parse_and_resolve, ResolvedFixtureContent};
+use viewwright_model::{parse_and_resolve, ResolvedDocument, ResolvedFixtureContent};
 
 const SOURCE: &str = include_str!("../../../specimens/lantern-leaf-reader-baseline.toml");
 
@@ -84,7 +84,9 @@ fn lantern_leaf_baseline_traverses_existing_01_projections_and_layout() {
     )));
     assert!(reading.content.iter().any(|content| matches!(
         content,
-        ResolvedFixtureContent::Document { element, title, paragraphs }
-            if element == "chapter_document" && title == "The Mountain Path" && paragraphs.len() == 4
+        ResolvedFixtureContent::Document {
+            element,
+            document: ResolvedDocument::Legacy { title, paragraphs },
+        } if element == "chapter_document" && title == "The Mountain Path" && paragraphs.len() == 4
     )));
 }

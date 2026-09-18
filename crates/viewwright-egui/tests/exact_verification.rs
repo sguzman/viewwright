@@ -115,3 +115,12 @@ fn lantern_leaf_semantic_controls_exactly_match_real_renderer_witness() {
         "M42 Lantern Leaf controls / reading at 1440x900",
     );
 }
+
+#[test]
+fn lantern_leaf_rich_document_exactly_matches_real_renderer_witness() {
+    assert_real_render_exactly_matches_expectation(
+        include_str!("../../../specimens/lantern-leaf-reader-document.toml"),
+        "reading",
+        "M43 Lantern Leaf rich document / reading at 1440x900",
+    );
+}

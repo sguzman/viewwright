@@ -242,10 +242,37 @@ pub struct TreeNodeSource {
     pub parent: Option<String>,
 }
 #[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum DocumentSource {
+    Legacy(LegacyDocumentSource),
+    Rich(RichDocumentSource),
+}
+#[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct DocumentSource {
+pub struct LegacyDocumentSource {
     pub title: String,
     pub paragraphs: Vec<String>,
+}
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RichDocumentSource {
+    pub blocks: Vec<DocumentBlockSource>,
+    pub spoken: Option<SpokenRangeSource>,
+}
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DocumentBlockSource {
+    pub id: String,
+    pub kind: String,
+    pub text: Option<String>,
+    pub level: Option<i64>,
+}
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SpokenRangeSource {
+    pub block: String,
+    pub start: usize,
+    pub end: usize,
 }
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -894,8 +921,7 @@ pub enum ResolvedFixtureContent {
     },
     Document {
         element: String,
-        title: String,
-        paragraphs: Vec<String>,
+        document: ResolvedDocument,
     },
     Command {
         element: String,
@@ -914,6 +940,81 @@ pub enum ResolvedFixtureContent {
         element: String,
         value: f32,
     },
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ResolvedDocument {
+    Legacy {
+        title: String,
+        paragraphs: Vec<String>,
+    },
+    Rich {
+        blocks: Vec<ResolvedDocumentBlock>,
+        spoken: Option<ResolvedSpokenRange>,
+    },
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DocumentBlockKind {
+    Eyebrow,
+    Heading,
+    Paragraph,
+    Quote,
+    Divider,
+}
+impl DocumentBlockKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Eyebrow => "eyebrow",
+            Self::Heading => "heading",
+            Self::Paragraph => "paragraph",
+            Self::Quote => "quote",
+            Self::Divider => "divider",
+        }
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ResolvedDocumentBlock {
+    Eyebrow { id: String, text: String },
+    Heading { id: String, level: u8, text: String },
+    Paragraph { id: String, text: String },
+    Quote { id: String, text: String },
+    Divider { id: String },
+}
+impl ResolvedDocumentBlock {
+    pub fn id(&self) -> &str {
+        match self {
+            Self::Eyebrow { id, .. }
+            | Self::Heading { id, .. }
+            | Self::Paragraph { id, .. }
+            | Self::Quote { id, .. }
+            | Self::Divider { id } => id,
+        }
+    }
+
+    pub fn kind(&self) -> DocumentBlockKind {
+        match self {
+            Self::Eyebrow { .. } => DocumentBlockKind::Eyebrow,
+            Self::Heading { .. } => DocumentBlockKind::Heading,
+            Self::Paragraph { .. } => DocumentBlockKind::Paragraph,
+            Self::Quote { .. } => DocumentBlockKind::Quote,
+            Self::Divider { .. } => DocumentBlockKind::Divider,
+        }
+    }
+
+    pub fn text(&self) -> Option<&str> {
+        match self {
+            Self::Eyebrow { text, .. }
+            | Self::Heading { text, .. }
+            | Self::Paragraph { text, .. }
+            | Self::Quote { text, .. } => Some(text),
+            Self::Divider { .. } => None,
+        }
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedSpokenRange {
+    pub block: String,
+    pub start: usize,
+    pub end: usize,
 }
 #[derive(Debug, Clone)]
 pub struct ResolvedCollectionItem {
@@ -960,6 +1061,216 @@ fn validate_nonblank_id(id: &str, context: &str, errors: &mut Vec<String>) {
         ));
     }
 }
+
+fn resolve_document_source(
+    fixture_id: &str,
+    element_id: &str,
+    source: &DocumentSource,
+    errors: &mut Vec<String>,
+) -> ResolvedDocument {
+    match source {
+        DocumentSource::Legacy(document) => {
+            if document.title.trim().is_empty() {
+                errors.push(format!(
+                    "fixture '{fixture_id}': document for '{element_id}' title must contain at least one non-whitespace character"
+                ));
+            }
+            ResolvedDocument::Legacy {
+                title: document.title.clone(),
+                paragraphs: document.paragraphs.clone(),
+            }
+        }
+        DocumentSource::Rich(document) => {
+            if document.blocks.is_empty() {
+                errors.push(format!(
+                    "fixture '{fixture_id}': rich document for '{element_id}' must contain at least one block"
+                ));
+            }
+
+            let mut seen_ids = HashSet::new();
+            let mut blocks = Vec::with_capacity(document.blocks.len());
+            for block in &document.blocks {
+                let context = format!("fixture '{fixture_id}': document block id '{}'", block.id);
+                validate_nonblank_id(&block.id, &context, errors);
+                if !seen_ids.insert(block.id.as_str()) {
+                    errors.push(format!(
+                        "fixture '{fixture_id}': duplicate document block id '{}' for '{element_id}'",
+                        block.id
+                    ));
+                }
+
+                let resolved = match block.kind.as_str() {
+                    "eyebrow" => {
+                        if block.level.is_some() {
+                            errors.push(format!(
+                                "fixture '{fixture_id}': eyebrow block '{}' for '{element_id}' must not have a level",
+                                block.id
+                            ));
+                        }
+                        resolve_document_block_text(fixture_id, element_id, block, errors).map(
+                            |text| ResolvedDocumentBlock::Eyebrow {
+                                id: block.id.clone(),
+                                text,
+                            },
+                        )
+                    }
+                    "heading" => {
+                        let level = match block.level {
+                            Some(1..=6) => block.level.map(|level| level as u8),
+                            Some(level) => {
+                                errors.push(format!(
+                                    "fixture '{fixture_id}': heading block '{}' for '{element_id}' level must be between 1 and 6, got {level}",
+                                    block.id
+                                ));
+                                None
+                            }
+                            None => {
+                                errors.push(format!(
+                                    "fixture '{fixture_id}': heading block '{}' for '{element_id}' requires a level from 1 through 6",
+                                    block.id
+                                ));
+                                None
+                            }
+                        };
+                        let text =
+                            resolve_document_block_text(fixture_id, element_id, block, errors);
+                        match (level, text) {
+                            (Some(level), Some(text)) => Some(ResolvedDocumentBlock::Heading {
+                                id: block.id.clone(),
+                                level,
+                                text,
+                            }),
+                            _ => None,
+                        }
+                    }
+                    "paragraph" => {
+                        if block.level.is_some() {
+                            errors.push(format!(
+                                "fixture '{fixture_id}': paragraph block '{}' for '{element_id}' must not have a level",
+                                block.id
+                            ));
+                        }
+                        resolve_document_block_text(fixture_id, element_id, block, errors).map(
+                            |text| ResolvedDocumentBlock::Paragraph {
+                                id: block.id.clone(),
+                                text,
+                            },
+                        )
+                    }
+                    "quote" => {
+                        if block.level.is_some() {
+                            errors.push(format!(
+                                "fixture '{fixture_id}': quote block '{}' for '{element_id}' must not have a level",
+                                block.id
+                            ));
+                        }
+                        resolve_document_block_text(fixture_id, element_id, block, errors).map(
+                            |text| ResolvedDocumentBlock::Quote {
+                                id: block.id.clone(),
+                                text,
+                            },
+                        )
+                    }
+                    "divider" => {
+                        if block.text.is_some() {
+                            errors.push(format!(
+                                "fixture '{fixture_id}': divider block '{}' for '{element_id}' must not have text",
+                                block.id
+                            ));
+                        }
+                        if block.level.is_some() {
+                            errors.push(format!(
+                                "fixture '{fixture_id}': divider block '{}' for '{element_id}' must not have a level",
+                                block.id
+                            ));
+                        }
+                        Some(ResolvedDocumentBlock::Divider {
+                            id: block.id.clone(),
+                        })
+                    }
+                    kind => {
+                        errors.push(format!(
+                            "fixture '{fixture_id}': document block '{}' for '{element_id}' has unsupported kind '{kind}'",
+                            block.id
+                        ));
+                        None
+                    }
+                };
+                if let Some(block) = resolved {
+                    blocks.push(block);
+                }
+            }
+
+            let spoken = document.spoken.as_ref().and_then(|spoken| {
+                let block = document.blocks.iter().find(|block| block.id == spoken.block);
+                let Some(block) = block else {
+                    errors.push(format!(
+                        "fixture '{fixture_id}': spoken range for '{element_id}' references missing document block '{}'",
+                        spoken.block
+                    ));
+                    return None;
+                };
+                if spoken.start >= spoken.end {
+                    errors.push(format!(
+                        "fixture '{fixture_id}': spoken range for block '{}' must satisfy start < end",
+                        spoken.block
+                    ));
+                }
+                let textual = matches!(
+                    block.kind.as_str(),
+                    "eyebrow" | "heading" | "paragraph" | "quote"
+                );
+                if !textual {
+                    errors.push(format!(
+                        "fixture '{fixture_id}': spoken range for '{element_id}' must target a textual document block, not '{}'",
+                        block.kind
+                    ));
+                    return None;
+                }
+                if let Some(text) = &block.text {
+                    let scalar_len = text.chars().count();
+                    if spoken.end > scalar_len {
+                        errors.push(format!(
+                            "fixture '{fixture_id}': spoken range {}..{} exceeds document block '{}' Unicode scalar length {scalar_len}",
+                            spoken.start, spoken.end, spoken.block
+                        ));
+                    }
+                }
+                Some(ResolvedSpokenRange {
+                    block: spoken.block.clone(),
+                    start: spoken.start,
+                    end: spoken.end,
+                })
+            });
+
+            ResolvedDocument::Rich { blocks, spoken }
+        }
+    }
+}
+
+fn resolve_document_block_text(
+    fixture_id: &str,
+    element_id: &str,
+    block: &DocumentBlockSource,
+    errors: &mut Vec<String>,
+) -> Option<String> {
+    let Some(text) = block.text.as_deref() else {
+        errors.push(format!(
+            "fixture '{fixture_id}': {} block '{}' for '{element_id}' requires text",
+            block.kind, block.id
+        ));
+        return None;
+    };
+    if text.trim().is_empty() {
+        errors.push(format!(
+            "fixture '{fixture_id}': {} block '{}' for '{element_id}' text must contain at least one non-whitespace character",
+            block.kind, block.id
+        ));
+        return None;
+    }
+    Some(text.to_owned())
+}
+
 fn add_id(ids: &mut HashSet<String>, errors: &mut Vec<String>, id: &str, kind: &str) {
     validate_nonblank_id(id, &format!("{kind}.id"), errors);
     if !ids.insert(id.to_owned()) {
@@ -2123,16 +2434,11 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
                     ));
                     continue;
                 }
-                if document.title.trim().is_empty() {
-                    errors.push(format!(
-                        "fixture '{}': document for '{}' title must contain at least one non-whitespace character",
-                        f.id, record.element
-                    ));
-                }
+                let resolved =
+                    resolve_document_source(&f.id, &record.element, document, &mut errors);
                 content.push(ResolvedFixtureContent::Document {
                     element: record.element.clone(),
-                    title: document.title.clone(),
-                    paragraphs: document.paragraphs.clone(),
+                    document: resolved,
                 });
             } else if let Some(command) = &record.command {
                 if element.kind != ElementKind::Command {
@@ -2506,14 +2812,43 @@ impl ResolvedBlueprint {
                         nodes.len(),
                         selected
                     )),
-                    ResolvedFixtureContent::Document {
-                        element,
-                        title,
-                        paragraphs,
-                    } => out.push_str(&format!(
-                        "    content {element}: document '{title}', {} paragraphs\n",
-                        paragraphs.len()
-                    )),
+                    ResolvedFixtureContent::Document { element, document } => match document {
+                        ResolvedDocument::Legacy { title, paragraphs } => out.push_str(&format!(
+                            "    content {element}: document '{title}', {} paragraphs\n",
+                            paragraphs.len()
+                        )),
+                        ResolvedDocument::Rich { blocks, spoken } => {
+                            out.push_str(&format!(
+                                "    content {element}: rich document, {} blocks\n",
+                                blocks.len()
+                            ));
+                            for block in blocks {
+                                match block {
+                                    ResolvedDocumentBlock::Heading { id, level, text } => out
+                                        .push_str(&format!(
+                                            "      block {id}: heading level {level} — {text}\n"
+                                        )),
+                                    ResolvedDocumentBlock::Eyebrow { id, text }
+                                    | ResolvedDocumentBlock::Paragraph { id, text }
+                                    | ResolvedDocumentBlock::Quote { id, text } => {
+                                        out.push_str(&format!(
+                                            "      block {id}: {} — {text}\n",
+                                            block.kind().as_str()
+                                        ))
+                                    }
+                                    ResolvedDocumentBlock::Divider { id } => {
+                                        out.push_str(&format!("      block {id}: divider\n"))
+                                    }
+                                }
+                            }
+                            if let Some(spoken) = spoken {
+                                out.push_str(&format!(
+                                    "      spoken: block {}, range {}..{}\n",
+                                    spoken.block, spoken.start, spoken.end
+                                ));
+                            }
+                        }
+                    },
                     ResolvedFixtureContent::Command {
                         element,
                         enabled,
@@ -4141,6 +4476,12 @@ scalar = { value = 18.0 }
         )
     }
 
+    fn rich_document_source(blocks: &str, spoken: &str) -> String {
+        format!(
+            "[screen]\nid='x'\npurpose='x'\nroot='root'\n[[region]]\nid='content'\nrole='primary_content'\nimportance='primary'\n[[region]]\nid='other'\nrole='status'\nimportance='secondary'\n[[element]]\nid='document_surface'\nregion='content'\nkind='document'\nimportance='primary'\nlabel='Document'\n[[composition]]\nid='root'\nkind='split'\nchildren=['content','other']\n[[fixture]]\nid='fixture'\nstate='ready'\n[[fixture.content]]\nelement='document_surface'\ndocument={{blocks=[{blocks}]{spoken}}}"
+        )
+    }
+
     #[test]
     fn document_titles_must_be_nonblank() {
         for title in ["", "   ", "\t", " \t "] {
@@ -4165,7 +4506,8 @@ scalar = { value = 18.0 }
         .unwrap();
         let (title, paragraphs) = match &blueprint.fixtures[0].content[0] {
             ResolvedFixtureContent::Document {
-                title, paragraphs, ..
+                document: ResolvedDocument::Legacy { title, paragraphs },
+                ..
             } => (title, paragraphs),
             other => panic!("unexpected fixture content: {other:?}"),
         };
@@ -4178,8 +4520,10 @@ scalar = { value = 18.0 }
         let blueprint = parse_and_resolve(&document_source("No document loaded", "[]")).unwrap();
         assert!(matches!(
             &blueprint.fixtures[0].content[0],
-            ResolvedFixtureContent::Document { title, paragraphs, .. }
-                if title == "No document loaded" && paragraphs.is_empty()
+            ResolvedFixtureContent::Document {
+                document: ResolvedDocument::Legacy { title, paragraphs },
+                ..
+            } if title == "No document loaded" && paragraphs.is_empty()
         ));
     }
 
@@ -4194,6 +4538,101 @@ scalar = { value = 18.0 }
     }
 
     #[test]
+    fn rich_document_blocks_resolve_with_unicode_scalar_spoken_range() {
+        let blueprint = parse_and_resolve(&rich_document_source(
+            "{id='eyebrow',kind='eyebrow',text='CHAPTER'},{id='heading',kind='heading',level=6,text='Café'},{id='p1',kind='paragraph',text='naïve café'}",
+            ",spoken={block='p1',start=2,end=7}",
+        ))
+        .unwrap();
+        let ResolvedFixtureContent::Document {
+            document: ResolvedDocument::Rich { blocks, spoken },
+            ..
+        } = &blueprint.fixtures[0].content[0]
+        else {
+            panic!("expected rich document");
+        };
+        assert_eq!(blocks.len(), 3);
+        assert_eq!(blocks[1].kind(), DocumentBlockKind::Heading);
+        assert_eq!(spoken.as_ref().unwrap().start, 2);
+        assert_eq!(spoken.as_ref().unwrap().end, 7);
+    }
+
+    #[test]
+    fn rich_document_validation_rejects_invalid_block_shapes_and_spoken_ranges() {
+        let cases = [
+            ("", "", "at least one block"),
+            ("{id='',kind='paragraph',text='x'}", "", "non-whitespace"),
+            (
+                "{id='x',kind='paragraph',text='x'},{id='x',kind='divider'}",
+                "",
+                "duplicate document block",
+            ),
+            ("{id='x',kind='unknown',text='x'}", "", "unsupported kind"),
+            ("{id='x',kind='heading',text='x'}", "", "requires a level"),
+            (
+                "{id='x',kind='heading',level=7,text='x'}",
+                "",
+                "between 1 and 6",
+            ),
+            (
+                "{id='x',kind='paragraph',level=1,text='x'}",
+                "",
+                "must not have a level",
+            ),
+            ("{id='x',kind='divider',text='x'}", "", "must not have text"),
+            (
+                "{id='x',kind='divider'}",
+                ",spoken={block='x',start=0,end=1}",
+                "textual document block",
+            ),
+            (
+                "{id='x',kind='paragraph',text='abc'}",
+                ",spoken={block='missing',start=0,end=1}",
+                "missing document block",
+            ),
+            (
+                "{id='x',kind='paragraph',text='abc'}",
+                ",spoken={block='x',start=1,end=1}",
+                "start < end",
+            ),
+            (
+                "{id='x',kind='paragraph',text='abc'}",
+                ",spoken={block='x',start=0,end=4}",
+                "scalar length",
+            ),
+        ];
+        for (blocks, spoken, expected) in cases {
+            let error = parse_and_resolve(&rich_document_source(blocks, spoken))
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains(expected), "expected {expected:?}: {error}");
+        }
+    }
+
+    #[test]
+    fn document_forms_are_exclusive() {
+        for source in [
+            document_source("Only title", "[]").replace(
+                "document={title=\"Only title\",paragraphs=[]}",
+                "document={title=\"Only title\"}",
+            ),
+            document_source("Ignored", "['paragraph']").replace(
+                "document={title=\"Ignored\",paragraphs=['paragraph']}",
+                "document={paragraphs=['paragraph']}",
+            ),
+            rich_document_source("{id='x',kind='paragraph',text='x'}", "").replace(
+                "document={blocks=[",
+                "document={title='mixed',paragraphs=[],blocks=[",
+            ),
+        ] {
+            assert!(
+                parse_and_resolve(&source).is_err(),
+                "source should be rejected: {source}"
+            );
+        }
+    }
+
+    #[test]
     fn canonical_sources_resolve_with_nonblank_document_titles() {
         for source in [
             reader(),
@@ -4203,7 +4642,7 @@ scalar = { value = 18.0 }
             let parsed: SourceBlueprint = toml::from_str(source).unwrap();
             for fixture in &parsed.fixture {
                 for content in &fixture.content {
-                    if let Some(document) = &content.document {
+                    if let Some(DocumentSource::Legacy(document)) = &content.document {
                         assert!(!document.title.trim().is_empty());
                     }
                 }
@@ -4539,8 +4978,10 @@ scalar = { value = 18.0 }
         )));
         assert!(reading.content.iter().any(|content| matches!(
             content,
-            ResolvedFixtureContent::Document { title, paragraphs, .. }
-                if title == "The Quiet Machine" && paragraphs.len() == 3
+            ResolvedFixtureContent::Document {
+                document: ResolvedDocument::Legacy { title, paragraphs },
+                ..
+            } if title == "The Quiet Machine" && paragraphs.len() == 3
         )));
         assert!(reading.content.iter().any(|content| matches!(
             content,
@@ -4557,8 +4998,10 @@ scalar = { value = 18.0 }
         )));
         assert!(empty.content.iter().any(|content| matches!(
             content,
-            ResolvedFixtureContent::Document { title, paragraphs, .. }
-                if title == "No document loaded" && paragraphs.is_empty()
+            ResolvedFixtureContent::Document {
+                document: ResolvedDocument::Legacy { title, paragraphs },
+                ..
+            } if title == "No document loaded" && paragraphs.is_empty()
         )));
         let debug = b.semantic_tree();
         assert!(debug.contains("document_outline: tree 5 nodes"));

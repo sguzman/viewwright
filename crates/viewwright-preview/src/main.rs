@@ -23,6 +23,10 @@ fn main() -> eframe::Result<()> {
             "../../../specimens/lantern-leaf-reader-controls.toml"
         ))
         .expect("Lantern Leaf semantic controls specimen must be valid"),
+        parse_and_resolve(include_str!(
+            "../../../specimens/lantern-leaf-reader-document.toml"
+        ))
+        .expect("Lantern Leaf rich document specimen must be valid"),
         parse_and_resolve(include_str!("../../../specimens/dependency-workbench.toml"))
             .expect("dependency workbench specimen must be valid"),
         parse_and_resolve(include_str!(
@@ -47,7 +51,10 @@ fn main() -> eframe::Result<()> {
         if b.visual.is_some() {
             println!("{}", viewwright_concept::render(b));
         }
-        if b.screen.id == "lantern_leaf_reader_controls" {
+        if matches!(
+            b.screen.id.as_str(),
+            "lantern_leaf_reader_controls" | "lantern_leaf_reader_document"
+        ) {
             println!(
                 "{}",
                 viewwright_concept::render_fixture(b, "reading").unwrap()

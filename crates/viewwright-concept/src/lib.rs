@@ -86,6 +86,33 @@ pub fn render_fixture(b: &ResolvedBlueprint, fixture_id: &str) -> Option<String>
     ));
     for content in &fixture.content {
         match content {
+            viewwright_model::ResolvedFixtureContent::Document {
+                element,
+                document: viewwright_model::ResolvedDocument::Rich { blocks, spoken },
+            } => {
+                out.push_str(&format!("  document {element}: rich blocks\n"));
+                for block in blocks {
+                    match block {
+                        viewwright_model::ResolvedDocumentBlock::Heading { id, level, text } => {
+                            out.push_str(&format!("    heading {id} level {level}: {text}\n"))
+                        }
+                        viewwright_model::ResolvedDocumentBlock::Eyebrow { id, text }
+                        | viewwright_model::ResolvedDocumentBlock::Paragraph { id, text }
+                        | viewwright_model::ResolvedDocumentBlock::Quote { id, text } => {
+                            out.push_str(&format!("    {} {id}: {text}\n", block.kind().as_str()));
+                        }
+                        viewwright_model::ResolvedDocumentBlock::Divider { id } => {
+                            out.push_str(&format!("    divider {id}\n"));
+                        }
+                    }
+                }
+                if let Some(spoken) = spoken {
+                    out.push_str(&format!(
+                        "    spoken: block {} range {}..{}\n",
+                        spoken.block, spoken.start, spoken.end
+                    ));
+                }
+            }
             viewwright_model::ResolvedFixtureContent::Choice { element, selected } => {
                 if let Some(control) = b.elements.iter().find(|control| control.id == *element) {
                     let label = control
@@ -353,5 +380,24 @@ mod tests {
         assert!(fixture.contains("Speed = 1.2×"));
         assert!(fixture.contains("Volume = 82%"));
         assert!(render_fixture(&blueprint, "missing").is_none());
+    }
+
+    #[test]
+    fn m43_fixture_concept_exposes_rich_document_structure_and_spoken_range() {
+        let blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/lantern-leaf-reader-document.toml"
+        ))
+        .unwrap();
+        let output = render_fixture(&blueprint, "reading").unwrap();
+        for expected in [
+            "document chapter_document: rich blocks",
+            "eyebrow chapter_3",
+            "heading chapter_title level 1",
+            "paragraph p2",
+            "quote closing_quote",
+            "spoken: block p2 range 174..212",
+        ] {
+            assert!(output.contains(expected), "missing {expected:?}:\n{output}");
+        }
     }
 }
