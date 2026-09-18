@@ -1,5 +1,7 @@
 use std::collections::HashMap;
-use viewwright_model::{Axis, CompositionChild, CompositionKind, ResolvedBlueprint};
+use viewwright_model::{
+    Axis, CompositionChild, CompositionKind, FurnishingChild, FurnishingKind, ResolvedBlueprint,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Rect {
@@ -34,6 +36,7 @@ pub struct LayoutPlan {
     pub viewport: Rect,
     compositions: HashMap<String, Rect>,
     regions: HashMap<String, Rect>,
+    furnishings: HashMap<String, Rect>,
 }
 
 impl LayoutPlan {
@@ -44,6 +47,10 @@ impl LayoutPlan {
     pub fn region(&self, id: &str) -> Option<Rect> {
         self.regions.get(id).copied()
     }
+
+    pub fn furnishing(&self, id: &str) -> Option<Rect> {
+        self.furnishings.get(id).copied()
+    }
 }
 
 pub fn layout(blueprint: &ResolvedBlueprint, width: f32, height: f32) -> LayoutPlan {
@@ -52,9 +59,87 @@ pub fn layout(blueprint: &ResolvedBlueprint, width: f32, height: f32) -> LayoutP
         viewport,
         compositions: HashMap::new(),
         regions: HashMap::new(),
+        furnishings: HashMap::new(),
     };
     layout_composition(blueprint, &mut plan, &blueprint.root, viewport);
+    for region in &blueprint.regions {
+        if let (Some(root), Some(rect)) = (region.furnishing.as_deref(), plan.region(&region.id)) {
+            layout_furnishing(blueprint, &mut plan, root, rect);
+        }
+    }
     plan
+}
+
+fn layout_furnishing(blueprint: &ResolvedBlueprint, plan: &mut LayoutPlan, id: &str, rect: Rect) {
+    let Some(furnishing) = blueprint
+        .furnishings
+        .iter()
+        .find(|furnishing| furnishing.id == id)
+    else {
+        return;
+    };
+    plan.furnishings.insert(id.to_owned(), rect);
+    let children: Vec<_> = furnishing
+        .children
+        .iter()
+        .filter_map(|child| match child {
+            FurnishingChild::Furnishing(id) => blueprint
+                .furnishings
+                .iter()
+                .find(|furnishing| furnishing.id == *id)
+                .map(|furnishing| (id.as_str(), furnishing)),
+            FurnishingChild::Element(_) => None,
+        })
+        .collect();
+    if children.is_empty() {
+        return;
+    }
+
+    let inner = rect.inset(furnishing.padding as f32);
+    let horizontal = furnishing.kind == FurnishingKind::Row;
+    let gap = furnishing.gap as f32;
+    let total_gap = gap * children.len().saturating_sub(1) as f32;
+    let fixed: f32 = children
+        .iter()
+        .map(|(_, child)| {
+            if horizontal {
+                child.width.unwrap_or(0) as f32
+            } else {
+                child.height.unwrap_or(0) as f32
+            }
+        })
+        .sum();
+    let growth: f32 = children.iter().map(|(_, child)| child.grow).sum();
+    let available = if horizontal {
+        inner.width
+    } else {
+        inner.height
+    };
+    let remaining = (available - total_gap - fixed).max(0.0);
+    let mut cursor = if horizontal { inner.x } else { inner.y };
+    for (child_id, child) in children {
+        let base = if horizontal {
+            child.width.unwrap_or(0) as f32
+        } else {
+            child.height.unwrap_or(0) as f32
+        };
+        let main = base
+            + if growth > 0.0 {
+                remaining * child.grow / growth
+            } else {
+                0.0
+            };
+        let child_rect = if horizontal {
+            let rect = Rect::new(cursor, inner.y, main, inner.height);
+            cursor += main + gap;
+            rect
+        } else {
+            let rect = Rect::new(inner.x, cursor, inner.width, main);
+            cursor += main + gap;
+            rect
+        };
+        layout_furnishing(blueprint, plan, child_id, child_rect);
+    }
 }
 
 fn layout_composition(blueprint: &ResolvedBlueprint, plan: &mut LayoutPlan, id: &str, rect: Rect) {
@@ -482,6 +567,160 @@ children = ["a", "b", "c"]
         assert_eq!(project_plan.region("navigation").unwrap().width, 240.0);
         assert_eq!(project_plan.region("inspector").unwrap().width, 320.0);
         assert!(project_plan.region("projects").unwrap().width > 800.0);
+    }
+
+    #[test]
+    fn lantern_leaf_furnishings_have_exact_nested_fixed_plus_grow_rectangles() {
+        let blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/lantern-leaf-reader-furnished.toml"
+        ))
+        .unwrap();
+        let plan = layout(&blueprint, 1440.0, 900.0);
+        assert_eq!(
+            plan.region("library"),
+            Some(Rect::new(8.0, 8.0, 260.0, 780.0))
+        );
+        assert_eq!(
+            plan.region("reader"),
+            Some(Rect::new(280.0, 8.0, 810.0, 780.0))
+        );
+        assert_eq!(
+            plan.region("inspector"),
+            Some(Rect::new(1102.0, 8.0, 330.0, 780.0))
+        );
+        assert_eq!(
+            plan.region("tts_player"),
+            Some(Rect::new(8.0, 796.0, 1424.0, 96.0))
+        );
+
+        assert_eq!(plan.furnishing("reader_furnishing"), plan.region("reader"));
+        assert_eq!(
+            plan.furnishing("toolbar_slot"),
+            Some(Rect::new(288.0, 16.0, 794.0, 52.0))
+        );
+        assert_eq!(
+            plan.furnishing("search_slot"),
+            Some(Rect::new(288.0, 16.0, 262.0, 52.0))
+        );
+        assert_eq!(
+            plan.furnishing("toolbar_actions"),
+            Some(Rect::new(562.0, 16.0, 520.0, 52.0))
+        );
+        assert_eq!(
+            plan.furnishing("document_slot"),
+            Some(Rect::new(288.0, 76.0, 794.0, 704.0))
+        );
+
+        assert_eq!(
+            plan.furnishing("inspector_furnishing"),
+            plan.region("inspector")
+        );
+        assert_eq!(
+            plan.furnishing("text_layout_slot"),
+            Some(Rect::new(1110.0, 16.0, 314.0, 230.0))
+        );
+        assert_eq!(
+            plan.furnishing("theme_slot"),
+            Some(Rect::new(1110.0, 254.0, 314.0, 170.0))
+        );
+        assert_eq!(
+            plan.furnishing("speech_slot"),
+            Some(Rect::new(1110.0, 432.0, 314.0, 150.0))
+        );
+
+        assert_eq!(plan.furnishing("tts_furnishing"), plan.region("tts_player"));
+        assert_eq!(
+            plan.furnishing("now_reading_slot"),
+            Some(Rect::new(16.0, 804.0, 300.0, 80.0))
+        );
+        assert_eq!(
+            plan.furnishing("transport_slot"),
+            Some(Rect::new(328.0, 804.0, 784.0, 80.0))
+        );
+        assert_eq!(
+            plan.furnishing("choices_slot"),
+            Some(Rect::new(1124.0, 804.0, 300.0, 80.0))
+        );
+        assert_eq!(
+            plan.furnishing("playback_status_slot"),
+            Some(Rect::new(328.0, 804.0, 784.0, 24.0))
+        );
+        assert_eq!(
+            plan.furnishing("transport_controls_slot"),
+            Some(Rect::new(328.0, 836.0, 784.0, 48.0))
+        );
+    }
+
+    #[test]
+    fn furnishing_child_can_keep_fixed_base_and_receive_grow_share() {
+        let source = r#"
+[screen]
+id = "furnishing-growth"
+purpose = "local layout"
+root = "root"
+[[region]]
+id = "work"
+role = "primary_content"
+importance = "primary"
+grow = 1
+furnishing = "root_furnishing"
+[[region]]
+id = "footer"
+role = "status"
+importance = "tertiary"
+height = "0px"
+[[element]]
+id = "first"
+region = "work"
+kind = "text"
+importance = "primary"
+label = "First"
+[[element]]
+id = "second"
+region = "work"
+kind = "text"
+importance = "secondary"
+label = "Second"
+[[composition]]
+id = "root"
+kind = "column"
+axis = "vertical"
+children = ["work", "footer"]
+[[furnishing]]
+id = "root_furnishing"
+kind = "row"
+children = ["fixed_grow", "grow_only"]
+gap = "gap"
+padding = "pad"
+[[furnishing]]
+id = "fixed_grow"
+kind = "column"
+children = ["first"]
+width = "100px"
+grow = 1
+[[furnishing]]
+id = "grow_only"
+kind = "column"
+children = ["second"]
+grow = 1
+[tokens.spacing]
+gap = 10
+pad = 5
+"#;
+        let blueprint = parse_and_resolve(source).unwrap();
+        let plan = layout(&blueprint, 600.0, 400.0);
+        assert_eq!(
+            plan.furnishing("root_furnishing"),
+            Some(Rect::new(0.0, 0.0, 600.0, 400.0))
+        );
+        assert_eq!(
+            plan.furnishing("fixed_grow"),
+            Some(Rect::new(5.0, 5.0, 340.0, 390.0))
+        );
+        assert_eq!(
+            plan.furnishing("grow_only"),
+            Some(Rect::new(355.0, 5.0, 240.0, 390.0))
+        );
     }
 
     #[test]

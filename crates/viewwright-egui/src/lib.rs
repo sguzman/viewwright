@@ -4,8 +4,8 @@ use egui::{CentralPanel, Color32, FontId, Frame, RichText, ScrollArea, Stroke, U
 use viewwright_layout::{layout, LayoutPlan, Rect as LayoutRect};
 use viewwright_model::{
     BorderPolicy, CollectionPresentation, Color, CompositionChild, Density, ElementKind,
-    Importance, OverflowPolicy, RegionRole, ResolvedBlueprint, ResolvedFixtureContent,
-    ResolvedRegion, SurfaceRole,
+    FurnishingChild, FurnishingKind, Importance, OverflowPolicy, RegionRole, ResolvedBlueprint,
+    ResolvedFixtureContent, ResolvedFurnishing, ResolvedRegion, SurfaceRole,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -240,6 +240,7 @@ fn render_composition(
                             region,
                             b,
                             fixture,
+                            plan,
                             child_rect,
                             origin,
                             activation,
@@ -261,6 +262,7 @@ fn render_region(
     r: &ResolvedRegion,
     b: &ResolvedBlueprint,
     fixture: &str,
+    plan: &LayoutPlan,
     rect: LayoutRect,
     origin: egui::Pos2,
     activation: &mut Option<InteractionEvent>,
@@ -309,7 +311,11 @@ fn render_region(
                         .paint(egui_rect),
                 );
             }
-            let content = egui_rect.shrink(density.region_inset);
+            let content = if r.furnishing.is_some() {
+                egui_rect
+            } else {
+                egui_rect.shrink(density.region_inset)
+            };
             ui.scope_builder(
                 UiBuilder::new()
                     .id_salt(("region", &r.id))
@@ -322,6 +328,8 @@ fn render_region(
                             r,
                             b,
                             fixture,
+                            plan,
+                            origin,
                             activation,
                             density,
                             state,
@@ -339,6 +347,8 @@ fn render_region(
                                     r,
                                     b,
                                     fixture,
+                                    plan,
+                                    origin,
                                     activation,
                                     density,
                                     state,
@@ -363,22 +373,206 @@ fn render_region_contents(
     r: &ResolvedRegion,
     b: &ResolvedBlueprint,
     fixture: &str,
+    plan: &LayoutPlan,
+    origin: egui::Pos2,
     activation: &mut Option<InteractionEvent>,
     density: DensityPolicy,
     state: &mut RenderState,
     parent_anchor: egui::Id,
 ) {
+    if let Some(root) = r.furnishing.as_deref() {
+        render_furnishing(
+            ui,
+            root,
+            b,
+            fixture,
+            plan,
+            origin,
+            activation,
+            density,
+            state,
+            parent_anchor,
+        );
+        return;
+    }
     let elements: Vec<_> = b.elements.iter().filter(|e| e.region == r.id).collect();
     if is_command_region(r.role) {
         ui.horizontal_wrapped(|ui| {
             for e in elements {
-                render_element(ui, e, b, fixture, activation, density, state, parent_anchor);
+                render_element(
+                    ui,
+                    e,
+                    b,
+                    fixture,
+                    activation,
+                    density,
+                    state,
+                    parent_anchor,
+                    density.element_gap,
+                );
             }
         });
     } else {
         for e in elements {
-            render_element(ui, e, b, fixture, activation, density, state, parent_anchor);
+            render_element(
+                ui,
+                e,
+                b,
+                fixture,
+                activation,
+                density,
+                state,
+                parent_anchor,
+                density.element_gap,
+            );
         }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_furnishing(
+    ui: &mut egui::Ui,
+    id: &str,
+    b: &ResolvedBlueprint,
+    fixture: &str,
+    plan: &LayoutPlan,
+    origin: egui::Pos2,
+    activation: &mut Option<InteractionEvent>,
+    density: DensityPolicy,
+    state: &mut RenderState,
+    region_anchor: egui::Id,
+) {
+    let Some(furnishing) = b.furnishings.iter().find(|node| node.id == id) else {
+        return;
+    };
+    let Some(rect) = plan.furnishing(id) else {
+        return;
+    };
+    let rect = to_egui_rect(rect, origin);
+    ui.scope_builder(
+        UiBuilder::new()
+            .id_salt(("furnishing", &furnishing.id))
+            .max_rect(rect),
+        |ui| {
+            ui.set_clip_rect(rect);
+            match furnishing.overflow {
+                OverflowPolicy::Clip => render_furnishing_contents(
+                    ui,
+                    furnishing,
+                    b,
+                    fixture,
+                    plan,
+                    origin,
+                    activation,
+                    density,
+                    state,
+                    region_anchor,
+                ),
+                OverflowPolicy::ScrollY => {
+                    ScrollArea::vertical()
+                        .id_salt(("furnishing-scroll", &b.screen.id, &furnishing.id))
+                        .hscroll(false)
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            render_furnishing_contents(
+                                ui,
+                                furnishing,
+                                b,
+                                fixture,
+                                plan,
+                                origin,
+                                activation,
+                                density,
+                                state,
+                                region_anchor,
+                            );
+                        });
+                }
+            }
+        },
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_furnishing_contents(
+    ui: &mut egui::Ui,
+    furnishing: &ResolvedFurnishing,
+    b: &ResolvedBlueprint,
+    fixture: &str,
+    plan: &LayoutPlan,
+    origin: egui::Pos2,
+    activation: &mut Option<InteractionEvent>,
+    density: DensityPolicy,
+    state: &mut RenderState,
+    region_anchor: egui::Id,
+) {
+    match furnishing.children.first() {
+        Some(FurnishingChild::Furnishing(_)) => {
+            for child in &furnishing.children {
+                let FurnishingChild::Furnishing(child_id) = child else {
+                    continue;
+                };
+                render_furnishing(
+                    ui,
+                    child_id,
+                    b,
+                    fixture,
+                    plan,
+                    origin,
+                    activation,
+                    density,
+                    state,
+                    region_anchor,
+                );
+            }
+        }
+        Some(FurnishingChild::Element(_)) => {
+            let Some(rect) = plan.furnishing(&furnishing.id) else {
+                return;
+            };
+            let rect = to_egui_rect(rect, origin).shrink(furnishing.padding as f32);
+            ui.scope_builder(
+                UiBuilder::new()
+                    .id_salt(("furnishing-leaf", &furnishing.id))
+                    .max_rect(rect),
+                |ui| {
+                    ui.set_clip_rect(rect);
+                    ui.style_mut().spacing.item_spacing =
+                        egui::vec2(furnishing.gap as f32, furnishing.gap as f32);
+                    let mut render_element_child = |element_id: &str, ui: &mut egui::Ui| {
+                        if let Some(element) = b.elements.iter().find(|e| e.id == element_id) {
+                            render_element(
+                                ui,
+                                element,
+                                b,
+                                fixture,
+                                activation,
+                                density,
+                                state,
+                                region_anchor,
+                                0.0,
+                            );
+                        }
+                    };
+                    if furnishing.kind == FurnishingKind::Row {
+                        ui.horizontal_wrapped(|ui| {
+                            for child in &furnishing.children {
+                                if let FurnishingChild::Element(element_id) = child {
+                                    render_element_child(element_id, ui);
+                                }
+                            }
+                        });
+                    } else {
+                        for child in &furnishing.children {
+                            if let FurnishingChild::Element(element_id) = child {
+                                render_element_child(element_id, ui);
+                            }
+                        }
+                    }
+                },
+            );
+        }
+        None => {}
     }
 }
 
@@ -397,6 +591,7 @@ fn render_element(
     density: DensityPolicy,
     state: &mut RenderState,
     parent_anchor: egui::Id,
+    leading_gap: f32,
 ) {
     let anchor_id = ui.make_persistent_id(("viewwright-element", &e.id));
     with_flow_identity_anchor(
@@ -405,7 +600,9 @@ fn render_element(
         &e.id,
         parent_anchor,
         |ui, _element_anchor| {
-            ui.add_space(density.element_gap);
+            if leading_gap > 0.0 {
+                ui.add_space(leading_gap);
+            }
             if separate_element_label(e.kind) {
                 ui.label(element_text(&e.label, e.importance, b.visual.as_ref()));
             }
@@ -1243,6 +1440,48 @@ mod tests {
             assert_eq!(actual.y0, planned.y as f64);
             assert_eq!(actual.x1, (planned.x + planned.width) as f64);
             assert_eq!(actual.y1, (planned.y + planned.height) as f64);
+        }
+    }
+
+    #[test]
+    fn furnishing_scopes_preserve_region_to_element_accesskit_identity_parentage() {
+        let blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/lantern-leaf-reader-furnished.toml"
+        ))
+        .unwrap();
+        let output = accesskit_output(&blueprint, "reading");
+        let update = update(&output);
+        assert_unique_author_ids(update);
+        let ids = author_ids(update);
+        for region in blueprint
+            .regions
+            .iter()
+            .filter(|region| region.furnishing.is_some())
+        {
+            assert!(
+                ids.contains(&region.id),
+                "missing region author id {}",
+                region.id
+            );
+            for element in blueprint
+                .elements
+                .iter()
+                .filter(|element| element.region == region.id)
+            {
+                assert!(
+                    ids.contains(&element.id),
+                    "missing element author id {}",
+                    element.id
+                );
+                assert_parent(update, &region.id, &element.id);
+            }
+        }
+        for furnishing in &blueprint.furnishings {
+            assert!(
+                !ids.contains(&furnishing.id),
+                "structural furnishing {} must not become an author id",
+                furnishing.id
+            );
         }
     }
 

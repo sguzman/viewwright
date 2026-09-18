@@ -459,4 +459,4 @@ M41 is the first ViewWright v0.2 language expansion earned by the Lantern Leaf b
 - M38 — accepted
 - M39 — accepted
 - M40 — accepted
-- M41 — authority defined; implementation pending
+- M41 — implementation complete; human/Director review pending

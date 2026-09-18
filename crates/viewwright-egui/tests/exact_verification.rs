@@ -97,3 +97,12 @@ fn lantern_leaf_baseline_exactly_matches_real_renderer_witness() {
         "M40 Lantern Leaf baseline / reading at 1440x900",
     );
 }
+
+#[test]
+fn lantern_leaf_furnished_exactly_matches_real_renderer_witness() {
+    assert_real_render_exactly_matches_expectation(
+        include_str!("../../../specimens/lantern-leaf-reader-furnished.toml"),
+        "reading",
+        "M41 Lantern Leaf furnished / reading at 1440x900",
+    );
+}

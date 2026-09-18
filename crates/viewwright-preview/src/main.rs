@@ -15,6 +15,10 @@ fn main() -> eframe::Result<()> {
             "../../../specimens/lantern-leaf-reader-baseline.toml"
         ))
         .expect("Lantern Leaf baseline specimen must be valid"),
+        parse_and_resolve(include_str!(
+            "../../../specimens/lantern-leaf-reader-furnished.toml"
+        ))
+        .expect("Lantern Leaf furnished specimen must be valid"),
         parse_and_resolve(include_str!("../../../specimens/dependency-workbench.toml"))
             .expect("dependency workbench specimen must be valid"),
         parse_and_resolve(include_str!(

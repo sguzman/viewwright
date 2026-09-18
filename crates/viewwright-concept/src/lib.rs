@@ -1,4 +1,6 @@
-use viewwright_model::{CompositionChild, CompositionKind, OverflowPolicy, ResolvedBlueprint};
+use viewwright_model::{
+    CompositionChild, CompositionKind, FurnishingChild, OverflowPolicy, ResolvedBlueprint,
+};
 
 pub fn render(b: &ResolvedBlueprint) -> String {
     let mut out = format!(
@@ -90,22 +92,78 @@ fn walk(id: &str, b: &ResolvedBlueprint, out: &mut String, depth: usize) {
                         .map(|height| format!("{height}px"))
                         .unwrap_or_else(|| "unspecified".into());
                     out.push_str(&format!(
-                        "{}{} layer: {} — centered, fixed {width} × {height}, role {}, {:?}, {:?}{overflow}\n",
+                        "{}{} layer: {} — centered, fixed {width} × {height}, role {}, {:?}, {:?}{}{}\n",
                         " ".repeat(depth + 2),
                         layer,
                         id,
                         r.role,
                         r.surface,
-                        r.importance
+                        r.importance,
+                        r.furnishing
+                            .as_deref()
+                            .map(|root| format!(", furnishing {root}"))
+                            .unwrap_or_default(),
+                        overflow
                     ));
                 } else {
                     out.push_str(&format!(
-                        "{}{} — role {}, {:?}, {:?}{overflow}\n",
+                        "{}{} — role {}, {:?}, {:?}{}{}\n",
                         " ".repeat(depth + 2),
                         id,
                         r.role,
                         r.surface,
-                        r.importance
+                        r.importance,
+                        r.furnishing
+                            .as_deref()
+                            .map(|root| format!(", furnishing {root}"))
+                            .unwrap_or_default(),
+                        overflow
+                    ));
+                }
+                if let Some(root) = r.furnishing.as_deref() {
+                    walk_furnishing(root, b, out, depth + 4);
+                }
+            }
+        }
+    }
+}
+
+fn walk_furnishing(id: &str, b: &ResolvedBlueprint, out: &mut String, depth: usize) {
+    let Some(furnishing) = b.furnishings.iter().find(|furnishing| furnishing.id == id) else {
+        return;
+    };
+    let mut attributes = vec![
+        format!("gap {}px", furnishing.gap),
+        format!("padding {}px", furnishing.padding),
+        format!("overflow {}", furnishing.overflow.as_str()),
+    ];
+    if let Some(width) = furnishing.width {
+        attributes.push(format!("width {width}px"));
+    }
+    if let Some(height) = furnishing.height {
+        attributes.push(format!("height {height}px"));
+    }
+    if furnishing.grow > 0.0 {
+        attributes.push(format!("grow {}", furnishing.grow));
+    }
+    out.push_str(&format!(
+        "{}{} — {} ({})\n",
+        " ".repeat(depth),
+        furnishing.id,
+        furnishing.kind,
+        attributes.join(", ")
+    ));
+    for child in &furnishing.children {
+        match child {
+            FurnishingChild::Furnishing(child) => walk_furnishing(child, b, out, depth + 2),
+            FurnishingChild::Element(id) => {
+                if let Some(element) = b.elements.iter().find(|element| element.id == *id) {
+                    out.push_str(&format!(
+                        "{}element {} — {:?}: {}\n",
+                        " ".repeat(depth + 2),
+                        element.id,
+                        element.kind,
+                        element.label
                     ));
                 }
             }
@@ -167,5 +225,30 @@ mod tests {
             overflow.contains("reader — role primary_content, Canvas, Primary — vertical scroll")
         );
         assert!(!overflow.contains("reader — vertical scroll, pagination"));
+    }
+
+    #[test]
+    fn furnished_lantern_leaf_concept_exposes_local_structure_without_new_semantics() {
+        let blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/lantern-leaf-reader-furnished.toml"
+        ))
+        .unwrap();
+        let output = render(&blueprint);
+        assert!(output.contains(
+            "reader — role primary_content, Panel, Primary, furnishing reader_furnishing"
+        ));
+        assert!(output.contains("reader_furnishing — column (gap 8px, padding 8px, overflow clip)"));
+        assert!(output
+            .contains("toolbar_slot — row (gap 12px, padding 0px, overflow clip, height 52px)"));
+        assert!(output
+            .contains("toolbar_actions — row (gap 8px, padding 0px, overflow clip, width 520px)"));
+        assert!(output
+            .contains("document_slot — column (gap 0px, padding 0px, overflow scroll_y, grow 1)"));
+        assert!(output.contains("tts_furnishing — row"));
+        assert!(output
+            .contains("choices_slot — row (gap 8px, padding 0px, overflow clip, width 300px)"));
+        assert!(output.contains("Important semantic elements"));
+        assert!(!output.contains("Slider:"));
+        assert!(!output.contains("Select:"));
     }
 }

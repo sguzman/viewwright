@@ -1,0 +1,451 @@
+[screen]
+id = "lantern_leaf_reader_furnished"
+purpose = "Read and listen to a book with locally grouped reader and speech surfaces"
+density = "comfortable"
+root = "workspace"
+
+[design]
+character = ["dark", "restrained", "warm", "reading_first", "quiet"]
+dominant = "reader"
+avoid = ["toolbar_dominance", "uniform_visual_weight", "nested_card_soup", "control_clutter", "crushed_darkness"]
+
+[tokens.spacing]
+sm = 8
+md = 12
+lg = 20
+
+[tokens.corners]
+medium = 8
+
+[tokens.color]
+app_background = "#09100F"
+reading_surface = "#101716"
+raised_surface = "#141D1B"
+warm_text = "#F4F4EF"
+muted_text = "#909A94"
+jade = "#62E89C"
+quiet_border = "#26322E"
+
+[tokens.type]
+display = 30
+heading = 20
+body = 14
+caption = 11
+
+[visual]
+canvas = "app_background"
+surface = "reading_surface"
+surface_raised = "raised_surface"
+text = "warm_text"
+text_muted = "muted_text"
+accent = "jade"
+border = "quiet_border"
+corner = "medium"
+border_policy = "minimal"
+
+[[region]]
+id = "library"
+role = "navigation"
+importance = "secondary"
+surface = "panel"
+width = "260px"
+overflow = "scroll_y"
+
+[[region]]
+id = "reader"
+role = "primary_content"
+importance = "primary"
+surface = "panel"
+grow = 1
+furnishing = "reader_furnishing"
+
+[[region]]
+id = "inspector"
+role = "inspector"
+importance = "tertiary"
+surface = "raised"
+width = "330px"
+furnishing = "inspector_furnishing"
+
+[[region]]
+id = "tts_player"
+role = "commands"
+importance = "secondary"
+surface = "raised"
+height = "96px"
+furnishing = "tts_furnishing"
+
+[[composition]]
+id = "workspace"
+kind = "column"
+axis = "vertical"
+children = ["reading_body", "tts_player"]
+gap = "sm"
+padding = "sm"
+
+[[composition]]
+id = "reading_body"
+kind = "split"
+axis = "horizontal"
+children = ["library", "reader", "inspector"]
+gap = "md"
+grow = 1
+
+[[element]]
+id = "brand"
+region = "library"
+kind = "text"
+importance = "primary"
+label = "Leafline"
+
+[[element]]
+id = "brand_tagline"
+region = "library"
+kind = "status"
+importance = "tertiary"
+label = "Brand tagline"
+
+[[element]]
+id = "library_navigation"
+region = "library"
+kind = "collection"
+importance = "secondary"
+label = "Library navigation"
+presentation = "list"
+
+[[element]]
+id = "current_book"
+region = "library"
+kind = "property_sheet"
+importance = "secondary"
+label = "Current book"
+
+[[element]]
+id = "table_of_contents"
+region = "library"
+kind = "tree"
+importance = "secondary"
+label = "Table of contents"
+
+[[element]]
+id = "book_search"
+region = "reader"
+kind = "search"
+importance = "secondary"
+label = "Search in book"
+
+[[element]]
+id = "previous_chapter"
+region = "reader"
+kind = "command"
+importance = "tertiary"
+label = "Previous chapter"
+action = "chapter.previous"
+
+[[element]]
+id = "next_chapter"
+region = "reader"
+kind = "command"
+importance = "tertiary"
+label = "Next chapter"
+action = "chapter.next"
+
+[[element]]
+id = "chapter_status"
+region = "reader"
+kind = "status"
+importance = "tertiary"
+label = "Chapter position"
+
+[[element]]
+id = "bookmark_chapter"
+region = "reader"
+kind = "command"
+importance = "tertiary"
+label = "Bookmark chapter"
+action = "reader.bookmark"
+
+[[element]]
+id = "chapter_document"
+region = "reader"
+kind = "document"
+importance = "primary"
+label = "Current chapter"
+
+[[element]]
+id = "text_layout_settings"
+region = "inspector"
+kind = "property_sheet"
+importance = "tertiary"
+label = "Text and layout"
+
+[[element]]
+id = "theme_settings"
+region = "inspector"
+kind = "property_sheet"
+importance = "tertiary"
+label = "Theme and annotations"
+
+[[element]]
+id = "speech_settings"
+region = "inspector"
+kind = "property_sheet"
+importance = "tertiary"
+label = "Speech settings"
+
+[[element]]
+id = "now_book"
+region = "tts_player"
+kind = "status"
+importance = "secondary"
+label = "Current book"
+
+[[element]]
+id = "now_chapter"
+region = "tts_player"
+kind = "status"
+importance = "tertiary"
+label = "Current chapter"
+
+[[element]]
+id = "playback_position"
+region = "tts_player"
+kind = "status"
+importance = "tertiary"
+label = "Playback position"
+
+[[element]]
+id = "skip_back"
+region = "tts_player"
+kind = "command"
+importance = "secondary"
+label = "Back 15 seconds"
+action = "reader.skip_back"
+
+[[element]]
+id = "play_pause"
+region = "tts_player"
+kind = "command"
+importance = "primary"
+label = "Play / pause"
+action = "reader.play_pause"
+
+[[element]]
+id = "skip_forward"
+region = "tts_player"
+kind = "command"
+importance = "secondary"
+label = "Forward 15 seconds"
+action = "reader.skip_forward"
+
+[[element]]
+id = "choose_voice"
+region = "tts_player"
+kind = "command"
+importance = "secondary"
+label = "Voice · Aria"
+action = "reader.choose_voice"
+
+[[element]]
+id = "choose_speed"
+region = "tts_player"
+kind = "command"
+importance = "secondary"
+label = "Speed · 1.2×"
+action = "reader.choose_speed"
+
+[[furnishing]]
+id = "reader_furnishing"
+kind = "column"
+children = ["toolbar_slot", "document_slot"]
+gap = "sm"
+padding = "sm"
+
+[[furnishing]]
+id = "toolbar_slot"
+kind = "row"
+children = ["search_slot", "toolbar_actions"]
+height = "52px"
+gap = "md"
+
+[[furnishing]]
+id = "search_slot"
+kind = "row"
+children = ["book_search"]
+grow = 1
+
+[[furnishing]]
+id = "toolbar_actions"
+kind = "row"
+children = ["previous_chapter", "next_chapter", "chapter_status", "bookmark_chapter"]
+width = "520px"
+gap = "sm"
+
+[[furnishing]]
+id = "document_slot"
+kind = "column"
+children = ["chapter_document"]
+grow = 1
+overflow = "scroll_y"
+
+[[furnishing]]
+id = "inspector_furnishing"
+kind = "column"
+children = ["text_layout_slot", "theme_slot", "speech_slot"]
+gap = "sm"
+padding = "sm"
+
+[[furnishing]]
+id = "text_layout_slot"
+kind = "column"
+children = ["text_layout_settings"]
+height = "230px"
+
+[[furnishing]]
+id = "theme_slot"
+kind = "column"
+children = ["theme_settings"]
+height = "170px"
+
+[[furnishing]]
+id = "speech_slot"
+kind = "column"
+children = ["speech_settings"]
+height = "150px"
+
+[[furnishing]]
+id = "tts_furnishing"
+kind = "row"
+children = ["now_reading_slot", "transport_slot", "choices_slot"]
+gap = "md"
+padding = "sm"
+
+[[furnishing]]
+id = "now_reading_slot"
+kind = "column"
+children = ["now_book", "now_chapter"]
+width = "300px"
+gap = "sm"
+
+[[furnishing]]
+id = "transport_slot"
+kind = "column"
+children = ["playback_status_slot", "transport_controls_slot"]
+grow = 1
+gap = "sm"
+
+[[furnishing]]
+id = "playback_status_slot"
+kind = "row"
+children = ["playback_position"]
+height = "24px"
+
+[[furnishing]]
+id = "transport_controls_slot"
+kind = "row"
+children = ["skip_back", "play_pause", "skip_forward"]
+grow = 1
+gap = "sm"
+
+[[furnishing]]
+id = "choices_slot"
+kind = "row"
+children = ["choose_voice", "choose_speed"]
+width = "300px"
+gap = "sm"
+
+[[fixture]]
+id = "reading"
+state = "chapter_three_preview"
+
+[[fixture.content]]
+element = "brand_tagline"
+text = "Great stories live longer"
+
+[[fixture.content]]
+element = "library_navigation"
+items = [
+  { id = "library", label = "Library" },
+  { id = "search", label = "Search" },
+  { id = "highlights", label = "Highlights" },
+  { id = "bookmarks", label = "Bookmarks" },
+  { id = "notes", label = "Notes" },
+]
+selected = "library"
+
+[[fixture.content]]
+element = "current_book"
+properties = [
+  { name = "Title", value = "The Wandering Horizon" },
+  { name = "Author", value = "Elise Carter" },
+  { name = "Chapter", value = "3 of 14" },
+  { name = "Progress", value = "28%" },
+]
+
+[[fixture.content]]
+element = "table_of_contents"
+nodes = [
+  { id = "chapter_1", label = "1 · A Different Dawn" },
+  { id = "chapter_2", label = "2 · Maps and Motives" },
+  { id = "chapter_3", label = "3 · The Mountain Path" },
+  { id = "chapter_4", label = "4 · Valleys of Quiet" },
+  { id = "chapter_5", label = "5 · The Longer Road" },
+  { id = "chapter_6", label = "6 · Letters from Home" },
+  { id = "chapter_7", label = "7 · A Wilder Sky" },
+  { id = "chapter_8", label = "8 · Turning Points" },
+]
+selected = "chapter_3"
+
+[[fixture.content]]
+element = "chapter_status"
+text = "Chapter 3 of 14 · 28%"
+
+[[fixture.content]]
+element = "chapter_document"
+document = { title = "The Mountain Path", paragraphs = [
+  "The trail began before dawn, a thin ribbon of earth threading through pine and stone. The air was cold enough to make our breath visible, and everything felt sharper — the crunch of gravel, the distant rush of water, the steady rhythm of our own footsteps.",
+  "As the first light touched the ridge, the valley below unfolded like a map, rivers of mist curling between the trees. I stopped for a moment, taking it all in, reminded that some of the most important discoveries arrive not with noise, but with stillness.",
+  "We walked for hours, following the mountain's gentle insistence upward. Each turn revealed something new — a wider view, a quieter mind, a little more space between who I had been and who I was becoming. The journey was not just about reaching the top, but about learning to notice the beauty in the climb.",
+  "Not all those who wander are lost, but many find exactly what they need.",
+] }
+
+[[fixture.content]]
+element = "text_layout_settings"
+properties = [
+  { name = "Font", value = "Literata" },
+  { name = "Size", value = "18 px" },
+  { name = "Line height", value = "1.7" },
+  { name = "Paragraph spacing", value = "1.2" },
+  { name = "Column width", value = "690 px" },
+  { name = "Page margins", value = "72 px" },
+]
+
+[[fixture.content]]
+element = "theme_settings"
+properties = [
+  { name = "Preset", value = "Default · dark" },
+  { name = "Reading tone", value = "Warm cream" },
+  { name = "Highlight", value = "Jade" },
+  { name = "Annotations", value = "Highlights · notes · bookmarks" },
+]
+
+[[fixture.content]]
+element = "speech_settings"
+properties = [
+  { name = "Voice", value = "Aria · Natural" },
+  { name = "Rate", value = "1.2×" },
+  { name = "Volume", value = "82%" },
+  { name = "Follow reading", value = "On" },
+]
+
+[[fixture.content]]
+element = "now_book"
+text = "The Wandering Horizon"
+
+[[fixture.content]]
+element = "now_chapter"
+text = "Chapter 3 · The Mountain Path · Aria (Natural)"
+
+[[fixture.content]]
+element = "playback_position"
+text = "6:24 elapsed · 12:36 remaining · chapter progress 28%"

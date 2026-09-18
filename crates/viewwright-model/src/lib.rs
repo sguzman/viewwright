@@ -24,6 +24,8 @@ pub struct SourceBlueprint {
     #[serde(default)]
     pub composition: Vec<CompositionSource>,
     #[serde(default)]
+    pub furnishing: Vec<FurnishingSource>,
+    #[serde(default)]
     pub element: Vec<ElementSource>,
     #[serde(default)]
     pub fixture: Vec<FixtureSource>,
@@ -123,6 +125,7 @@ pub struct RegionSource {
     pub grow: Option<f32>,
     pub surface: Option<String>,
     pub overflow: Option<String>,
+    pub furnishing: Option<String>,
 }
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -134,6 +137,19 @@ pub struct CompositionSource {
     pub gap: Option<String>,
     pub padding: Option<String>,
     pub grow: Option<f32>,
+}
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FurnishingSource {
+    pub id: String,
+    pub kind: String,
+    pub children: Vec<String>,
+    pub gap: Option<String>,
+    pub padding: Option<String>,
+    pub width: Option<String>,
+    pub height: Option<String>,
+    pub grow: Option<f32>,
+    pub overflow: Option<String>,
 }
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -345,6 +361,19 @@ fn overflow(value: Option<&str>, id: &str, errors: &mut Vec<String>) -> Overflow
     }
 }
 
+fn furnishing_overflow(value: Option<&str>, id: &str, errors: &mut Vec<String>) -> OverflowPolicy {
+    match value.unwrap_or("clip") {
+        "clip" => OverflowPolicy::Clip,
+        "scroll_y" => OverflowPolicy::ScrollY,
+        other => {
+            errors.push(format!(
+                "furnishing '{id}': unknown overflow '{other}' (expected clip or scroll_y)"
+            ));
+            OverflowPolicy::Clip
+        }
+    }
+}
+
 fn composition_kind(value: &str, id: &str, errors: &mut Vec<String>) -> CompositionKind {
     match value {
         "split" => CompositionKind::Split,
@@ -356,6 +385,19 @@ fn composition_kind(value: &str, id: &str, errors: &mut Vec<String>) -> Composit
                 "composition '{id}': unknown composition kind '{other}'"
             ));
             CompositionKind::Split
+        }
+    }
+}
+
+fn furnishing_kind(value: &str, id: &str, errors: &mut Vec<String>) -> FurnishingKind {
+    match value {
+        "row" => FurnishingKind::Row,
+        "column" => FurnishingKind::Column,
+        other => {
+            errors.push(format!(
+                "furnishing '{id}': unknown kind '{other}' (expected row or column)"
+            ));
+            FurnishingKind::Column
         }
     }
 }
@@ -510,6 +552,7 @@ pub struct ResolvedRegion {
     pub grow: f32,
     pub surface: SurfaceRole,
     pub overflow: OverflowPolicy,
+    pub furnishing: Option<String>,
 }
 #[derive(Debug, Clone)]
 pub struct ResolvedElement {
@@ -535,6 +578,46 @@ pub struct ResolvedComposition {
     pub gap: u32,
     pub padding: u32,
     pub grow: f32,
+}
+
+#[derive(Debug, Clone)]
+pub struct ResolvedFurnishing {
+    pub id: String,
+    pub kind: FurnishingKind,
+    pub children: Vec<FurnishingChild>,
+    pub gap: u32,
+    pub padding: u32,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+    pub grow: f32,
+    pub overflow: OverflowPolicy,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FurnishingKind {
+    Row,
+    Column,
+}
+
+impl FurnishingKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Row => "row",
+            Self::Column => "column",
+        }
+    }
+}
+
+impl std::fmt::Display for FurnishingKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum FurnishingChild {
+    Furnishing(String),
+    Element(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -642,6 +725,7 @@ pub struct ResolvedBlueprint {
     pub root: String,
     pub regions: Vec<ResolvedRegion>,
     pub compositions: Vec<ResolvedComposition>,
+    pub furnishings: Vec<ResolvedFurnishing>,
     pub elements: Vec<ResolvedElement>,
     pub fixtures: Vec<ResolvedFixture>,
     pub visual: Option<ResolvedVisual>,
@@ -698,6 +782,367 @@ fn logical_size(
         }
     }
 }
+
+fn resolve_furnishings(
+    source_regions: &[RegionSource],
+    source_furnishings: &[FurnishingSource],
+    regions: &mut [ResolvedRegion],
+    elements: &[ResolvedElement],
+    ids: &mut HashSet<String>,
+    spacing: &HashMap<String, u32>,
+    errors: &mut Vec<String>,
+) -> Vec<ResolvedFurnishing> {
+    let furnishing_ids: HashSet<_> = source_furnishings
+        .iter()
+        .filter(|furnishing| !furnishing.id.trim().is_empty())
+        .map(|furnishing| furnishing.id.as_str())
+        .collect();
+    let element_ids: HashSet<_> = elements
+        .iter()
+        .filter(|element| !element.id.trim().is_empty())
+        .map(|element| element.id.as_str())
+        .collect();
+    let element_by_id: HashMap<_, _> = elements
+        .iter()
+        .map(|element| (element.id.as_str(), element))
+        .collect();
+
+    let mut furnished_roots: HashMap<String, Vec<String>> = HashMap::new();
+    for (source, region) in source_regions.iter().zip(regions.iter_mut()) {
+        region.furnishing = source.furnishing.clone();
+        if let Some(root) = &source.furnishing {
+            if !furnishing_ids.contains(root.as_str()) {
+                errors.push(format!(
+                    "region '{}': missing furnishing root '{}'",
+                    region.id, root
+                ));
+            } else {
+                furnished_roots
+                    .entry(root.clone())
+                    .or_default()
+                    .push(region.id.clone());
+            }
+        }
+    }
+
+    let mut resolved = Vec::with_capacity(source_furnishings.len());
+    for source in source_furnishings {
+        add_id(ids, errors, &source.id, "furnishing");
+        let kind = furnishing_kind(&source.kind, &source.id, errors);
+        let mut children = Vec::with_capacity(source.children.len());
+        let mut seen_children = HashSet::new();
+        let mut child_types = HashSet::new();
+        for child in &source.children {
+            if !seen_children.insert(child.as_str()) {
+                errors.push(format!(
+                    "furnishing '{}': child '{}' is duplicated within its children",
+                    source.id, child
+                ));
+                continue;
+            }
+            if furnishing_ids.contains(child.as_str()) {
+                child_types.insert("furnishing");
+                children.push(FurnishingChild::Furnishing(child.clone()));
+            } else if element_ids.contains(child.as_str()) {
+                child_types.insert("element");
+                children.push(FurnishingChild::Element(child.clone()));
+            } else {
+                errors.push(format!(
+                    "furnishing '{}': missing child reference '{}'",
+                    source.id, child
+                ));
+            }
+        }
+        if child_types.len() > 1 {
+            errors.push(format!(
+                "furnishing '{}': direct children must be either all furnishings or all elements",
+                source.id
+            ));
+        }
+
+        let gap = source
+            .gap
+            .as_ref()
+            .and_then(|token| spacing.get(token))
+            .copied()
+            .unwrap_or(0);
+        if let Some(token) = &source.gap {
+            if !spacing.contains_key(token) {
+                errors.push(format!(
+                    "furnishing '{}': missing spacing token '{}' for gap",
+                    source.id, token
+                ));
+            }
+        }
+        let padding = source
+            .padding
+            .as_ref()
+            .and_then(|token| spacing.get(token))
+            .copied()
+            .unwrap_or(0);
+        if let Some(token) = &source.padding {
+            if !spacing.contains_key(token) {
+                errors.push(format!(
+                    "furnishing '{}': missing spacing token '{}' for padding",
+                    source.id, token
+                ));
+            }
+        }
+        let width = logical_size(
+            source.width.as_ref(),
+            "furnishing width",
+            &source.id,
+            errors,
+        );
+        let height = logical_size(
+            source.height.as_ref(),
+            "furnishing height",
+            &source.id,
+            errors,
+        );
+        let grow = source.grow.unwrap_or(0.0);
+        if !grow.is_finite() || grow < 0.0 {
+            errors.push(format!(
+                "furnishing '{}': grow must be finite and non-negative",
+                source.id
+            ));
+        }
+        if furnished_roots.contains_key(&source.id)
+            && (source.width.is_some() || source.height.is_some() || source.grow.is_some())
+        {
+            errors.push(format!(
+                "furnishing '{}': a region furnishing root must not author width, height, or grow",
+                source.id
+            ));
+        }
+        resolved.push(ResolvedFurnishing {
+            id: source.id.clone(),
+            kind,
+            children,
+            gap,
+            padding,
+            width,
+            height,
+            grow: if grow.is_finite() && grow >= 0.0 {
+                grow
+            } else {
+                0.0
+            },
+            overflow: furnishing_overflow(source.overflow.as_deref(), &source.id, errors),
+        });
+    }
+
+    let by_id: HashMap<_, _> = resolved
+        .iter()
+        .map(|furnishing| (furnishing.id.as_str(), furnishing))
+        .collect();
+    let source_by_id: HashMap<_, _> = source_furnishings
+        .iter()
+        .map(|furnishing| (furnishing.id.as_str(), furnishing))
+        .collect();
+    let mut furnishing_parents: HashMap<&str, Vec<&str>> = HashMap::new();
+    let mut element_parents: HashMap<&str, Vec<&str>> = HashMap::new();
+    for parent in &resolved {
+        for child in &parent.children {
+            match child {
+                FurnishingChild::Furnishing(id) => furnishing_parents
+                    .entry(id.as_str())
+                    .or_default()
+                    .push(parent.id.as_str()),
+                FurnishingChild::Element(id) => element_parents
+                    .entry(id.as_str())
+                    .or_default()
+                    .push(parent.id.as_str()),
+            }
+        }
+    }
+    for (child, parents) in &furnishing_parents {
+        if parents.len() > 1 {
+            errors.push(format!(
+                "furnishing '{child}' has multiple furnishing parents: {}",
+                parents.join(" and ")
+            ));
+        }
+        if furnished_roots.contains_key(*child) {
+            errors.push(format!(
+                "furnishing root '{child}' cannot have a furnishing parent"
+            ));
+        }
+    }
+    for (child, parents) in &element_parents {
+        if parents.len() > 1 {
+            errors.push(format!(
+                "element '{child}' has multiple furnishing parents: {}",
+                parents.join(" and ")
+            ));
+        }
+    }
+    for (root, owners) in &furnished_roots {
+        if owners.len() > 1 {
+            errors.push(format!(
+                "furnishing root '{root}' is assigned to multiple regions: {}",
+                owners.join(" and ")
+            ));
+        }
+    }
+
+    for parent in &resolved {
+        for child in &parent.children {
+            let FurnishingChild::Furnishing(child_id) = child else {
+                continue;
+            };
+            let Some(child_furnishing) = by_id.get(child_id.as_str()) else {
+                continue;
+            };
+            let Some(source_child) = source_by_id.get(child_id.as_str()) else {
+                continue;
+            };
+            let has_main_axis_slot = match parent.kind {
+                FurnishingKind::Row => {
+                    child_furnishing.width.is_some() || child_furnishing.grow > 0.0
+                }
+                FurnishingKind::Column => {
+                    child_furnishing.height.is_some() || child_furnishing.grow > 0.0
+                }
+            };
+            if !has_main_axis_slot {
+                let axis = match parent.kind {
+                    FurnishingKind::Row => "width",
+                    FurnishingKind::Column => "height",
+                };
+                errors.push(format!(
+                    "furnishing '{}' child '{}': requires {axis} or positive grow for deterministic allocation",
+                    parent.id, source_child.id
+                ));
+            }
+        }
+    }
+
+    let mut visiting = HashSet::new();
+    let mut visited = HashSet::new();
+    fn visit(
+        id: &str,
+        furnishings: &HashMap<&str, &ResolvedFurnishing>,
+        visiting: &mut HashSet<String>,
+        visited: &mut HashSet<String>,
+        errors: &mut Vec<String>,
+    ) {
+        if visiting.contains(id) {
+            errors.push(format!("furnishing cycle detected at '{id}'"));
+            return;
+        }
+        if !visited.insert(id.to_owned()) {
+            return;
+        }
+        visiting.insert(id.to_owned());
+        if let Some(furnishing) = furnishings.get(id) {
+            for child in &furnishing.children {
+                if let FurnishingChild::Furnishing(child) = child {
+                    visit(child, furnishings, visiting, visited, errors);
+                }
+            }
+        }
+        visiting.remove(id);
+    }
+    for furnishing in &resolved {
+        if !visited.contains(&furnishing.id) {
+            visit(&furnishing.id, &by_id, &mut visiting, &mut visited, errors);
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn collect_reachable(
+        id: &str,
+        owner_region: &str,
+        furnishings: &HashMap<&str, &ResolvedFurnishing>,
+        elements: &HashMap<&str, &ResolvedElement>,
+        stack: &mut HashSet<String>,
+        furnishing_counts: &mut HashMap<String, usize>,
+        element_counts: &mut HashMap<(String, String), usize>,
+        errors: &mut Vec<String>,
+    ) {
+        if !stack.insert(id.to_owned()) {
+            return;
+        }
+        *furnishing_counts.entry(id.to_owned()).or_default() += 1;
+        if let Some(furnishing) = furnishings.get(id) {
+            for child in &furnishing.children {
+                match child {
+                    FurnishingChild::Furnishing(child) => collect_reachable(
+                        child,
+                        owner_region,
+                        furnishings,
+                        elements,
+                        stack,
+                        furnishing_counts,
+                        element_counts,
+                        errors,
+                    ),
+                    FurnishingChild::Element(child) => {
+                        if let Some(element) = elements.get(child.as_str()) {
+                            if element.region != owner_region {
+                                errors.push(format!(
+                                    "furnishing '{}' in region '{}' contains element '{}' owned by region '{}'",
+                                    furnishing.id, owner_region, child, element.region
+                                ));
+                            }
+                            *element_counts
+                                .entry((owner_region.to_owned(), child.clone()))
+                                .or_default() += 1;
+                        }
+                    }
+                }
+            }
+        }
+        stack.remove(id);
+    }
+
+    let mut furnishing_counts = HashMap::new();
+    let mut element_counts = HashMap::new();
+    for (root, owners) in &furnished_roots {
+        for owner in owners {
+            collect_reachable(
+                root,
+                owner,
+                &by_id,
+                &element_by_id,
+                &mut HashSet::new(),
+                &mut furnishing_counts,
+                &mut element_counts,
+                errors,
+            );
+        }
+    }
+    for furnishing in &resolved {
+        let count = furnishing_counts.get(&furnishing.id).copied().unwrap_or(0);
+        if count != 1 {
+            errors.push(format!(
+                "furnishing '{}': must be reachable from exactly one region furnishing root (found {count})",
+                furnishing.id
+            ));
+        }
+    }
+    for region in regions.iter().filter(|region| region.furnishing.is_some()) {
+        for element in elements
+            .iter()
+            .filter(|element| element.region == region.id)
+        {
+            let count = element_counts
+                .get(&(region.id.clone(), element.id.clone()))
+                .copied()
+                .unwrap_or(0);
+            if count != 1 {
+                errors.push(format!(
+                    "furnished region '{}': element '{}' must be reachable exactly once from its furnishing root (found {count})",
+                    region.id, element.id
+                ));
+            }
+        }
+    }
+
+    resolved
+}
+
 fn parse_color(value: &str) -> Option<Color> {
     let valid = value
         .strip_prefix('#')
@@ -897,18 +1342,19 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
             },
             surface: surface(r.surface.as_ref(), &r.id, &mut errors),
             overflow: overflow(r.overflow.as_deref(), &r.id, &mut errors),
+            furnishing: r.furnishing.clone(),
         });
     }
     let region_ids: HashSet<_> = regions
         .iter()
         .filter(|r| !r.id.trim().is_empty())
-        .map(|r| r.id.as_str())
+        .map(|r| r.id.clone())
         .collect();
     let mut elements = Vec::new();
     for e in &source.element {
         validate_screen_author_id_collision(&source.screen.id, &e.id, "element", &mut errors);
         add_id(&mut ids, &mut errors, &e.id, "element");
-        if !region_ids.contains(e.region.as_str()) {
+        if !region_ids.contains(&e.region) {
             errors.push(format!("element '{}': missing region '{}'", e.id, e.region));
         }
         let element_kind = kind(&e.kind, &format!("element '{}'", e.id), &mut errors);
@@ -967,7 +1413,7 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
         let composition_axis = axis(c.axis.as_deref(), composition_kind, &c.id, &mut errors);
         let mut children = Vec::new();
         for child in &c.children {
-            if region_ids.contains(child.as_str()) {
+            if region_ids.contains(child) {
                 children.push(CompositionChild::Region(child.clone()));
             } else if composition_ids.contains(child.as_str()) {
                 children.push(CompositionChild::Composition(child.clone()));
@@ -1079,6 +1525,15 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
             },
         });
     }
+    let furnishings = resolve_furnishings(
+        &source.region,
+        &source.furnishing,
+        &mut regions,
+        &elements,
+        &mut ids,
+        spacing,
+        &mut errors,
+    );
     let root = match source.screen.root.as_deref() {
         None => {
             errors.push("screen.root: missing explicit composition reference".into());
@@ -1468,7 +1923,7 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
         });
     }
     let dominant = source.design.dominant.as_ref().and_then(|d| {
-        if region_ids.contains(d.as_str()) {
+        if region_ids.contains(d) {
             if root.is_some() && !reachable_regions.contains(d) {
                 errors.push(format!(
                     "design.dominant: region '{}' is not reachable from screen.root '{}'",
@@ -1514,6 +1969,7 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
         root: root.expect("validated root"),
         regions,
         compositions,
+        furnishings,
         elements,
         fixtures: resolved_fixtures,
         visual,
@@ -1522,6 +1978,64 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
 
 impl ResolvedBlueprint {
     pub fn semantic_tree(&self) -> String {
+        fn render_element(element: &ResolvedElement, out: &mut String, indent: usize) {
+            out.push_str(&format!(
+                "{:indent$}element {} ({:?}{}{})\n",
+                "",
+                element.id,
+                element.kind,
+                element
+                    .action
+                    .as_ref()
+                    .map(|action| format!(", action {}", action.as_str()))
+                    .unwrap_or_default(),
+                element
+                    .presentation
+                    .map(|presentation| format!(", presentation {presentation:?}"))
+                    .unwrap_or_default(),
+                indent = indent
+            ));
+        }
+        fn walk_furnishing(id: &str, b: &ResolvedBlueprint, out: &mut String, indent: usize) {
+            let Some(furnishing) = b.furnishings.iter().find(|furnishing| furnishing.id == id)
+            else {
+                return;
+            };
+            let mut attributes = vec![
+                format!("gap {}px", furnishing.gap),
+                format!("padding {}px", furnishing.padding),
+                format!("overflow {}", furnishing.overflow.as_str()),
+            ];
+            if let Some(width) = furnishing.width {
+                attributes.push(format!("width {width}px"));
+            }
+            if let Some(height) = furnishing.height {
+                attributes.push(format!("height {height}px"));
+            }
+            if furnishing.grow > 0.0 {
+                attributes.push(format!("grow {}", furnishing.grow));
+            }
+            out.push_str(&format!(
+                "{:indent$}furnishing {} — {} ({})\n",
+                "",
+                furnishing.id,
+                furnishing.kind,
+                attributes.join(", "),
+                indent = indent
+            ));
+            for child in &furnishing.children {
+                match child {
+                    FurnishingChild::Furnishing(child) => {
+                        walk_furnishing(child, b, out, indent + 2)
+                    }
+                    FurnishingChild::Element(id) => {
+                        if let Some(element) = b.elements.iter().find(|element| element.id == *id) {
+                            render_element(element, out, indent + 2);
+                        }
+                    }
+                }
+            }
+        }
         fn walk(
             id: &str,
             b: &ResolvedBlueprint,
@@ -1586,7 +2100,7 @@ impl ResolvedBlueprint {
                             String::new()
                         };
                         out.push_str(&format!(
-                            "{:indent$}{}region {} (role {}{})\n",
+                            "{:indent$}{}region {} (role {}{}{})\n",
                             "",
                             layer.map(|layer| format!("{layer} ")).unwrap_or_default(),
                             region,
@@ -1594,23 +2108,24 @@ impl ResolvedBlueprint {
                                 .map(|candidate| candidate.role.as_str())
                                 .unwrap_or("unknown"),
                             annotation,
+                            resolved
+                                .and_then(|candidate| candidate.furnishing.as_deref())
+                                .map(|root| format!(", furnishing {root}"))
+                                .unwrap_or_default(),
                             indent = indent + 2
                         ));
-                        for e in b.elements.iter().filter(|e| e.region == *region) {
-                            out.push_str(&format!(
-                                "{:indent$}element {} ({:?}{}{})\n",
-                                "",
-                                e.id,
-                                e.kind,
-                                e.action
-                                    .as_ref()
-                                    .map(|action| format!(", action {}", action.as_str()))
-                                    .unwrap_or_default(),
-                                e.presentation
-                                    .map(|presentation| format!(", presentation {presentation:?}"))
-                                    .unwrap_or_default(),
-                                indent = indent + 4
-                            ));
+                        if let Some(root) =
+                            resolved.and_then(|candidate| candidate.furnishing.as_deref())
+                        {
+                            walk_furnishing(root, b, out, indent + 4);
+                        } else {
+                            for element in b
+                                .elements
+                                .iter()
+                                .filter(|element| element.region == *region)
+                            {
+                                render_element(element, out, indent + 4);
+                            }
                         }
                     }
                 }
@@ -3733,6 +4248,346 @@ mod tests {
         assert_eq!(
             parse_and_resolve(&source).unwrap().compositions[0].grow,
             2.5
+        );
+    }
+
+    fn furnishing_source() -> String {
+        r#"
+[screen]
+id = "furnishing_root"
+purpose = "Inspect nested furnishing layout"
+root = "workspace"
+
+[tokens.spacing]
+sm = 8
+md = 12
+
+[[region]]
+id = "reader"
+role = "primary_content"
+importance = "primary"
+furnishing = "furnishing_root"
+
+[[region]]
+id = "other"
+role = "status"
+importance = "secondary"
+
+[[element]]
+id = "search"
+region = "reader"
+kind = "search"
+importance = "secondary"
+label = "Search"
+
+[[element]]
+id = "previous"
+region = "reader"
+kind = "command"
+importance = "secondary"
+label = "Previous"
+action = "chapter.previous"
+
+[[element]]
+id = "chapter_status"
+region = "reader"
+kind = "status"
+importance = "tertiary"
+label = "Chapter position"
+
+[[element]]
+id = "chapter"
+region = "reader"
+kind = "document"
+importance = "primary"
+label = "Chapter"
+
+[[composition]]
+id = "workspace"
+kind = "split"
+children = ["reader", "other"]
+
+[[furnishing]]
+id = "furnishing_root"
+kind = "column"
+children = ["toolbar", "document_slot"]
+gap = "md"
+padding = "sm"
+
+[[furnishing]]
+id = "toolbar"
+kind = "row"
+children = ["search_slot", "actions_slot"]
+height = "52px"
+gap = "sm"
+
+[[furnishing]]
+id = "search_slot"
+kind = "row"
+children = ["search"]
+grow = 1
+
+[[furnishing]]
+id = "actions_slot"
+kind = "row"
+children = ["previous", "chapter_status"]
+width = "320px"
+grow = 0.5
+gap = "sm"
+
+[[furnishing]]
+id = "document_slot"
+kind = "column"
+children = ["chapter"]
+grow = 1
+overflow = "scroll_y"
+"#
+        .to_owned()
+    }
+
+    fn assert_furnishing_error(source: &str, expected: &str) {
+        let error = parse_and_resolve(source).unwrap_err().to_string();
+        assert!(
+            error.contains(expected),
+            "expected diagnostic {expected:?}, got:\n{error}"
+        );
+    }
+
+    fn with_extra_furnishing(source: &str, block: &str) -> String {
+        format!("{source}\n{block}")
+    }
+
+    #[test]
+    fn nested_furnishing_resolves_typed_tree_and_covers_region_elements_once() {
+        let blueprint = parse_and_resolve(&furnishing_source()).unwrap();
+        assert_eq!(blueprint.screen.id, "furnishing_root");
+        let reader = blueprint
+            .regions
+            .iter()
+            .find(|region| region.id == "reader")
+            .unwrap();
+        assert_eq!(reader.furnishing.as_deref(), Some("furnishing_root"));
+        assert_eq!(blueprint.furnishings.len(), 5);
+
+        let root = blueprint
+            .furnishings
+            .iter()
+            .find(|furnishing| furnishing.id == "furnishing_root")
+            .unwrap();
+        assert_eq!(root.kind, FurnishingKind::Column);
+        assert_eq!(root.gap, 12);
+        assert_eq!(root.padding, 8);
+        assert!(root.width.is_none() && root.height.is_none());
+        assert!(matches!(
+            root.children.as_slice(),
+            [FurnishingChild::Furnishing(toolbar), FurnishingChild::Furnishing(document)]
+                if toolbar == "toolbar" && document == "document_slot"
+        ));
+
+        let actions = blueprint
+            .furnishings
+            .iter()
+            .find(|furnishing| furnishing.id == "actions_slot")
+            .unwrap();
+        assert_eq!(actions.kind, FurnishingKind::Row);
+        assert_eq!(actions.width, Some(320));
+        assert_eq!(actions.grow, 0.5);
+        assert_eq!(actions.gap, 8);
+        let document = blueprint
+            .furnishings
+            .iter()
+            .find(|furnishing| furnishing.id == "document_slot")
+            .unwrap();
+        assert_eq!(document.overflow, OverflowPolicy::ScrollY);
+        assert!(matches!(
+            document.children.as_slice(),
+            [FurnishingChild::Element(chapter)] if chapter == "chapter"
+        ));
+    }
+
+    #[test]
+    fn furnished_lantern_leaf_specimen_resolves_without_a_fake_toolbar_region() {
+        let blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/lantern-leaf-reader-furnished.toml"
+        ))
+        .unwrap();
+        assert_eq!(blueprint.screen.id, "lantern_leaf_reader_furnished");
+        assert!(blueprint.regions.iter().any(|region| region.id == "reader"));
+        assert!(!blueprint
+            .regions
+            .iter()
+            .any(|region| region.id == "reader_toolbar"));
+        assert_eq!(blueprint.furnishings.len(), 15);
+        for region in blueprint
+            .regions
+            .iter()
+            .filter(|region| region.furnishing.is_some())
+        {
+            let root = region.furnishing.as_deref().unwrap();
+            let root_node = blueprint
+                .furnishings
+                .iter()
+                .find(|node| node.id == root)
+                .unwrap();
+            assert!(root_node.width.is_none());
+            assert!(root_node.height.is_none());
+            assert_eq!(root_node.grow, 0.0);
+        }
+        let reader = blueprint
+            .regions
+            .iter()
+            .find(|region| region.id == "reader")
+            .unwrap();
+        assert_eq!(reader.furnishing.as_deref(), Some("reader_furnishing"));
+        let fixtures = &blueprint.fixtures;
+        assert!(fixtures.iter().any(|fixture| fixture.id == "reading"));
+        let semantic = blueprint.semantic_tree();
+        assert!(semantic.contains("region reader"));
+        assert!(semantic.contains("furnishing reader_furnishing — column"));
+        assert!(semantic.contains("furnishing toolbar_slot — row"));
+        assert!(semantic.contains("furnishing document_slot — column"));
+        assert!(semantic.contains("element chapter_document"));
+    }
+
+    #[test]
+    fn furnishing_validation_rejects_missing_root_cycles_and_duplicate_children() {
+        let source = furnishing_source();
+        assert_furnishing_error(
+            &source.replace(
+                "furnishing = \"furnishing_root\"",
+                "furnishing = \"missing_root\"",
+            ),
+            "missing furnishing root 'missing_root'",
+        );
+        assert_furnishing_error(
+            &source.replace(
+                "children = [\"search_slot\", \"actions_slot\"]",
+                "children = [\"search_slot\", \"actions_slot\", \"toolbar\"]",
+            ),
+            "furnishing cycle detected",
+        );
+        assert_furnishing_error(
+            &source.replace(
+                "children = [\"search\"]",
+                "children = [\"search\", \"search\"]",
+            ),
+            "child 'search' is duplicated",
+        );
+    }
+
+    #[test]
+    fn furnishing_validation_rejects_multiple_parents_and_mixed_children() {
+        let source = furnishing_source();
+        let two_furnishing_parents = with_extra_furnishing(
+            &source,
+            "[[furnishing]]\nid = \"extra\"\nkind = \"column\"\nchildren = [\"search_slot\"]\nheight = \"40px\"",
+        );
+        assert_furnishing_error(
+            &two_furnishing_parents,
+            "furnishing 'search_slot' has multiple furnishing parents",
+        );
+
+        let two_element_parents = with_extra_furnishing(
+            &source,
+            "[[furnishing]]\nid = \"extra\"\nkind = \"row\"\nchildren = [\"search\"]\nwidth = \"100px\"",
+        );
+        assert_furnishing_error(
+            &two_element_parents,
+            "element 'search' has multiple furnishing parents",
+        );
+
+        let mixed = source.replace(
+            "children = [\"toolbar\", \"document_slot\"]",
+            "children = [\"toolbar\", \"document_slot\", \"search\"]",
+        );
+        assert_furnishing_error(
+            &mixed,
+            "direct children must be either all furnishings or all elements",
+        );
+    }
+
+    #[test]
+    fn furnishing_validation_rejects_cross_region_elements_and_orphans() {
+        let source = furnishing_source();
+        assert_furnishing_error(
+            &source.replace(
+                "id = \"search\"\nregion = \"reader\"",
+                "id = \"search\"\nregion = \"other\"",
+            ),
+            "contains element 'search' owned by region 'other'",
+        );
+        let orphan = source.replace("children = [\"search\"]", "children = []");
+        assert_furnishing_error(&orphan, "element 'search' must be reachable exactly once");
+    }
+
+    #[test]
+    fn furnishing_validation_rejects_bad_spacing_dimensions_growth_and_slots() {
+        let source = furnishing_source();
+        assert_furnishing_error(
+            &source.replace(
+                "gap = \"md\"\npadding = \"sm\"",
+                "gap = \"absent\"\npadding = \"sm\"",
+            ),
+            "missing spacing token 'absent' for gap",
+        );
+        assert_furnishing_error(
+            &source.replace("padding = \"sm\"", "padding = \"absent\""),
+            "missing spacing token 'absent' for padding",
+        );
+        assert_furnishing_error(
+            &source.replace("height = \"52px\"", "height = \"52\""),
+            "furnishing height 'toolbar': size must be a pixel value",
+        );
+        assert_furnishing_error(
+            &source.replace("width = \"320px\"", "width = \"wide\""),
+            "furnishing width 'actions_slot': size must be a pixel value",
+        );
+        assert_furnishing_error(
+            &source.replace("grow = 0.5", "grow = -1.0"),
+            "furnishing 'actions_slot': grow must be finite and non-negative",
+        );
+        assert_furnishing_error(
+            &source.replace("grow = 0.5", "grow = nan"),
+            "furnishing 'actions_slot': grow must be finite and non-negative",
+        );
+        assert_furnishing_error(
+            &source.replace("width = \"320px\"\ngrow = 0.5\n", ""),
+            "child 'actions_slot': requires width or positive grow",
+        );
+        assert_furnishing_error(
+            &source.replace(
+                "id = \"furnishing_root\"\nkind = \"column\"",
+                "id = \"furnishing_root\"\nkind = \"column\"\nwidth = \"300px\"",
+            ),
+            "region furnishing root must not author width, height, or grow",
+        );
+    }
+
+    #[test]
+    fn furnishing_validation_rejects_multiple_roots_unrooted_nodes_and_unknown_fields() {
+        let source = furnishing_source();
+        let multiple_roots = source.replace(
+            "id = \"other\"\nrole = \"status\"",
+            "id = \"other\"\nrole = \"status\"\nfurnishing = \"furnishing_root\"",
+        );
+        assert_furnishing_error(
+            &multiple_roots,
+            "furnishing root 'furnishing_root' is assigned to multiple regions",
+        );
+        let unrooted = with_extra_furnishing(
+            &source,
+            "[[furnishing]]\nid = \"unrooted\"\nkind = \"row\"\nchildren = []",
+        );
+        assert_furnishing_error(
+            &unrooted,
+            "furnishing 'unrooted': must be reachable from exactly one region furnishing root (found 0)",
+        );
+        assert_furnishing_error(
+            &source.replace(
+                "id = \"search_slot\"\nkind = \"row\"",
+                "id = \"search_slot\"\nkind = \"row\"\nrole = \"commands\"",
+            ),
+            "unknown field `role`",
         );
     }
 }

@@ -1,4 +1,6 @@
-use viewwright_model::{CompositionChild, CompositionKind, OverflowPolicy, ResolvedBlueprint};
+use viewwright_model::{
+    CompositionChild, CompositionKind, FurnishingChild, OverflowPolicy, ResolvedBlueprint,
+};
 
 pub fn render(b: &ResolvedBlueprint) -> String {
     let mut out = format!("ViewWright: {} — {}\n", b.screen.id, b.screen.purpose);
@@ -47,8 +49,53 @@ fn walk(id: &str, b: &ResolvedBlueprint, out: &mut String, depth: usize) {
                         ""
                     }
                 ));
-                for e in b.elements.iter().filter(|e| e.region == *region) {
-                    out.push_str(&format!("{}      * {} [{:?}]\n", indent, e.label, e.kind));
+                let resolved = b.regions.iter().find(|candidate| candidate.id == *region);
+                if let Some(root) = resolved.and_then(|region| region.furnishing.as_deref()) {
+                    walk_furnishing(root, b, out, depth + 1);
+                } else {
+                    for e in b.elements.iter().filter(|e| e.region == *region) {
+                        out.push_str(&format!("{}      * {} [{:?}]\n", indent, e.label, e.kind));
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn walk_furnishing(id: &str, b: &ResolvedBlueprint, out: &mut String, depth: usize) {
+    let Some(furnishing) = b.furnishings.iter().find(|furnishing| furnishing.id == id) else {
+        return;
+    };
+    let indent = "  ".repeat(depth);
+    let mut attributes = vec![
+        format!("gap {}px", furnishing.gap),
+        format!("padding {}px", furnishing.padding),
+        format!("overflow {}", furnishing.overflow.as_str()),
+    ];
+    if let Some(width) = furnishing.width {
+        attributes.push(format!("width {width}px"));
+    }
+    if let Some(height) = furnishing.height {
+        attributes.push(format!("height {height}px"));
+    }
+    if furnishing.grow > 0.0 {
+        attributes.push(format!("grow {}", furnishing.grow));
+    }
+    out.push_str(&format!(
+        "{indent}  + furnishing {} ({}, {})\n",
+        furnishing.id,
+        furnishing.kind,
+        attributes.join(", ")
+    ));
+    for child in &furnishing.children {
+        match child {
+            FurnishingChild::Furnishing(child) => walk_furnishing(child, b, out, depth + 1),
+            FurnishingChild::Element(id) => {
+                if let Some(element) = b.elements.iter().find(|element| element.id == *id) {
+                    out.push_str(&format!(
+                        "{}    * {} [{:?}]\n",
+                        indent, element.label, element.kind
+                    ));
                 }
             }
         }
@@ -77,5 +124,26 @@ mod tests {
         ))
         .unwrap();
         assert!(render(&overflow).contains("region reader (overflow scroll_y)"));
+    }
+
+    #[test]
+    fn furnished_lantern_leaf_ascii_exposes_order_slots_and_overflow() {
+        let blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/lantern-leaf-reader-furnished.toml"
+        ))
+        .unwrap();
+        let output = render(&blueprint);
+        assert!(output.contains("region reader\n"));
+        assert!(output.contains("furnishing reader_furnishing (column"));
+        assert!(output.contains("furnishing toolbar_slot (row"));
+        assert!(output.contains("furnishing search_slot (row"));
+        assert!(output.contains("furnishing toolbar_actions (row"));
+        assert!(output.contains("furnishing document_slot (column"));
+        assert!(output.contains("overflow scroll_y, grow 1"));
+        assert!(output.contains("Back 15 seconds [Command]"));
+        assert!(
+            output.find("Back 15 seconds [Command]").unwrap()
+                < output.find("Play / pause [Command]").unwrap()
+        );
     }
 }
