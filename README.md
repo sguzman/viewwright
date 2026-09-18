@@ -406,6 +406,12 @@ M38 promotes the verification chain from individually proven stages into one in-
 
 The M38 integration proof composes the real ViewWright egui output, pinned ViewWitness adapter, and M35 comparator for Project Browser, M31 overlay, and M32 overflow pressure at 1440×900. All three produce valid Witnesses and exact reports; the proof and its additional dependencies are confined to renderer tests.
 
+## M40 — Lantern Leaf v0.1-language baseline transcription
+
+M40 adds `specimens/lantern-leaf-reader-baseline.toml`, an honest Lantern Leaf EPUB + TTS reader approximation authored exclusively with accepted ViewWright 0.1 language. Its fixed 260 px library and 330 px inspector flank a growing reader; a 96 px TTS command surface persists at the bottom. Fixture-backed navigation, book/TOC/document/settings/status content and action labels make the representational boundary executable without adding application behavior.
+
+The companion [M40 baseline findings](docs/v0.2/m40-lantern-leaf-baseline-findings.md) records flattened furnishing, unsupported controls and document/highlight semantics, missing visual assets and typography distinction, concept-projection loss, and absent compact/narrow behavior. Focused tests traverse semantic, ASCII, concept, layout, preview, expectation, real AccessKit/ViewWitness, and M35 exact comparison. No schema, resolved-model, renderer-semantic, comparator, or ViewWitness changes were made. The baseline's M35 comparison is exact; human/Director visual QA remains pending, and no visual parity is claimed.
+
 ## Status
 
 - M0 — accepted
@@ -448,3 +454,4 @@ The M38 integration proof composes the real ViewWright egui output, pinned ViewW
 - M37 — accepted
 - M38 — accepted
 - M39 — accepted
+- M40 — implementation complete; human/Director review pending

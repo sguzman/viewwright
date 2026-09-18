@@ -9,6 +9,8 @@ viewwright-model = { path = "../viewwright-model" }
 viewwright-layout = { path = "../viewwright-layout" }
 
 [dev-dependencies]
+viewwright-ascii = { path = "../viewwright-ascii" }
 viewwright-compare = { path = "../viewwright-compare" }
+viewwright-concept = { path = "../viewwright-concept" }
 viewwright-expectation = { path = "../viewwright-expectation" }
 viewwitness = { git = "https://github.com/sguzman/viewwitness", rev = "f1930ab2a70175c46d12dd1e61501c3b4ae09408", default-features = false, features = ["egui"] }
