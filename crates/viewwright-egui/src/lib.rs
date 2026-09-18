@@ -3,15 +3,23 @@ use std::collections::HashMap;
 use egui::{CentralPanel, Color32, FontId, Frame, RichText, ScrollArea, Stroke, Ui, UiBuilder};
 use viewwright_layout::{layout, LayoutPlan, Rect as LayoutRect};
 use viewwright_model::{
-    BorderPolicy, CollectionPresentation, Color, CompositionChild, Density, ElementKind,
-    FurnishingChild, FurnishingKind, Importance, OverflowPolicy, RegionRole, ResolvedBlueprint,
-    ResolvedFixtureContent, ResolvedFurnishing, ResolvedRegion, SurfaceRole,
+    BorderPolicy, ChoicePresentation, CollectionPresentation, Color, CompositionChild, Density,
+    ElementKind, FurnishingChild, FurnishingKind, Importance, OverflowPolicy, RegionRole,
+    ResolvedBlueprint, ResolvedFixtureContent, ResolvedFurnishing, ResolvedRegion, SurfaceRole,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct InteractionEvent {
     pub element_id: String,
     pub action: String,
+    pub value: Option<TypedValue>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TypedValue {
+    Choice(String),
+    Boolean(bool),
+    Scalar(f32),
 }
 
 #[derive(Debug, Default)]
@@ -22,15 +30,28 @@ pub struct RenderOutput {
 #[derive(Debug, Default)]
 pub struct RenderState {
     search_values: HashMap<String, String>,
+    control_values: HashMap<(String, String), TypedValue>,
 }
 
 impl RenderState {
     pub fn clear(&mut self) {
         self.search_values.clear();
+        self.control_values.clear();
     }
 
     pub fn search_value_mut(&mut self, element_id: &str) -> &mut String {
         self.search_values.entry(element_id.to_owned()).or_default()
+    }
+
+    fn control_value_mut(
+        &mut self,
+        fixture: &str,
+        element_id: &str,
+        seed: TypedValue,
+    ) -> &mut TypedValue {
+        self.control_values
+            .entry((fixture.to_owned(), element_id.to_owned()))
+            .or_insert(seed)
     }
 }
 
@@ -667,8 +688,98 @@ fn render_element(
                             *activation = Some(InteractionEvent {
                                 element_id: e.id.clone(),
                                 action: action.as_str().to_owned(),
+                                value: None,
                             });
                         }
+                    }
+                }
+                ElementKind::Choice => {
+                    let (Some(config), Some(ResolvedFixtureContent::Choice { selected, .. })) =
+                        (e.choice.as_ref(), content_for(b, fixture, &e.id))
+                    else {
+                        return;
+                    };
+                    let value = state.control_value_mut(
+                        fixture,
+                        &e.id,
+                        TypedValue::Choice(selected.clone()),
+                    );
+                    let TypedValue::Choice(selected) = value else {
+                        return;
+                    };
+                    let mut changed = false;
+                    match config.presentation {
+                        ChoicePresentation::Select => {
+                            let selected_label = config
+                                .options
+                                .iter()
+                                .find(|option| option.id == *selected)
+                                .map(|option| option.label.as_str())
+                                .unwrap_or(selected);
+                            egui::ComboBox::from_id_salt(("viewwright-choice", &e.id))
+                                .selected_text(selected_label)
+                                .show_ui(ui, |ui| {
+                                    for option in &config.options {
+                                        changed |= ui
+                                            .selectable_value(
+                                                selected,
+                                                option.id.clone(),
+                                                &option.label,
+                                            )
+                                            .changed();
+                                    }
+                                });
+                        }
+                        ChoicePresentation::Segmented => {
+                            ui.horizontal(|ui| {
+                                for option in &config.options {
+                                    changed |= ui
+                                        .selectable_value(
+                                            selected,
+                                            option.id.clone(),
+                                            &option.label,
+                                        )
+                                        .changed();
+                                }
+                            });
+                        }
+                    }
+                    if changed {
+                        *activation = value_event(e, TypedValue::Choice(selected.clone()));
+                    }
+                }
+                ElementKind::Boolean => {
+                    let Some(ResolvedFixtureContent::Boolean { value: seed, .. }) =
+                        content_for(b, fixture, &e.id)
+                    else {
+                        return;
+                    };
+                    let value = state.control_value_mut(fixture, &e.id, TypedValue::Boolean(*seed));
+                    let TypedValue::Boolean(value) = value else {
+                        return;
+                    };
+                    if ui.checkbox(value, &e.label).changed() {
+                        *activation = value_event(e, TypedValue::Boolean(*value));
+                    }
+                }
+                ElementKind::Scalar => {
+                    let (Some(config), Some(ResolvedFixtureContent::Scalar { value: seed, .. })) =
+                        (e.scalar.as_ref(), content_for(b, fixture, &e.id))
+                    else {
+                        return;
+                    };
+                    let value = state.control_value_mut(fixture, &e.id, TypedValue::Scalar(*seed));
+                    let TypedValue::Scalar(value) = value else {
+                        return;
+                    };
+                    let mut slider = egui::Slider::new(value, config.min..=config.max)
+                        .step_by(f64::from(config.step))
+                        .show_value(true);
+                    if let Some(unit) = &config.unit {
+                        slider = slider.suffix(unit);
+                    }
+                    if ui.add(slider).changed() {
+                        *activation = value_event(e, TypedValue::Scalar(*value));
                     }
                 }
                 ElementKind::Status => {
@@ -690,8 +801,19 @@ fn render_element(
 fn separate_element_label(kind: ElementKind) -> bool {
     !matches!(
         kind,
-        ElementKind::Command | ElementKind::Text | ElementKind::Preview
+        ElementKind::Command | ElementKind::Text | ElementKind::Preview | ElementKind::Boolean
     )
+}
+
+fn value_event(
+    element: &viewwright_model::ResolvedElement,
+    value: TypedValue,
+) -> Option<InteractionEvent> {
+    Some(InteractionEvent {
+        element_id: element.id.clone(),
+        action: element.action.as_ref()?.as_str().to_owned(),
+        value: Some(value),
+    })
 }
 
 fn render_tree(
@@ -896,8 +1018,11 @@ fn content_for<'a>(
             | ResolvedFixtureContent::Properties { element: id, .. }
             | ResolvedFixtureContent::Text { element: id, .. }
             | ResolvedFixtureContent::Tree { element: id, .. }
-            | ResolvedFixtureContent::Document { element: id, .. } => id == element,
-            ResolvedFixtureContent::Command { element: id, .. } => id == element,
+            | ResolvedFixtureContent::Document { element: id, .. }
+            | ResolvedFixtureContent::Command { element: id, .. }
+            | ResolvedFixtureContent::Choice { element: id, .. }
+            | ResolvedFixtureContent::Boolean { element: id, .. }
+            | ResolvedFixtureContent::Scalar { element: id, .. } => id == element,
         })
 }
 
@@ -979,6 +1104,7 @@ mod tests {
     use viewwright_layout::layout;
     use viewwright_model::{
         parse_and_resolve, BorderPolicy, Density, ElementKind, Importance, RegionRole,
+        ResolvedFixtureContent,
     };
 
     #[test]
@@ -1274,6 +1400,36 @@ mod tests {
             .unwrap_or_else(|| panic!("expected rendered {role:?} node bounds for {label:?}"))
     }
 
+    fn pointer_click(
+        context: &Context,
+        blueprint: &viewwright_model::ResolvedBlueprint,
+        fixture: &str,
+        state: &mut RenderState,
+        position: egui::Pos2,
+    ) -> Option<super::InteractionEvent> {
+        let event = |pressed| egui::Event::PointerButton {
+            pos: position,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        let (_, pressed_activation) = interactive_frame(
+            context,
+            blueprint,
+            fixture,
+            state,
+            vec![egui::Event::PointerMoved(position), event(true)],
+        );
+        let (_, released_activation) = interactive_frame(
+            context,
+            blueprint,
+            fixture,
+            state,
+            vec![egui::Event::PointerMoved(position), event(false)],
+        );
+        pressed_activation.or(released_activation)
+    }
+
     #[test]
     fn command_labels_are_control_owned_while_content_labels_are_separate() {
         assert!(!separate_element_label(ElementKind::Command));
@@ -1289,6 +1445,9 @@ mod tests {
         }
         assert!(!separate_element_label(ElementKind::Text));
         assert!(!separate_element_label(ElementKind::Preview));
+        assert!(separate_element_label(ElementKind::Choice));
+        assert!(!separate_element_label(ElementKind::Boolean));
+        assert!(separate_element_label(ElementKind::Scalar));
     }
 
     #[test]
@@ -1530,6 +1689,343 @@ mod tests {
                 "command/status elements must advance horizontally in the 1440px viewport: {first_id}={first:?}, {second_id}={second:?}"
             );
         }
+    }
+
+    #[test]
+    fn m42_controls_keep_element_identity_and_region_parent_without_option_or_furnishing_ids() {
+        let blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/lantern-leaf-reader-controls.toml"
+        ))
+        .unwrap();
+        let output = accesskit_output(&blueprint, "reading");
+        let tree = update(&output);
+        assert_unique_author_ids(tree);
+        let ids = author_ids(tree);
+        for element in blueprint.elements.iter().filter(|element| {
+            matches!(
+                element.kind,
+                ElementKind::Choice | ElementKind::Boolean | ElementKind::Scalar
+            )
+        }) {
+            assert!(
+                ids.contains(&element.id),
+                "missing semantic control ID {}",
+                element.id
+            );
+            assert_parent(tree, &element.region, &element.id);
+        }
+        for furnishing in &blueprint.furnishings {
+            assert!(!ids.contains(&furnishing.id));
+        }
+        for option_id in [
+            "literata",
+            "source_serif",
+            "georgia",
+            "left",
+            "justified",
+            "centered",
+            "continuous",
+            "paginated",
+            "aria",
+            "willow",
+            "rowan",
+            "0.9x",
+            "1.0x",
+            "1.2x",
+            "1.5x",
+        ] {
+            assert!(
+                !ids.contains(option_id),
+                "choice option became an author ID: {option_id}"
+            );
+        }
+    }
+
+    #[test]
+    fn m42_typed_value_events_render_state_persistence_and_fixture_seed_reset() {
+        let mut blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/lantern-leaf-reader-controls.toml"
+        ))
+        .unwrap();
+        let mut alternate = blueprint.fixtures[0].clone();
+        alternate.id = "alternate".into();
+        for content in &mut alternate.content {
+            match content {
+                ResolvedFixtureContent::Choice { element, selected }
+                    if element == "font_family" =>
+                {
+                    *selected = "georgia".into()
+                }
+                ResolvedFixtureContent::Choice { element, selected }
+                    if element == "text_alignment" =>
+                {
+                    *selected = "centered".into()
+                }
+                ResolvedFixtureContent::Boolean { element, value }
+                    if element == "show_highlights" =>
+                {
+                    *value = false
+                }
+                ResolvedFixtureContent::Scalar { element, value } if element == "font_size" => {
+                    *value = 24.0
+                }
+                _ => {}
+            }
+        }
+        blueprint.fixtures.push(alternate);
+
+        let context = accesskit_context();
+        let mut state = RenderState::default();
+        let controls = [
+            (
+                "font_family",
+                "reader.font_family.set",
+                super::TypedValue::Choice("source_serif".into()),
+                super::TypedValue::Choice("literata".into()),
+            ),
+            (
+                "text_alignment",
+                "reader.text_alignment.set",
+                super::TypedValue::Choice("justified".into()),
+                super::TypedValue::Choice("left".into()),
+            ),
+            (
+                "show_highlights",
+                "reader.show_highlights.set",
+                super::TypedValue::Boolean(false),
+                super::TypedValue::Boolean(true),
+            ),
+            (
+                "font_size",
+                "reader.font_size.set",
+                super::TypedValue::Scalar(20.0),
+                super::TypedValue::Scalar(18.0),
+            ),
+        ];
+        for (element_id, action, changed, seed) in controls {
+            let element = blueprint
+                .elements
+                .iter()
+                .find(|element| element.id == element_id)
+                .unwrap();
+            let local = state.control_value_mut("reading", element_id, seed.clone());
+            assert_eq!(local, &seed);
+            *local = changed.clone();
+            let event = super::value_event(element, changed.clone()).unwrap();
+            assert_eq!(event.element_id, element_id);
+            assert_eq!(event.action, action);
+            assert_eq!(event.value, Some(changed));
+        }
+
+        let changed_frame = accesskit_frame(&context, &blueprint, "reading", &mut state);
+        let nodes = &update(&changed_frame).nodes;
+        assert!(nodes
+            .iter()
+            .any(|(_, node)| node.role() == accesskit::Role::ComboBox
+                && node.value() == Some("Source Serif")));
+        assert!(nodes
+            .iter()
+            .any(|(_, node)| node.role() == accesskit::Role::Button
+                && node.label() == Some("Justified")));
+        assert!(nodes
+            .iter()
+            .any(|(_, node)| node.role() == accesskit::Role::SpinButton
+                && node.value() == Some("20.0px")));
+        let redraw = accesskit_frame(&context, &blueprint, "reading", &mut state);
+        assert!(update(&redraw)
+            .nodes
+            .iter()
+            .any(|(_, node)| node.role() == accesskit::Role::ComboBox
+                && node.value() == Some("Source Serif")));
+        assert_eq!(
+            state.control_value_mut("reading", "font_size", super::TypedValue::Scalar(18.0)),
+            &super::TypedValue::Scalar(20.0)
+        );
+
+        state.clear();
+        let reset = accesskit_frame(&context, &blueprint, "reading", &mut state);
+        assert!(update(&reset)
+            .nodes
+            .iter()
+            .any(|(_, node)| node.role() == accesskit::Role::ComboBox
+                && node.value() == Some("Literata")));
+        assert_eq!(
+            state.control_value_mut("reading", "font_size", super::TypedValue::Scalar(18.0)),
+            &super::TypedValue::Scalar(18.0)
+        );
+        state.clear();
+        let alternate = accesskit_frame(&context, &blueprint, "alternate", &mut state);
+        assert!(update(&alternate)
+            .nodes
+            .iter()
+            .any(|(_, node)| node.role() == accesskit::Role::ComboBox
+                && node.value() == Some("Georgia")));
+        assert_eq!(
+            state.control_value_mut("alternate", "font_size", super::TypedValue::Scalar(24.0)),
+            &super::TypedValue::Scalar(24.0)
+        );
+    }
+
+    #[test]
+    fn m42_segmented_boolean_and_scalar_native_controls_emit_values_on_pointer_input() {
+        let blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/lantern-leaf-reader-controls.toml"
+        ))
+        .unwrap();
+        let context = accesskit_context();
+        let mut state = RenderState::default();
+
+        let frame = accesskit_frame(&context, &blueprint, "reading", &mut state);
+        let bounds =
+            rendered_node_bounds(update(&frame), accesskit::Role::Button, Some("Justified"));
+        let event = pointer_click(
+            &context,
+            &blueprint,
+            "reading",
+            &mut state,
+            egui::pos2(
+                ((bounds.x0 + bounds.x1) / 2.0) as f32,
+                ((bounds.y0 + bounds.y1) / 2.0) as f32,
+            ),
+        );
+        assert_eq!(
+            event.as_ref().map(|event| event.action.as_str()),
+            Some("reader.text_alignment.set")
+        );
+        assert_eq!(
+            event.as_ref().and_then(|event| event.value.as_ref()),
+            Some(&super::TypedValue::Choice("justified".into()))
+        );
+
+        let frame = accesskit_frame(&context, &blueprint, "reading", &mut state);
+        let bounds = rendered_node_bounds(
+            update(&frame),
+            accesskit::Role::CheckBox,
+            Some("Show Highlights"),
+        );
+        let event = pointer_click(
+            &context,
+            &blueprint,
+            "reading",
+            &mut state,
+            egui::pos2(
+                ((bounds.x0 + bounds.x1) / 2.0) as f32,
+                ((bounds.y0 + bounds.y1) / 2.0) as f32,
+            ),
+        );
+        assert_eq!(
+            event.as_ref().map(|event| event.action.as_str()),
+            Some("reader.show_highlights.set")
+        );
+        assert_eq!(
+            event.as_ref().and_then(|event| event.value.as_ref()),
+            Some(&super::TypedValue::Boolean(false))
+        );
+
+        let frame = accesskit_frame(&context, &blueprint, "reading", &mut state);
+        let tree = update(&frame);
+        let (_, font_node) = author_node(tree, "font_size");
+        let value_container = font_node
+            .children()
+            .iter()
+            .filter_map(|id| {
+                tree.nodes
+                    .iter()
+                    .find(|(node_id, _)| node_id == id)
+                    .map(|(_, node)| node)
+            })
+            .find(|node| node.role() == accesskit::Role::GenericContainer)
+            .expect("scalar element owns its native control container");
+        let slider = value_container
+            .children()
+            .iter()
+            .filter_map(|id| {
+                tree.nodes
+                    .iter()
+                    .find(|(node_id, _)| node_id == id)
+                    .map(|(_, node)| node)
+            })
+            .find(|node| node.role() == accesskit::Role::Slider)
+            .expect("scalar element exposes an accessible slider");
+        let bounds = slider.bounds().unwrap();
+        let event = pointer_click(
+            &context,
+            &blueprint,
+            "reading",
+            &mut state,
+            egui::pos2(
+                (bounds.x0 + (bounds.x1 - bounds.x0) * 0.8) as f32,
+                ((bounds.y0 + bounds.y1) / 2.0) as f32,
+            ),
+        );
+        assert_eq!(
+            event.as_ref().map(|event| event.action.as_str()),
+            Some("reader.font_size.set")
+        );
+        assert!(
+            matches!(event.and_then(|event| event.value), Some(super::TypedValue::Scalar(value)) if (12.0..=32.0).contains(&value) && value != 18.0)
+        );
+    }
+
+    #[test]
+    fn m42_select_choice_native_dropdown_emits_typed_value_on_pointer_input() {
+        let blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/lantern-leaf-reader-controls.toml"
+        ))
+        .unwrap();
+        let context = accesskit_context();
+        let mut state = RenderState::default();
+
+        let frame = accesskit_frame(&context, &blueprint, "reading", &mut state);
+        let bounds = update(&frame)
+            .nodes
+            .iter()
+            .find(|(_, node)| {
+                node.role() == accesskit::Role::ComboBox && node.value() == Some("Literata")
+            })
+            .and_then(|(_, node)| node.bounds())
+            .expect("font-family select exposes its selected label and bounds");
+        pointer_click(
+            &context,
+            &blueprint,
+            "reading",
+            &mut state,
+            egui::pos2(
+                ((bounds.x0 + bounds.x1) / 2.0) as f32,
+                ((bounds.y0 + bounds.y1) / 2.0) as f32,
+            ),
+        );
+
+        let opened = accesskit_frame(&context, &blueprint, "reading", &mut state);
+        let font_family_bounds = update(&opened)
+            .nodes
+            .iter()
+            .find(|(_, node)| {
+                node.role() == accesskit::Role::ComboBox && node.value() == Some("Literata")
+            })
+            .and_then(|(_, node)| node.bounds())
+            .expect("font-family select remains visible while its popup is open");
+        let option_position = egui::pos2(
+            ((font_family_bounds.x0 + font_family_bounds.x1) / 2.0) as f32,
+            (font_family_bounds.y1 + (font_family_bounds.y1 - font_family_bounds.y0) * 1.5) as f32,
+        );
+        let event = pointer_click(&context, &blueprint, "reading", &mut state, option_position);
+        assert_eq!(
+            event.as_ref().map(|event| event.element_id.as_str()),
+            Some("font_family")
+        );
+        assert_eq!(
+            event.as_ref().map(|event| event.action.as_str()),
+            Some("reader.font_family.set")
+        );
+        assert_eq!(
+            event.and_then(|event| event.value),
+            Some(super::TypedValue::Choice("source_serif".into()))
+        );
+        let selected = accesskit_frame(&context, &blueprint, "reading", &mut state);
+        assert!(update(&selected).nodes.iter().any(|(_, node)| {
+            node.role() == accesskit::Role::ComboBox && node.value() == Some("Source Serif")
+        }));
     }
 
     #[test]
@@ -1891,6 +2387,7 @@ items = [{ id = "fixture_item", label = "Fixture item" }]
             Some(super::InteractionEvent {
                 element_id: "open_document".into(),
                 action: "document.open".into(),
+                value: None,
             })
         );
 

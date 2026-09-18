@@ -54,7 +54,12 @@ fn walk(id: &str, b: &ResolvedBlueprint, out: &mut String, depth: usize) {
                     walk_furnishing(root, b, out, depth + 1);
                 } else {
                     for e in b.elements.iter().filter(|e| e.region == *region) {
-                        out.push_str(&format!("{}      * {} [{:?}]\n", indent, e.label, e.kind));
+                        out.push_str(&format!(
+                            "{}      * {} [{}]\n",
+                            indent,
+                            e.label,
+                            element_semantics(e)
+                        ));
                     }
                 }
             }
@@ -93,12 +98,33 @@ fn walk_furnishing(id: &str, b: &ResolvedBlueprint, out: &mut String, depth: usi
             FurnishingChild::Element(id) => {
                 if let Some(element) = b.elements.iter().find(|element| element.id == *id) {
                     out.push_str(&format!(
-                        "{}    * {} [{:?}]\n",
-                        indent, element.label, element.kind
+                        "{}    * {} [{}]\n",
+                        indent,
+                        element.label,
+                        element_semantics(element)
                     ));
                 }
             }
         }
+    }
+}
+
+fn element_semantics(element: &viewwright_model::ResolvedElement) -> String {
+    if let Some(choice) = &element.choice {
+        format!("choice/{}", choice.presentation.as_str())
+    } else if let Some(scalar) = &element.scalar {
+        format!(
+            "scalar {}..{}{}",
+            scalar.min,
+            scalar.max,
+            scalar
+                .unit
+                .as_deref()
+                .map(|unit| format!(" {unit}"))
+                .unwrap_or_default()
+        )
+    } else {
+        format!("{:?}", element.kind)
     }
 }
 
@@ -145,5 +171,20 @@ mod tests {
             output.find("Back 15 seconds [Command]").unwrap()
                 < output.find("Play / pause [Command]").unwrap()
         );
+    }
+
+    #[test]
+    fn m42_ascii_exposes_semantic_controls_without_toolkit_widget_names() {
+        let blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/lantern-leaf-reader-controls.toml"
+        ))
+        .unwrap();
+        let output = render(&blueprint);
+        assert!(output.contains("Font Family [choice/select]"));
+        assert!(output.contains("Text Alignment [choice/segmented]"));
+        assert!(output.contains("Font Size [scalar 12..32 px]"));
+        assert!(output.contains("Dyslexia-friendly font [Boolean]"));
+        assert!(!output.contains("Slider"));
+        assert!(!output.contains("ComboBox"));
     }
 }

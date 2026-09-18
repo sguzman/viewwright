@@ -464,4 +464,4 @@ M42 is the second ViewWright v0.2 language expansion earned by the furnished Lan
 - M39 — accepted
 - M40 — accepted
 - M41 — accepted
-- M42 — authority defined; implementation pending
+- M42 — implementation complete; human/Director review pending

@@ -161,6 +161,28 @@ pub struct ElementSource {
     pub label: Option<String>,
     pub presentation: Option<String>,
     pub action: Option<String>,
+    pub choice: Option<ChoiceSource>,
+    pub scalar: Option<ScalarSource>,
+}
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChoiceSource {
+    pub presentation: String,
+    pub options: Vec<ChoiceOptionSource>,
+}
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChoiceOptionSource {
+    pub id: String,
+    pub label: String,
+}
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ScalarSource {
+    pub min: f32,
+    pub max: f32,
+    pub step: f32,
+    pub unit: Option<String>,
 }
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -181,6 +203,24 @@ pub struct FixtureContentSource {
     pub nodes: Option<Vec<TreeNodeSource>>,
     pub document: Option<DocumentSource>,
     pub command: Option<CommandSource>,
+    pub choice: Option<ChoiceStateSource>,
+    pub boolean: Option<BooleanStateSource>,
+    pub scalar: Option<ScalarStateSource>,
+}
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChoiceStateSource {
+    pub selected: String,
+}
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BooleanStateSource {
+    pub value: bool,
+}
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ScalarStateSource {
+    pub value: f32,
 }
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -459,11 +499,44 @@ pub enum ElementKind {
     Preview,
     Status,
     Document,
+    Choice,
+    Boolean,
+    Scalar,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CollectionPresentation {
     List,
     AdaptiveCards,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChoicePresentation {
+    Select,
+    Segmented,
+}
+impl ChoicePresentation {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Select => "select",
+            Self::Segmented => "segmented",
+        }
+    }
+}
+#[derive(Debug, Clone)]
+pub struct ResolvedChoiceOption {
+    pub id: String,
+    pub label: String,
+}
+#[derive(Debug, Clone)]
+pub struct ResolvedChoice {
+    pub presentation: ChoicePresentation,
+    pub options: Vec<ResolvedChoiceOption>,
+}
+#[derive(Debug, Clone)]
+pub struct ResolvedScalar {
+    pub min: f32,
+    pub max: f32,
+    pub step: f32,
+    pub unit: Option<String>,
 }
 fn kind(s: &str, where_: &str, errors: &mut Vec<String>) -> ElementKind {
     match s {
@@ -476,6 +549,9 @@ fn kind(s: &str, where_: &str, errors: &mut Vec<String>) -> ElementKind {
         "preview" => ElementKind::Preview,
         "status" => ElementKind::Status,
         "document" => ElementKind::Document,
+        "choice" => ElementKind::Choice,
+        "boolean" => ElementKind::Boolean,
+        "scalar" => ElementKind::Scalar,
         _ => {
             errors.push(format!("{where_}: unknown element kind '{s}'"));
             ElementKind::Text
@@ -522,6 +598,129 @@ fn collection_presentation(
         }
     }
 }
+fn choice_config(
+    source: Option<&ChoiceSource>,
+    element: &str,
+    element_kind: ElementKind,
+    errors: &mut Vec<String>,
+) -> Option<ResolvedChoice> {
+    if element_kind != ElementKind::Choice {
+        if source.is_some() {
+            errors.push(format!(
+                "element '{element}': choice configuration is only valid for choice elements"
+            ));
+        }
+        return None;
+    }
+    let Some(source) = source else {
+        errors.push(format!(
+            "element '{element}': choice elements require choice configuration"
+        ));
+        return None;
+    };
+    let presentation = match source.presentation.as_str() {
+        "select" => Some(ChoicePresentation::Select),
+        "segmented" => Some(ChoicePresentation::Segmented),
+        other => {
+            errors.push(format!(
+                "element '{element}': unknown choice presentation '{other}'"
+            ));
+            None
+        }
+    };
+    if source.options.len() < 2 {
+        errors.push(format!(
+            "element '{element}': choice requires at least two options"
+        ));
+    }
+    let mut ids = HashSet::new();
+    let options = source
+        .options
+        .iter()
+        .filter_map(|option| {
+            if option.id.trim().is_empty() {
+                errors.push(format!(
+                    "element '{element}': choice option id must be nonblank"
+                ));
+                return None;
+            }
+            if option.label.trim().is_empty() {
+                errors.push(format!(
+                    "element '{element}': choice option '{}' label must be nonblank",
+                    option.id
+                ));
+            }
+            if !ids.insert(option.id.clone()) {
+                errors.push(format!(
+                    "element '{element}': duplicate choice option id '{}'",
+                    option.id
+                ));
+                return None;
+            }
+            Some(ResolvedChoiceOption {
+                id: option.id.clone(),
+                label: option.label.clone(),
+            })
+        })
+        .collect();
+    presentation.map(|presentation| ResolvedChoice {
+        presentation,
+        options,
+    })
+}
+
+fn scalar_config(
+    source: Option<&ScalarSource>,
+    element: &str,
+    element_kind: ElementKind,
+    errors: &mut Vec<String>,
+) -> Option<ResolvedScalar> {
+    if element_kind != ElementKind::Scalar {
+        if source.is_some() {
+            errors.push(format!(
+                "element '{element}': scalar configuration is only valid for scalar elements"
+            ));
+        }
+        return None;
+    }
+    let Some(source) = source else {
+        errors.push(format!(
+            "element '{element}': scalar elements require scalar configuration"
+        ));
+        return None;
+    };
+    if !source.min.is_finite() {
+        errors.push(format!("element '{element}': scalar min must be finite"));
+    }
+    if !source.max.is_finite() {
+        errors.push(format!("element '{element}': scalar max must be finite"));
+    }
+    if source.min.is_finite() && source.max.is_finite() && source.min >= source.max {
+        errors.push(format!(
+            "element '{element}': scalar min must be less than max"
+        ));
+    }
+    if !source.step.is_finite() || source.step <= 0.0 {
+        errors.push(format!(
+            "element '{element}': scalar step must be finite and positive"
+        ));
+    }
+    if source
+        .unit
+        .as_ref()
+        .is_some_and(|unit| unit.trim().is_empty())
+    {
+        errors.push(format!(
+            "element '{element}': scalar unit must be nonblank when present"
+        ));
+    }
+    Some(ResolvedScalar {
+        min: source.min,
+        max: source.max,
+        step: source.step,
+        unit: source.unit.clone(),
+    })
+}
 fn action_id(value: &str, element: &str, errors: &mut Vec<String>) -> Option<ActionId> {
     let valid = !value.is_empty()
         && value.contains('.')
@@ -563,6 +762,8 @@ pub struct ResolvedElement {
     pub label: String,
     pub presentation: Option<CollectionPresentation>,
     pub action: Option<ActionId>,
+    pub choice: Option<ResolvedChoice>,
+    pub scalar: Option<ResolvedScalar>,
 }
 #[derive(Debug, Clone)]
 pub enum CompositionChild {
@@ -700,6 +901,18 @@ pub enum ResolvedFixtureContent {
         element: String,
         enabled: bool,
         reason: Option<String>,
+    },
+    Choice {
+        element: String,
+        selected: String,
+    },
+    Boolean {
+        element: String,
+        value: bool,
+    },
+    Scalar {
+        element: String,
+        value: f32,
     },
 }
 #[derive(Debug, Clone)]
@@ -1360,8 +1573,16 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
         let element_kind = kind(&e.kind, &format!("element '{}'", e.id), &mut errors);
         let presentation =
             collection_presentation(e.presentation.as_deref(), &e.id, element_kind, &mut errors);
+        let choice = choice_config(e.choice.as_ref(), &e.id, element_kind, &mut errors);
+        let scalar = scalar_config(e.scalar.as_ref(), &e.id, element_kind, &mut errors);
         let action = match (element_kind, e.action.as_deref()) {
-            (ElementKind::Command, Some(action)) => action_id(action, &e.id, &mut errors),
+            (
+                ElementKind::Command
+                | ElementKind::Choice
+                | ElementKind::Boolean
+                | ElementKind::Scalar,
+                Some(action),
+            ) => action_id(action, &e.id, &mut errors),
             (ElementKind::Command, None) => {
                 errors.push(format!(
                     "element '{}': command elements require an action",
@@ -1369,9 +1590,16 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
                 ));
                 None
             }
+            (ElementKind::Choice | ElementKind::Boolean | ElementKind::Scalar, None) => {
+                errors.push(format!(
+                    "element '{}': {} elements require an action",
+                    e.id, e.kind
+                ));
+                None
+            }
             (_kind, Some(_)) => {
                 errors.push(format!(
-                    "element '{}': action is only valid for command elements",
+                    "element '{}': action is only valid for command and value-control elements",
                     e.id
                 ));
                 None
@@ -1386,6 +1614,8 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
             label: element_label(e.label.as_ref(), &e.id, &mut errors),
             presentation,
             action,
+            choice,
+            scalar,
         });
     }
     let composition_ids: HashSet<_> = source
@@ -1681,7 +1911,10 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
                 + usize::from(record.text.is_some())
                 + usize::from(record.nodes.is_some())
                 + usize::from(record.document.is_some())
-                + usize::from(record.command.is_some());
+                + usize::from(record.command.is_some())
+                + usize::from(record.choice.is_some())
+                + usize::from(record.boolean.is_some())
+                + usize::from(record.scalar.is_some());
             if families != 1 {
                 errors.push(format!(
                     "fixture '{}': content for '{}' must contain exactly one payload family",
@@ -1914,6 +2147,83 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
                     enabled: command.enabled,
                     reason: command.reason.clone(),
                 });
+            } else if let Some(choice_state) = &record.choice {
+                if element.kind != ElementKind::Choice {
+                    errors.push(format!(
+                        "fixture '{}': choice state on '{}' requires a choice element",
+                        f.id, record.element
+                    ));
+                    continue;
+                }
+                let option_exists = element.choice.as_ref().is_some_and(|choice| {
+                    choice
+                        .options
+                        .iter()
+                        .any(|option| option.id == choice_state.selected)
+                });
+                if !option_exists {
+                    errors.push(format!(
+                        "fixture '{}': selected choice '{}' is absent from options for '{}'",
+                        f.id, choice_state.selected, record.element
+                    ));
+                }
+                content.push(ResolvedFixtureContent::Choice {
+                    element: record.element.clone(),
+                    selected: choice_state.selected.clone(),
+                });
+            } else if let Some(boolean_state) = &record.boolean {
+                if element.kind != ElementKind::Boolean {
+                    errors.push(format!(
+                        "fixture '{}': boolean state on '{}' requires a boolean element",
+                        f.id, record.element
+                    ));
+                    continue;
+                }
+                content.push(ResolvedFixtureContent::Boolean {
+                    element: record.element.clone(),
+                    value: boolean_state.value,
+                });
+            } else if let Some(scalar_state) = &record.scalar {
+                if element.kind != ElementKind::Scalar {
+                    errors.push(format!(
+                        "fixture '{}': scalar state on '{}' requires a scalar element",
+                        f.id, record.element
+                    ));
+                    continue;
+                }
+                if !scalar_state.value.is_finite() {
+                    errors.push(format!(
+                        "fixture '{}': scalar value for '{}' must be finite",
+                        f.id, record.element
+                    ));
+                }
+                if let Some(scalar) = &element.scalar {
+                    if scalar_state.value.is_finite()
+                        && (scalar_state.value < scalar.min || scalar_state.value > scalar.max)
+                    {
+                        errors.push(format!(
+                            "fixture '{}': scalar value {} for '{}' must be within {}..{}",
+                            f.id, scalar_state.value, record.element, scalar.min, scalar.max
+                        ));
+                    }
+                }
+                content.push(ResolvedFixtureContent::Scalar {
+                    element: record.element.clone(),
+                    value: scalar_state.value,
+                });
+            }
+        }
+        for element in elements.iter().filter(|element| {
+            matches!(
+                element.kind,
+                ElementKind::Choice | ElementKind::Boolean | ElementKind::Scalar
+            )
+        }) {
+            if !seen_content.contains(&element.id) {
+                errors.push(format!(
+                    "fixture '{}': missing representative state for control '{}'",
+                    f.id, element.id
+                ));
             }
         }
         resolved_fixtures.push(ResolvedFixture {
@@ -1979,20 +2289,48 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
 impl ResolvedBlueprint {
     pub fn semantic_tree(&self) -> String {
         fn render_element(element: &ResolvedElement, out: &mut String, indent: usize) {
+            let mut semantics = Vec::new();
+            if let Some(action) = &element.action {
+                semantics.push(format!("action {}", action.as_str()));
+            }
+            if let Some(presentation) = element.presentation {
+                semantics.push(format!("presentation {presentation:?}"));
+            }
+            if let Some(choice) = &element.choice {
+                semantics.push(format!(
+                    "choice/{} options [{}]",
+                    choice.presentation.as_str(),
+                    choice
+                        .options
+                        .iter()
+                        .map(|option| format!("{}={}", option.id, option.label))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
+            }
+            if let Some(scalar) = &element.scalar {
+                semantics.push(format!(
+                    "scalar {}..{} step {}{}",
+                    scalar.min,
+                    scalar.max,
+                    scalar.step,
+                    scalar
+                        .unit
+                        .as_deref()
+                        .map(|unit| format!(" {unit}"))
+                        .unwrap_or_default()
+                ));
+            }
             out.push_str(&format!(
-                "{:indent$}element {} ({:?}{}{})\n",
+                "{:indent$}element {} ({:?}{})\n",
                 "",
                 element.id,
                 element.kind,
-                element
-                    .action
-                    .as_ref()
-                    .map(|action| format!(", action {}", action.as_str()))
-                    .unwrap_or_default(),
-                element
-                    .presentation
-                    .map(|presentation| format!(", presentation {presentation:?}"))
-                    .unwrap_or_default(),
+                if semantics.is_empty() {
+                    String::new()
+                } else {
+                    format!(", {}", semantics.join(", "))
+                },
                 indent = indent
             ));
         }
@@ -2184,6 +2522,15 @@ impl ResolvedBlueprint {
                         "    content {element}: command enabled={enabled}, reason {:?}\n",
                         reason
                     )),
+                    ResolvedFixtureContent::Choice { element, selected } => out.push_str(&format!(
+                        "    content {element}: choice selected={selected}\n"
+                    )),
+                    ResolvedFixtureContent::Boolean { element, value } => {
+                        out.push_str(&format!("    content {element}: boolean value={value}\n"))
+                    }
+                    ResolvedFixtureContent::Scalar { element, value } => {
+                        out.push_str(&format!("    content {element}: scalar value={value}\n"))
+                    }
                 }
             }
         }
@@ -2228,6 +2575,180 @@ mod tests {
     use super::*;
     fn project() -> &'static str {
         include_str!("../../../examples/project-browser.toml")
+    }
+
+    fn control_source() -> String {
+        r#"
+[screen]
+id = "controls"
+purpose = "Test value controls"
+root = "root"
+
+[[region]]
+id = "inspector"
+role = "inspector"
+importance = "secondary"
+
+[[region]]
+id = "reader"
+role = "primary_content"
+importance = "primary"
+
+[[composition]]
+id = "root"
+kind = "column"
+axis = "vertical"
+children = ["inspector", "reader"]
+
+[[element]]
+id = "font"
+region = "inspector"
+kind = "choice"
+importance = "secondary"
+label = "Font"
+action = "reader.font.set"
+choice = { presentation = "select", options = [{ id = "a", label = "Alpha" }, { id = "b", label = "Beta" }] }
+
+[[element]]
+id = "enabled"
+region = "inspector"
+kind = "boolean"
+importance = "secondary"
+label = "Enabled"
+action = "reader.enabled.set"
+
+[[element]]
+id = "size"
+region = "inspector"
+kind = "scalar"
+importance = "secondary"
+label = "Size"
+action = "reader.size.set"
+scalar = { min = 10.0, max = 30.0, step = 1.0, unit = "px" }
+
+[[fixture]]
+id = "first"
+state = "representative"
+[[fixture.content]]
+element = "font"
+choice = { selected = "a" }
+[[fixture.content]]
+element = "enabled"
+boolean = { value = true }
+[[fixture.content]]
+element = "size"
+scalar = { value = 18.0 }
+"#.to_owned()
+    }
+
+    fn control_validation_error(source: &str, expected: &str) {
+        let error = parse_and_resolve(source).unwrap_err().to_string();
+        assert!(
+            error.contains(expected),
+            "expected {expected:?} in {error:?}"
+        );
+    }
+
+    #[test]
+    fn m42_typed_controls_resolve_with_explicit_fixture_state_and_inspectable_semantics() {
+        let blueprint = parse_and_resolve(&control_source()).unwrap();
+        assert!(blueprint.elements.iter().any(|element| {
+            element.id == "font"
+                && element.kind == ElementKind::Choice
+                && element.choice.as_ref().is_some_and(|choice| {
+                    choice.presentation == ChoicePresentation::Select && choice.options.len() == 2
+                })
+        }));
+        assert!(blueprint
+            .elements
+            .iter()
+            .any(|element| element.kind == ElementKind::Boolean));
+        assert!(blueprint.elements.iter().any(|element| {
+            element.kind == ElementKind::Scalar
+                && element
+                    .scalar
+                    .as_ref()
+                    .is_some_and(|scalar| scalar.min == 10.0 && scalar.max == 30.0)
+        }));
+        let semantic = blueprint.semantic_tree();
+        assert!(semantic.contains("choice/select options [a=Alpha, b=Beta]"));
+        assert!(semantic.contains("scalar 10..30 step 1 px"));
+        assert!(semantic.contains("content enabled: boolean value=true"));
+    }
+
+    #[test]
+    fn m42_element_configuration_validation_rejects_invalid_control_schemas() {
+        let source = control_source();
+        let cases = [
+            (source.replace("choice = { presentation = \"select\", options = [{ id = \"a\", label = \"Alpha\" }, { id = \"b\", label = \"Beta\" }] }\n", ""), "choice elements require choice configuration"),
+            (source.replacen("kind = \"choice\"", "kind = \"text\"", 1), "choice configuration is only valid for choice elements"),
+            (source.replace("{ id = \"b\", label = \"Beta\" }]", "{ id = \"a\", label = \"Beta\" }]"), "duplicate choice option id 'a'"),
+            (source.replace("{ id = \"a\", label = \"Alpha\" }", "{ id = \"  \", label = \"Alpha\" }"), "choice option id must be nonblank"),
+            (source.replace("label = \"Alpha\"", "label = \"  \""), "choice option 'a' label must be nonblank"),
+            (source.replace("presentation = \"select\"", "presentation = \"tabs\""), "unknown choice presentation 'tabs'"),
+            (source.replace("options = [{ id = \"a\", label = \"Alpha\" }, { id = \"b\", label = \"Beta\" }]", "options = [{ id = \"a\", label = \"Alpha\" }]"), "choice requires at least two options"),
+            (source.replacen("kind = \"scalar\"", "kind = \"text\"", 1), "scalar configuration is only valid for scalar elements"),
+            (source.replace("scalar = { min = 10.0, max = 30.0, step = 1.0, unit = \"px\" }\n", ""), "scalar elements require scalar configuration"),
+            (source.replace("min = 10.0", "min = nan"), "scalar min must be finite"),
+            (source.replace("max = 30.0", "max = nan"), "scalar max must be finite"),
+            (source.replace("step = 1.0", "step = nan"), "scalar step must be finite and positive"),
+            (source.replace("min = 10.0, max = 30.0", "min = 30.0, max = 10.0"), "scalar min must be less than max"),
+            (source.replace("step = 1.0", "step = 0.0"), "scalar step must be finite and positive"),
+            (source.replace("unit = \"px\"", "unit = \"  \""), "scalar unit must be nonblank"),
+            (source.replace("action = \"reader.font.set\"", ""), "choice elements require an action"),
+            (source.replace("reader.font.set", "bad action"), "action must be a non-empty dot-separated identifier"),
+        ];
+        for (invalid, expected) in cases {
+            control_validation_error(&invalid, expected);
+        }
+    }
+
+    #[test]
+    fn m42_fixture_state_validation_rejects_cross_kind_missing_duplicate_and_invalid_values() {
+        let source = control_source();
+        let cases = [
+            (
+                source.replace("selected = \"a\"", "selected = \"missing\""),
+                "selected choice 'missing' is absent from options",
+            ),
+            (
+                source.replacen("kind = \"boolean\"", "kind = \"text\"", 1),
+                "boolean state on 'enabled' requires a boolean element",
+            ),
+            (
+                source.replacen("kind = \"choice\"", "kind = \"text\"", 1),
+                "choice state on 'font' requires a choice element",
+            ),
+            (
+                source.replacen("kind = \"scalar\"", "kind = \"text\"", 1),
+                "scalar state on 'size' requires a scalar element",
+            ),
+            (
+                source.replace("value = 18.0", "value = nan"),
+                "scalar value for 'size' must be finite",
+            ),
+            (
+                source.replace("value = 18.0", "value = 31.0"),
+                "scalar value 31 for 'size' must be within 10..30",
+            ),
+            (
+                source.replace(
+                    "[[fixture.content]]\nelement = \"size\"\nscalar = { value = 18.0 }\n",
+                    "",
+                ),
+                "missing representative state for control 'size'",
+            ),
+            (
+                format!(
+                    "{}\n[[fixture.content]]\nelement = \"size\"\nscalar = {{ value = 20.0 }}\n",
+                    source
+                ),
+                "duplicate content for element 'size'",
+            ),
+        ];
+        for (invalid, expected) in cases {
+            control_validation_error(&invalid, expected);
+        }
     }
     fn reader() -> &'static str {
         include_str!("../../../specimens/reader-workspace.toml")

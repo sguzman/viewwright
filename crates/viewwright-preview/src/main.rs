@@ -19,6 +19,10 @@ fn main() -> eframe::Result<()> {
             "../../../specimens/lantern-leaf-reader-furnished.toml"
         ))
         .expect("Lantern Leaf furnished specimen must be valid"),
+        parse_and_resolve(include_str!(
+            "../../../specimens/lantern-leaf-reader-controls.toml"
+        ))
+        .expect("Lantern Leaf semantic controls specimen must be valid"),
         parse_and_resolve(include_str!("../../../specimens/dependency-workbench.toml"))
             .expect("dependency workbench specimen must be valid"),
         parse_and_resolve(include_str!(
@@ -42,6 +46,12 @@ fn main() -> eframe::Result<()> {
         println!("{}\n{}", b.semantic_tree(), viewwright_ascii::render(b));
         if b.visual.is_some() {
             println!("{}", viewwright_concept::render(b));
+        }
+        if b.screen.id == "lantern_leaf_reader_controls" {
+            println!(
+                "{}",
+                viewwright_concept::render_fixture(b, "reading").unwrap()
+            );
         }
     }
     let options = eframe::NativeOptions {
@@ -100,9 +110,16 @@ impl eframe::App for App {
                 );
             }
             if let Some(event) = &self.last_action {
+                let value = event.value.as_ref().map(|value| match value {
+                    viewwright_egui::TypedValue::Choice(value) => format!("Choice({value:?})"),
+                    viewwright_egui::TypedValue::Boolean(value) => format!("Boolean({value})"),
+                    viewwright_egui::TypedValue::Scalar(value) => format!("Scalar({value})"),
+                });
                 ui.label(format!(
-                    "Last action: {} ({})",
-                    event.action, event.element_id
+                    "Last action: {} ({}){}",
+                    event.action,
+                    event.element_id,
+                    value.map(|value| format!(" — {value}")).unwrap_or_default()
                 ));
             }
         });

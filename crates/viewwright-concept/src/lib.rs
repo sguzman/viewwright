@@ -29,16 +29,95 @@ pub fn render(b: &ResolvedBlueprint) -> String {
     }
     out.push_str("\nImportant semantic elements\n");
     for e in &b.elements {
+        let mut attributes = Vec::new();
         if let Some(presentation) = e.presentation {
-            out.push_str(&format!(
-                "  {:?}: {} (presentation {:?})\n",
-                e.kind, e.label, presentation
-            ));
-        } else {
-            out.push_str(&format!("  {:?}: {}\n", e.kind, e.label));
+            attributes.push(format!("presentation {presentation:?}"));
         }
+        if let Some(choice) = &e.choice {
+            attributes.push(format!(
+                "choice/{} options [{}]",
+                choice.presentation.as_str(),
+                choice
+                    .options
+                    .iter()
+                    .map(|option| format!("{}={}", option.id, option.label))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+        if let Some(scalar) = &e.scalar {
+            attributes.push(format!(
+                "scalar {}..{} step {}{}",
+                scalar.min,
+                scalar.max,
+                scalar.step,
+                scalar
+                    .unit
+                    .as_deref()
+                    .map(|unit| format!(" {unit}"))
+                    .unwrap_or_default()
+            ));
+        }
+        if let Some(action) = &e.action {
+            attributes.push(format!("action {}", action.as_str()));
+        }
+        out.push_str(&format!(
+            "  {:?}: {}{}\n",
+            e.kind,
+            e.label,
+            if attributes.is_empty() {
+                String::new()
+            } else {
+                format!(" ({})", attributes.join("; "))
+            }
+        ));
     }
     out
+}
+
+/// Renders the structural concept specification plus typed representative values for one fixture.
+/// Returns `None` when the fixture does not exist on this blueprint.
+pub fn render_fixture(b: &ResolvedBlueprint, fixture_id: &str) -> Option<String> {
+    let fixture = b.fixtures.iter().find(|fixture| fixture.id == fixture_id)?;
+    let mut out = render(b);
+    out.push_str(&format!(
+        "\nRepresentative control values — fixture {}\n",
+        fixture.id
+    ));
+    for content in &fixture.content {
+        match content {
+            viewwright_model::ResolvedFixtureContent::Choice { element, selected } => {
+                if let Some(control) = b.elements.iter().find(|control| control.id == *element) {
+                    let label = control
+                        .choice
+                        .as_ref()
+                        .and_then(|choice| {
+                            choice.options.iter().find(|option| option.id == *selected)
+                        })
+                        .map(|option| option.label.as_str())
+                        .unwrap_or(selected);
+                    out.push_str(&format!("  {} = {}\n", control.label, label));
+                }
+            }
+            viewwright_model::ResolvedFixtureContent::Boolean { element, value } => {
+                if let Some(control) = b.elements.iter().find(|control| control.id == *element) {
+                    out.push_str(&format!("  {} = {}\n", control.label, value));
+                }
+            }
+            viewwright_model::ResolvedFixtureContent::Scalar { element, value } => {
+                if let Some(control) = b.elements.iter().find(|control| control.id == *element) {
+                    let unit = control
+                        .scalar
+                        .as_ref()
+                        .and_then(|scalar| scalar.unit.as_deref())
+                        .unwrap_or("");
+                    out.push_str(&format!("  {} = {}{}\n", control.label, value, unit));
+                }
+            }
+            _ => {}
+        }
+    }
+    Some(out)
 }
 fn walk(id: &str, b: &ResolvedBlueprint, out: &mut String, depth: usize) {
     let Some(c) = b.compositions.iter().find(|c| c.id == id) else {
@@ -176,7 +255,7 @@ fn hex(c: viewwright_model::Color) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::render;
+    use super::{render, render_fixture};
     use viewwright_model::parse_and_resolve;
 
     #[test]
@@ -250,5 +329,29 @@ mod tests {
         assert!(output.contains("Important semantic elements"));
         assert!(!output.contains("Slider:"));
         assert!(!output.contains("Select:"));
+    }
+
+    #[test]
+    fn m42_concept_exposes_control_configuration_actions_and_fixture_values() {
+        let blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/lantern-leaf-reader-controls.toml"
+        ))
+        .unwrap();
+        let structural = render(&blueprint);
+        assert!(
+            structural.contains("Choice: Font Family (choice/select options [literata=Literata")
+        );
+        assert!(structural.contains("action reader.font_family.set"));
+        assert!(structural.contains("Scalar: Font Size (scalar 12..32 step 1 px;"));
+        assert!(structural.contains("Boolean: Dyslexia-friendly font"));
+        let fixture = render_fixture(&blueprint, "reading").unwrap();
+        assert!(fixture.contains("Font Family = Literata"));
+        assert!(fixture.contains("Font Size = 18px"));
+        assert!(fixture.contains("Text Alignment = Left"));
+        assert!(fixture.contains("Show Highlights = true"));
+        assert!(fixture.contains("Voice = Aria"));
+        assert!(fixture.contains("Speed = 1.2×"));
+        assert!(fixture.contains("Volume = 82%"));
+        assert!(render_fixture(&blueprint, "missing").is_none());
     }
 }

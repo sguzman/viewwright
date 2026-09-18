@@ -8,7 +8,7 @@ use viewwright_model::{
     ResolvedBlueprint,
 };
 
-pub const EXPECTATION_VERSION: &str = "0.1";
+pub const EXPECTATION_VERSION: &str = "0.2";
 
 #[derive(Debug, Error, PartialEq)]
 pub enum ExpectationError {
@@ -35,6 +35,8 @@ pub struct ViewWrightExpectation {
 pub enum ExpectationVersion {
     #[serde(rename = "0.1")]
     V0_1,
+    #[serde(rename = "0.2")]
+    V0_2,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -133,6 +135,9 @@ pub enum ElementKind {
     Preview,
     Status,
     Document,
+    Choice,
+    Boolean,
+    Scalar,
 }
 
 /// Builds normative expectations from resolved intent and LayoutPlan at one explicit logical viewport.
@@ -200,7 +205,7 @@ pub fn build_expectation(
         .collect();
 
     Ok(ViewWrightExpectation {
-        version: ExpectationVersion::V0_1,
+        version: ExpectationVersion::V0_2,
         epistemic: Epistemic::Intended,
         screen: ScreenExpectation {
             author_id: blueprint.screen.id.clone(),
@@ -313,6 +318,9 @@ impl From<ResolvedElementKind> for ElementKind {
             ResolvedElementKind::Preview => Self::Preview,
             ResolvedElementKind::Status => Self::Status,
             ResolvedElementKind::Document => Self::Document,
+            ResolvedElementKind::Choice => Self::Choice,
+            ResolvedElementKind::Boolean => Self::Boolean,
+            ResolvedElementKind::Scalar => Self::Scalar,
         }
     }
 }
@@ -351,7 +359,7 @@ mod tests {
         let expectation = build_expectation(&blueprint, 1440.0, 900.0).unwrap();
         let plan = layout(&blueprint, 1440.0, 900.0);
 
-        assert_eq!(expectation.version, ExpectationVersion::V0_1);
+        assert_eq!(expectation.version, ExpectationVersion::V0_2);
         assert_eq!(expectation.epistemic, Epistemic::Intended);
         assert_eq!(expectation.screen.author_id, "project_browser");
         assert_eq!(
@@ -425,6 +433,27 @@ mod tests {
     }
 
     #[test]
+    fn m42_expectation_uses_wire_version_02_and_exports_semantic_control_kinds() {
+        let blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/lantern-leaf-reader-controls.toml"
+        ))
+        .unwrap();
+        let expectation = build_expectation(&blueprint, 1440.0, 900.0).unwrap();
+        assert_eq!(expectation.version, ExpectationVersion::V0_2);
+        let kinds: Vec<_> = expectation
+            .elements
+            .iter()
+            .map(|element| element.kind)
+            .collect();
+        assert!(kinds.contains(&ElementKind::Choice));
+        assert!(kinds.contains(&ElementKind::Boolean));
+        assert!(kinds.contains(&ElementKind::Scalar));
+        assert!(serde_yaml_ng::to_string(&expectation)
+            .unwrap()
+            .starts_with("viewwright_expectation_version: '0.2'"));
+    }
+
+    #[test]
     fn project_browser_yaml_is_deterministic_intended_and_not_a_witness() {
         let expectation = build_expectation(&browser(), 1440.0, 900.0).unwrap();
         let first = to_yaml(&expectation).unwrap();
@@ -434,7 +463,7 @@ mod tests {
             first,
             include_str!("../tests/fixtures/project-browser-1440x900.intended.yaml")
         );
-        assert!(first.contains("viewwright_expectation_version: '0.1'"));
+        assert!(first.contains("viewwright_expectation_version: '0.2'"));
         assert!(first.contains("epistemic: intended"));
         assert!(!first.contains("viewwitness_version"));
         assert!(!first.contains("witness"));
