@@ -433,19 +433,18 @@ fn render_element(
                     }
                 }
                 ElementKind::Command => {
-                    let label = if e.importance == Importance::Primary {
-                        if let Some(v) = &b.visual {
-                            RichText::new(&e.label)
-                                .size(v.type_scale.body as f32)
-                                .color(color32(v.palette.accent))
-                                .strong()
-                        } else {
-                            element_text(&e.label, e.importance, b.visual.as_ref())
-                        }
+                    let state = b.command_state(fixture, &e.id);
+                    let label = if let (Some(color), Some(v)) = (
+                        command_label_color(e.importance, state.enabled, b.visual.as_ref()),
+                        b.visual.as_ref(),
+                    ) {
+                        RichText::new(&e.label)
+                            .size(v.type_scale.body as f32)
+                            .color(color)
+                            .strong()
                     } else {
                         RichText::new(&e.label)
                     };
-                    let state = b.command_state(fixture, &e.id);
                     let response = ui.add_enabled(state.enabled, egui::Button::new(label));
                     if !state.enabled {
                         if let Some(reason) = state.reason {
@@ -654,6 +653,22 @@ fn element_text(
     value
 }
 
+fn command_label_color(
+    importance: Importance,
+    enabled: bool,
+    visual: Option<&viewwright_model::ResolvedVisual>,
+) -> Option<Color32> {
+    if importance != Importance::Primary {
+        return None;
+    }
+    let visual = visual?;
+    Some(color32(if enabled {
+        visual.palette.accent
+    } else {
+        visual.palette.text_muted
+    }))
+}
+
 fn content_for<'a>(
     b: &'a ResolvedBlueprint,
     fixture: &str,
@@ -700,6 +715,7 @@ fn apply_visuals(ui: &mut egui::Ui, b: &ResolvedBlueprint) {
         BorderPolicy::Defined => Stroke::new(1.0_f32, color32(v.palette.border)),
     };
     for widget in [
+        &mut style.visuals.widgets.noninteractive,
         &mut style.visuals.widgets.inactive,
         &mut style.visuals.widgets.hovered,
         &mut style.visuals.widgets.active,
@@ -709,6 +725,9 @@ fn apply_visuals(ui: &mut egui::Ui, b: &ResolvedBlueprint) {
         widget.fg_stroke.color = color32(v.palette.text);
         widget.bg_stroke = boundary;
     }
+    style.visuals.widgets.noninteractive.bg_fill = color32(v.palette.surface);
+    style.visuals.widgets.noninteractive.weak_bg_fill = color32(v.palette.surface);
+    style.visuals.widgets.noninteractive.fg_stroke.color = color32(v.palette.text_muted);
     style.visuals.widgets.hovered.bg_fill = color32(v.palette.surface_raised);
     style.visuals.widgets.active.bg_fill = color32(v.palette.accent);
     style.text_styles.insert(
@@ -735,13 +754,108 @@ fn apply_density(ui: &mut egui::Ui, policy: DensityPolicy) {
 #[cfg(test)]
 mod tests {
     use super::{
-        is_command_region, root_fill, scroll_area_id, separate_element_label, DensityPolicy,
-        RenderState,
+        apply_visuals, command_label_color, is_command_region, root_fill, scroll_area_id,
+        separate_element_label, DensityPolicy, RenderState,
     };
-    use egui::{accesskit, Color32, Context, FullOutput, RawInput};
+    use egui::{accesskit, Color32, Context, FullOutput, RawInput, Stroke};
     use std::collections::BTreeSet;
     use viewwright_layout::layout;
-    use viewwright_model::{parse_and_resolve, Density, ElementKind, RegionRole};
+    use viewwright_model::{
+        parse_and_resolve, BorderPolicy, Density, ElementKind, Importance, RegionRole,
+    };
+
+    #[test]
+    fn authored_visuals_style_noninteractive_widgets_from_the_palette() {
+        let blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/reader-workspace-visual.toml"
+        ))
+        .unwrap();
+        let visual = blueprint.visual.as_ref().unwrap();
+        let expected_bg = Color32::from_rgb(
+            visual.palette.surface.r,
+            visual.palette.surface.g,
+            visual.palette.surface.b,
+        );
+        let expected_muted = Color32::from_rgb(
+            visual.palette.text_muted.r,
+            visual.palette.text_muted.g,
+            visual.palette.text_muted.b,
+        );
+        let context = Context::default();
+        let mut actual = None;
+        let mut output = context.run_ui(RawInput::default(), |ui| {
+            let default_noninteractive = ui.style().visuals.widgets.noninteractive;
+            apply_visuals(ui, &blueprint);
+            let noninteractive = ui.style().visuals.widgets.noninteractive;
+            actual = Some((
+                default_noninteractive,
+                noninteractive.bg_fill,
+                noninteractive.weak_bg_fill,
+                noninteractive.fg_stroke.color,
+                noninteractive.bg_stroke,
+            ));
+        });
+        output.textures_delta.clear();
+        let (default, bg, weak_bg, fg, border) = actual.unwrap();
+        assert_ne!(
+            bg, default.bg_fill,
+            "disabled bg must not retain theme fill"
+        );
+        assert_eq!(bg, expected_bg);
+        assert_eq!(weak_bg, expected_bg);
+        assert_eq!(fg, expected_muted);
+        assert_eq!(border, Stroke::NONE, "minimal borders stay absent");
+    }
+
+    #[test]
+    fn primary_command_uses_accent_when_enabled_and_muted_text_when_disabled() {
+        let blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/reader-workspace-visual.toml"
+        ))
+        .unwrap();
+        let visual = blueprint.visual.as_ref().unwrap();
+        let accent = Color32::from_rgb(
+            visual.palette.accent.r,
+            visual.palette.accent.g,
+            visual.palette.accent.b,
+        );
+        let muted = Color32::from_rgb(
+            visual.palette.text_muted.r,
+            visual.palette.text_muted.g,
+            visual.palette.text_muted.b,
+        );
+        assert_eq!(
+            command_label_color(Importance::Primary, true, Some(visual)),
+            Some(accent)
+        );
+        assert_eq!(
+            command_label_color(Importance::Primary, false, Some(visual)),
+            Some(muted)
+        );
+        assert_eq!(
+            command_label_color(Importance::Secondary, true, Some(visual)),
+            None
+        );
+    }
+
+    #[test]
+    fn defined_noninteractive_border_uses_authored_border_color() {
+        let mut blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/reader-workspace-visual.toml"
+        ))
+        .unwrap();
+        blueprint.visual.as_mut().unwrap().border_policy = BorderPolicy::Defined;
+        let border_color = blueprint.visual.as_ref().unwrap().palette.border;
+        let expected = Color32::from_rgb(border_color.r, border_color.g, border_color.b);
+        let context = Context::default();
+        let mut actual = None;
+        let mut output = context.run_ui(RawInput::default(), |ui| {
+            apply_visuals(ui, &blueprint);
+            actual = Some(ui.style().visuals.widgets.noninteractive.bg_stroke);
+        });
+        output.textures_delta.clear();
+        assert_eq!(actual.unwrap(), Stroke::new(1.0, expected));
+    }
 
     fn accesskit_context() -> Context {
         let context = Context::default();
