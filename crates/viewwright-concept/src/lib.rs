@@ -241,7 +241,7 @@ mod tests {
         assert!(output
             .contains("toolbar_slot — row (gap 12px, padding 0px, overflow clip, height 52px)"));
         assert!(output
-            .contains("toolbar_actions — row (gap 8px, padding 0px, overflow clip, width 520px)"));
+            .contains("toolbar_actions — row (gap 8px, padding 0px, overflow clip, width 560px)"));
         assert!(output
             .contains("document_slot — column (gap 0px, padding 0px, overflow scroll_y, grow 1)"));
         assert!(output.contains("tts_furnishing — row"));

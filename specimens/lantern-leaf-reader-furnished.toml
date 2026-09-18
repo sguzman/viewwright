@@ -72,7 +72,7 @@ id = "tts_player"
 role = "commands"
 importance = "secondary"
 surface = "raised"
-height = "96px"
+height = "112px"
 furnishing = "tts_furnishing"
 
 [[composition]]
@@ -278,7 +278,7 @@ grow = 1
 id = "toolbar_actions"
 kind = "row"
 children = ["previous_chapter", "next_chapter", "chapter_status", "bookmark_chapter"]
-width = "520px"
+width = "560px"
 gap = "sm"
 
 [[furnishing]]
@@ -398,7 +398,7 @@ selected = "chapter_3"
 
 [[fixture.content]]
 element = "chapter_status"
-text = "Chapter 3 of 14 · 28%"
+text = "3 / 14 · 28%"
 
 [[fixture.content]]
 element = "chapter_document"
@@ -444,7 +444,7 @@ text = "The Wandering Horizon"
 
 [[fixture.content]]
 element = "now_chapter"
-text = "Chapter 3 · The Mountain Path · Aria (Natural)"
+text = "Chapter 3 · The Mountain Path"
 
 [[fixture.content]]
 element = "playback_position"

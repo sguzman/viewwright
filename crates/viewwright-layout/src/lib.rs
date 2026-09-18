@@ -578,19 +578,19 @@ children = ["a", "b", "c"]
         let plan = layout(&blueprint, 1440.0, 900.0);
         assert_eq!(
             plan.region("library"),
-            Some(Rect::new(8.0, 8.0, 260.0, 780.0))
+            Some(Rect::new(8.0, 8.0, 260.0, 764.0))
         );
         assert_eq!(
             plan.region("reader"),
-            Some(Rect::new(280.0, 8.0, 810.0, 780.0))
+            Some(Rect::new(280.0, 8.0, 810.0, 764.0))
         );
         assert_eq!(
             plan.region("inspector"),
-            Some(Rect::new(1102.0, 8.0, 330.0, 780.0))
+            Some(Rect::new(1102.0, 8.0, 330.0, 764.0))
         );
         assert_eq!(
             plan.region("tts_player"),
-            Some(Rect::new(8.0, 796.0, 1424.0, 96.0))
+            Some(Rect::new(8.0, 780.0, 1424.0, 112.0))
         );
 
         assert_eq!(plan.furnishing("reader_furnishing"), plan.region("reader"));
@@ -600,15 +600,15 @@ children = ["a", "b", "c"]
         );
         assert_eq!(
             plan.furnishing("search_slot"),
-            Some(Rect::new(288.0, 16.0, 262.0, 52.0))
+            Some(Rect::new(288.0, 16.0, 222.0, 52.0))
         );
         assert_eq!(
             plan.furnishing("toolbar_actions"),
-            Some(Rect::new(562.0, 16.0, 520.0, 52.0))
+            Some(Rect::new(522.0, 16.0, 560.0, 52.0))
         );
         assert_eq!(
             plan.furnishing("document_slot"),
-            Some(Rect::new(288.0, 76.0, 794.0, 704.0))
+            Some(Rect::new(288.0, 76.0, 794.0, 688.0))
         );
 
         assert_eq!(
@@ -631,23 +631,23 @@ children = ["a", "b", "c"]
         assert_eq!(plan.furnishing("tts_furnishing"), plan.region("tts_player"));
         assert_eq!(
             plan.furnishing("now_reading_slot"),
-            Some(Rect::new(16.0, 804.0, 300.0, 80.0))
+            Some(Rect::new(16.0, 788.0, 300.0, 96.0))
         );
         assert_eq!(
             plan.furnishing("transport_slot"),
-            Some(Rect::new(328.0, 804.0, 784.0, 80.0))
+            Some(Rect::new(328.0, 788.0, 784.0, 96.0))
         );
         assert_eq!(
             plan.furnishing("choices_slot"),
-            Some(Rect::new(1124.0, 804.0, 300.0, 80.0))
+            Some(Rect::new(1124.0, 788.0, 300.0, 96.0))
         );
         assert_eq!(
             plan.furnishing("playback_status_slot"),
-            Some(Rect::new(328.0, 804.0, 784.0, 24.0))
+            Some(Rect::new(328.0, 788.0, 784.0, 24.0))
         );
         assert_eq!(
             plan.furnishing("transport_controls_slot"),
-            Some(Rect::new(328.0, 836.0, 784.0, 48.0))
+            Some(Rect::new(328.0, 820.0, 784.0, 64.0))
         );
     }
 

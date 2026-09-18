@@ -537,24 +537,28 @@ fn render_furnishing_contents(
                     .max_rect(rect),
                 |ui| {
                     ui.set_clip_rect(rect);
-                    ui.style_mut().spacing.item_spacing =
-                        egui::vec2(furnishing.gap as f32, furnishing.gap as f32);
                     let mut render_element_child = |element_id: &str, ui: &mut egui::Ui| {
                         if let Some(element) = b.elements.iter().find(|e| e.id == element_id) {
-                            render_element(
-                                ui,
-                                element,
-                                b,
-                                fixture,
-                                activation,
-                                density,
-                                state,
-                                region_anchor,
-                                0.0,
-                            );
+                            ui.scope(|element_ui| {
+                                element_ui.style_mut().spacing.item_spacing =
+                                    egui::vec2(density.item_spacing, density.item_spacing);
+                                render_element(
+                                    element_ui,
+                                    element,
+                                    b,
+                                    fixture,
+                                    activation,
+                                    density,
+                                    state,
+                                    region_anchor,
+                                    0.0,
+                                );
+                            });
                         }
                     };
                     if furnishing.kind == FurnishingKind::Row {
+                        ui.style_mut().spacing.item_spacing =
+                            egui::vec2(furnishing.gap as f32, furnishing.gap as f32);
                         ui.horizontal_wrapped(|ui| {
                             for child in &furnishing.children {
                                 if let FurnishingChild::Element(element_id) = child {
@@ -563,8 +567,11 @@ fn render_furnishing_contents(
                             }
                         });
                     } else {
-                        for child in &furnishing.children {
+                        for (index, child) in furnishing.children.iter().enumerate() {
                             if let FurnishingChild::Element(element_id) = child {
+                                if index > 0 {
+                                    ui.add_space(furnishing.gap as f32);
+                                }
                                 render_element_child(element_id, ui);
                             }
                         }
