@@ -432,4 +432,4 @@ The M38 integration proof composes the real ViewWright egui output, pinned ViewW
 - M36 — accepted
 - M37 — accepted
 - M38 — accepted
-- M39 — implementation complete; Director audit pending
+- M39 — accepted
