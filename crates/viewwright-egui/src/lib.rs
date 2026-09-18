@@ -414,6 +414,7 @@ fn render_region_contents(
             density,
             state,
             parent_anchor,
+            ui.clip_rect(),
         );
         return;
     }
@@ -463,6 +464,7 @@ fn render_furnishing(
     density: DensityPolicy,
     state: &mut RenderState,
     region_anchor: egui::Id,
+    ancestor_clip: egui::Rect,
 ) {
     let Some(furnishing) = b.furnishings.iter().find(|node| node.id == id) else {
         return;
@@ -476,7 +478,8 @@ fn render_furnishing(
             .id_salt(("furnishing", &furnishing.id))
             .max_rect(rect),
         |ui| {
-            ui.set_clip_rect(rect);
+            let effective_clip = ancestor_clip.intersect(rect);
+            set_clip_rect_intersection(ui, effective_clip, rect);
             match furnishing.overflow {
                 OverflowPolicy::Clip => render_furnishing_contents(
                     ui,
@@ -489,7 +492,7 @@ fn render_furnishing(
                     density,
                     state,
                     region_anchor,
-                    false,
+                    effective_clip,
                 ),
                 OverflowPolicy::ScrollY => {
                     let content_extent = plan
@@ -515,7 +518,7 @@ fn render_furnishing(
                                 density,
                                 state,
                                 region_anchor,
-                                true,
+                                effective_clip,
                             );
                         });
                 }
@@ -536,7 +539,7 @@ fn render_furnishing_contents(
     density: DensityPolicy,
     state: &mut RenderState,
     region_anchor: egui::Id,
-    is_scroll_root: bool,
+    ancestor_clip: egui::Rect,
 ) {
     match furnishing.children.first() {
         Some(FurnishingChild::Furnishing(_)) => {
@@ -555,6 +558,7 @@ fn render_furnishing_contents(
                     density,
                     state,
                     region_anchor,
+                    ancestor_clip,
                 );
             }
         }
@@ -568,9 +572,7 @@ fn render_furnishing_contents(
                     .id_salt(("furnishing-leaf", &furnishing.id))
                     .max_rect(rect),
                 |ui| {
-                    if !is_scroll_root {
-                        ui.set_clip_rect(rect);
-                    }
+                    set_clip_rect_intersection(ui, ancestor_clip, rect);
                     let mut render_element_child = |element_id: &str, ui: &mut egui::Ui| {
                         if let Some(element) = b.elements.iter().find(|e| e.id == element_id) {
                             ui.scope(|element_ui| {
@@ -1069,6 +1071,10 @@ fn to_egui_rect(rect: LayoutRect, origin: egui::Pos2) -> egui::Rect {
     )
 }
 
+fn set_clip_rect_intersection(ui: &mut egui::Ui, ancestor_clip: egui::Rect, rect: egui::Rect) {
+    ui.set_clip_rect(ui.clip_rect().intersect(ancestor_clip).intersect(rect));
+}
+
 fn apply_visuals(ui: &mut egui::Ui, b: &ResolvedBlueprint) {
     let Some(v) = &b.visual else { return };
     apply_resolved_visuals(ui.style_mut(), *v);
@@ -1132,6 +1138,8 @@ fn choice_popup_style(visual: Option<ResolvedVisual>) -> egui::style::StyleModif
     egui::style::StyleModifier::new(move |style| {
         apply_resolved_visuals(style, visual);
         style.visuals.window_fill = color32(visual.palette.surface_raised);
+        style.visuals.selection.bg_fill = color32(visual.palette.surface);
+        style.visuals.selection.stroke = Stroke::new(1.0, color32(visual.palette.accent));
     })
 }
 
@@ -1145,8 +1153,8 @@ fn apply_density(ui: &mut egui::Ui, policy: DensityPolicy) {
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_visuals, command_label_color, is_command_region, root_fill, scroll_area_id,
-        separate_element_label, DensityPolicy, RenderState,
+        apply_visuals, choice_popup_style, command_label_color, is_command_region, root_fill,
+        scroll_area_id, separate_element_label, DensityPolicy, RenderState,
     };
     use egui::widget_style::{Classes, WidgetState};
     use egui::{accesskit, Color32, Context, FullOutput, RawInput, Stroke};
@@ -1365,6 +1373,36 @@ mod tests {
         });
         output.textures_delta.clear();
         output
+    }
+
+    fn color_matches_with_gamma_opacity(actual: Color32, source: Color32) -> bool {
+        let opacity = actual.a() as u16;
+        let matches_channel = |actual: u8, source: u8| {
+            let expected = (source as u16 * opacity + 127) / 255;
+            (actual as u16).abs_diff(expected) <= 1
+        };
+        opacity > 0
+            && matches_channel(actual.r(), source.r())
+            && matches_channel(actual.g(), source.g())
+            && matches_channel(actual.b(), source.b())
+    }
+
+    fn contrast_ratio(foreground: Color32, background: Color32) -> f32 {
+        fn luminance(color: Color32) -> f32 {
+            let linear = |channel: u8| {
+                let channel = channel as f32 / 255.0;
+                if channel <= 0.04045 {
+                    channel / 12.92
+                } else {
+                    ((channel + 0.055) / 1.055).powf(2.4)
+                }
+            };
+            0.2126 * linear(color.r()) + 0.7152 * linear(color.g()) + 0.0722 * linear(color.b())
+        }
+
+        let foreground = luminance(foreground);
+        let background = luminance(background);
+        (foreground.max(background) + 0.05) / (foreground.min(background) + 0.05)
     }
 
     fn interactive_frame(
@@ -2101,6 +2139,29 @@ mod tests {
         .unwrap();
         let visual = blueprint.visual.unwrap();
         let expected_popup_fill = super::color32(visual.palette.surface_raised);
+        let expected_selected_fill = super::color32(visual.palette.surface);
+        let expected_selected_text = super::color32(visual.palette.accent);
+        let base_popup_text = super::color32(visual.palette.text);
+        let mut popup_style = egui::Style::default();
+        choice_popup_style(Some(visual)).apply(&mut popup_style);
+        assert_eq!(popup_style.visuals.window_fill, expected_popup_fill);
+        assert_eq!(
+            popup_style.visuals.selection.bg_fill,
+            expected_selected_fill
+        );
+        assert_eq!(
+            popup_style.visuals.selection.stroke.color,
+            expected_selected_text
+        );
+        assert_eq!(
+            popup_style.visuals.override_text_color,
+            Some(base_popup_text)
+        );
+        assert_ne!(
+            popup_style.visuals.selection.bg_fill,
+            expected_selected_text
+        );
+        assert!(contrast_ratio(expected_selected_text, expected_selected_fill) >= 7.0);
         let context = accesskit_context();
         let host_theme = context.theme();
         let host_style_before = context.style_of(host_theme).as_ref().clone();
@@ -2155,12 +2216,7 @@ mod tests {
                 return false;
             };
             let rect = shape.rect;
-            let opacity = shape.fill.a() as u16;
-            let uses_raised_surface = opacity > 0
-                && shape.fill.r() as u16 == (expected_popup_fill.r() as u16 * opacity + 127) / 255
-                && shape.fill.g() as u16 == (expected_popup_fill.g() as u16 * opacity + 127) / 255
-                && shape.fill.b() as u16 == (expected_popup_fill.b() as u16 * opacity + 127) / 255;
-            uses_raised_surface
+            color_matches_with_gamma_opacity(shape.fill, expected_popup_fill)
                 && rect.width() < 320.0
                 && rect.height() > 24.0
                 && rect.min.x >= combo_bounds.x0 as f32 - 8.0
@@ -2171,6 +2227,40 @@ mod tests {
             popup_surface_found,
             "opened ComboBox popup should paint a raised surface from the authored palette"
         );
+        let restrained_selected_row = opened.shapes.iter().any(|clipped| {
+            let egui::epaint::Shape::Rect(shape) = &clipped.shape else {
+                return false;
+            };
+            let rect = shape.rect;
+            color_matches_with_gamma_opacity(shape.fill, expected_selected_fill)
+                && rect.width() < 320.0
+                && (16.0..=24.0).contains(&rect.height())
+                && rect.min.x >= combo_bounds.x0 as f32 - 8.0
+                && rect.min.x <= combo_bounds.x1 as f32 + 8.0
+                && rect.min.y >= combo_bounds.y1 as f32 - 2.0
+                && rect.min.y < combo_bounds.y1 as f32 + 24.0
+        });
+        assert!(
+            restrained_selected_row,
+            "the selected option row should use a dark authored surface, not a full accent fill"
+        );
+        let selected_text = opened
+            .shapes
+            .iter()
+            .find_map(|clipped| match &clipped.shape {
+                egui::epaint::Shape::Text(text)
+                    if text.galley.job.text == "Literata"
+                        && text.pos.y >= combo_bounds.y1 as f32 =>
+                {
+                    Some(text)
+                }
+                _ => None,
+            })
+            .expect("the selected option label is painted in the popup");
+        assert!(color_matches_with_gamma_opacity(
+            selected_text.fallback_color,
+            expected_selected_text
+        ));
         assert_eq!(context.style_of(host_theme).as_ref(), &host_style_before);
         assert_eq!(
             context.style_of(host_theme).visuals.window_fill,
@@ -2261,6 +2351,10 @@ mod tests {
         );
         let after_update = update(&after);
         let inspector_after = author_node(after_update, "inspector").1.bounds().unwrap();
+        let inspector_viewport = egui::Rect::from_min_max(
+            egui::pos2(inspector_before.x0 as f32, inspector_before.y0 as f32),
+            egui::pos2(inspector_before.x1 as f32, inspector_before.y1 as f32),
+        );
         let lower_after = rendered_node_bounds(
             after_update,
             accesskit::Role::CheckBox,
@@ -2284,6 +2378,81 @@ mod tests {
             .map(|(id, _)| *id)
             .unwrap();
         assert!(element_node.children().contains(&checkbox_id));
+
+        fn collect_descendant_furnishing_rects(
+            blueprint: &viewwright_model::ResolvedBlueprint,
+            plan: &viewwright_layout::LayoutPlan,
+            id: &str,
+            rects: &mut Vec<egui::Rect>,
+        ) {
+            let Some(furnishing) = blueprint.furnishings.iter().find(|node| node.id == id) else {
+                return;
+            };
+            for child in &furnishing.children {
+                let viewwright_model::FurnishingChild::Furnishing(child_id) = child else {
+                    continue;
+                };
+                if let Some(rect) = plan.furnishing(child_id) {
+                    rects.push(egui::Rect::from_min_size(
+                        egui::pos2(rect.x, rect.y),
+                        egui::vec2(rect.width, rect.height),
+                    ));
+                }
+                collect_descendant_furnishing_rects(blueprint, plan, child_id, rects);
+            }
+        }
+        let scroll_offset = (lower_before.y0 - lower_after.y0) as f32;
+        let mut descendant_rects = Vec::new();
+        collect_descendant_furnishing_rects(
+            &blueprint,
+            &plan,
+            "inspector_furnishing",
+            &mut descendant_rects,
+        );
+        let translated_descendant_rects: Vec<_> = descendant_rects
+            .into_iter()
+            .map(|rect| rect.translate(egui::vec2(0.0, -scroll_offset)))
+            .collect();
+        let descendant_paints: Vec<_> = after
+            .shapes
+            .iter()
+            .filter(|clipped| {
+                let paint_bounds = clipped.shape.visual_bounding_rect();
+                clipped.clip_rect.min.x >= inspector_viewport.min.x - 1.0
+                    && clipped.clip_rect.max.x <= inspector_viewport.max.x + 1.0
+                    && translated_descendant_rects
+                        .iter()
+                        .any(|rect| rect.expand(3.0).intersects(paint_bounds))
+            })
+            .collect();
+        assert!(!descendant_paints.is_empty());
+        assert!(
+            descendant_paints.iter().all(|clipped| {
+                clipped.clip_rect.min.x >= inspector_viewport.min.x - 1.0
+                    && clipped.clip_rect.max.x <= inspector_viewport.max.x + 1.0
+                    && clipped.clip_rect.min.y >= inspector_viewport.min.y - 1.0
+                    && clipped.clip_rect.max.y <= inspector_viewport.max.y + 1.0
+            }),
+            "every translated descendant paint clip must remain inside the fixed inspector viewport: viewport={inspector_viewport:?}, offending={:?}",
+            descendant_paints
+                .iter()
+                .filter(|clipped| {
+                    clipped.clip_rect.min.x < inspector_viewport.min.x - 1.0
+                        || clipped.clip_rect.max.x > inspector_viewport.max.x + 1.0
+                        || clipped.clip_rect.min.y < inspector_viewport.min.y - 1.0
+                        || clipped.clip_rect.max.y > inspector_viewport.max.y + 1.0
+                })
+                .map(|clipped| clipped.clip_rect)
+                .collect::<Vec<_>>()
+        );
+        let translated_content_above_viewport = descendant_paints.iter().any(|clipped| {
+            let paint_bounds = clipped.shape.visual_bounding_rect();
+            paint_bounds.min.y < inspector_viewport.min.y
+        });
+        assert!(
+            translated_content_above_viewport,
+            "the regression must exercise translated furnishing paint above the viewport and prove its clip stays bounded"
+        );
     }
 
     #[test]
