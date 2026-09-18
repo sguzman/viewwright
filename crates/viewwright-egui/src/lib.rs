@@ -1138,8 +1138,23 @@ fn choice_popup_style(visual: Option<ResolvedVisual>) -> egui::style::StyleModif
     egui::style::StyleModifier::new(move |style| {
         apply_resolved_visuals(style, visual);
         style.visuals.window_fill = color32(visual.palette.surface_raised);
-        style.visuals.selection.bg_fill = color32(visual.palette.surface);
+        style.visuals.selection.bg_fill = choice_selected_fill(visual);
         style.visuals.selection.stroke = Stroke::new(1.0, color32(visual.palette.accent));
+    })
+}
+
+fn choice_selected_fill(visual: ResolvedVisual) -> Color32 {
+    const ACCENT_MIX: f32 = 0.16;
+    let base = visual.palette.surface_raised;
+    let accent = visual.palette.accent;
+    let mix = |base: u8, accent: u8| {
+        (base as f32 + (accent as f32 - base as f32) * ACCENT_MIX).round() as u8
+    };
+    color32(Color {
+        r: mix(base.r, accent.r),
+        g: mix(base.g, accent.g),
+        b: mix(base.b, accent.b),
+        a: mix(base.a, accent.a),
     })
 }
 
@@ -1153,8 +1168,9 @@ fn apply_density(ui: &mut egui::Ui, policy: DensityPolicy) {
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_visuals, choice_popup_style, command_label_color, is_command_region, root_fill,
-        scroll_area_id, separate_element_label, DensityPolicy, RenderState,
+        apply_visuals, choice_popup_style, choice_selected_fill, command_label_color,
+        is_command_region, root_fill, scroll_area_id, separate_element_label, DensityPolicy,
+        RenderState,
     };
     use egui::widget_style::{Classes, WidgetState};
     use egui::{accesskit, Color32, Context, FullOutput, RawInput, Stroke};
@@ -1403,6 +1419,14 @@ mod tests {
         let foreground = luminance(foreground);
         let background = luminance(background);
         (foreground.max(background) + 0.05) / (foreground.min(background) + 0.05)
+    }
+
+    fn color_distance(left: Color32, right: Color32) -> f32 {
+        let delta = |left: u8, right: u8| left as f32 - right as f32;
+        (delta(left.r(), right.r()).powi(2)
+            + delta(left.g(), right.g()).powi(2)
+            + delta(left.b(), right.b()).powi(2))
+        .sqrt()
     }
 
     fn interactive_frame(
@@ -2139,7 +2163,7 @@ mod tests {
         .unwrap();
         let visual = blueprint.visual.unwrap();
         let expected_popup_fill = super::color32(visual.palette.surface_raised);
-        let expected_selected_fill = super::color32(visual.palette.surface);
+        let expected_selected_fill = choice_selected_fill(visual);
         let expected_selected_text = super::color32(visual.palette.accent);
         let base_popup_text = super::color32(visual.palette.text);
         let mut popup_style = egui::Style::default();
@@ -2160,6 +2184,13 @@ mod tests {
         assert_ne!(
             popup_style.visuals.selection.bg_fill,
             expected_selected_text
+        );
+        assert!(color_distance(expected_selected_fill, expected_popup_fill) >= 35.0);
+        assert!(
+            color_distance(
+                expected_selected_fill,
+                super::color32(visual.palette.surface)
+            ) >= 35.0
         );
         assert!(contrast_ratio(expected_selected_text, expected_selected_fill) >= 7.0);
         let context = accesskit_context();
