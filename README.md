@@ -389,6 +389,8 @@ M37 aligns the workspace on egui/eframe 0.36.2 and proves that an actual AccessK
 
 M38 promotes the verification chain from individually proven stages into one in-process end-to-end proof. For representative canonical screens, the same resolved blueprint and logical viewport must produce an M33 intended expectation and a real M37 ViewWitness Witness, then M35 must report an exact match with zero mismatches and zero evidence gaps. The proof remains test/dev-only: no observer server, network transport, CI gate, public verification API, schema change, comparator weakening, responsive authoring, or renderer behavior change is authorized.
 
+The M38 integration proof composes the real ViewWright egui output, pinned ViewWitness adapter, and M35 comparator for Project Browser, M31 overlay, and M32 overflow pressure at 1440×900. All three produce valid Witnesses and exact reports; the proof and its additional dependencies are confined to renderer tests.
+
 ## Status
 
 - M0 — accepted
@@ -429,4 +431,4 @@ M38 promotes the verification chain from individually proven stages into one in-
 - M35 — accepted
 - M36 — accepted
 - M37 — accepted
-- M38 — authority defined; implementation pending
+- M38 — implementation complete; Director audit pending

@@ -3340,6 +3340,8 @@ version = "0.1.0"
 dependencies = [
  "egui",
  "viewwitness",
+ "viewwright-compare",
+ "viewwright-expectation",
  "viewwright-layout",
  "viewwright-model",
 ]
