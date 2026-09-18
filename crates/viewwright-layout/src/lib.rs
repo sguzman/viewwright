@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use viewwright_model::{
-    Axis, CompositionChild, CompositionKind, FurnishingChild, FurnishingKind, ResolvedBlueprint,
+    Axis, CompositionChild, CompositionKind, FurnishingChild, FurnishingKind, OverflowPolicy,
+    ResolvedBlueprint,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -50,6 +51,48 @@ impl LayoutPlan {
 
     pub fn furnishing(&self, id: &str) -> Option<Rect> {
         self.furnishings.get(id).copied()
+    }
+
+    /// Returns the planned scroll content bounds for one furnishing subtree.
+    /// Nested scroll containers contribute their viewport bounds, not their own
+    /// independently scrollable descendants.
+    pub fn furnishing_content_extent(
+        &self,
+        blueprint: &ResolvedBlueprint,
+        id: &str,
+    ) -> Option<Rect> {
+        let root = self.furnishing(id)?;
+        let mut max_y = root.y + root.height;
+        accumulate_furnishing_bottom(self, blueprint, id, true, &mut max_y);
+        Some(Rect::new(root.x, root.y, root.width, max_y - root.y))
+    }
+}
+
+fn accumulate_furnishing_bottom(
+    plan: &LayoutPlan,
+    blueprint: &ResolvedBlueprint,
+    id: &str,
+    is_scroll_root: bool,
+    max_y: &mut f32,
+) {
+    let Some(furnishing) = blueprint
+        .furnishings
+        .iter()
+        .find(|furnishing| furnishing.id == id)
+    else {
+        return;
+    };
+    for child in &furnishing.children {
+        let FurnishingChild::Furnishing(child_id) = child else {
+            continue;
+        };
+        let Some(rect) = plan.furnishing(child_id) else {
+            continue;
+        };
+        *max_y = max_y.max(rect.y + rect.height);
+        if is_scroll_root || furnishing.overflow != OverflowPolicy::ScrollY {
+            accumulate_furnishing_bottom(plan, blueprint, child_id, false, max_y);
+        }
     }
 }
 
@@ -648,6 +691,29 @@ children = ["a", "b", "c"]
         assert_eq!(
             plan.furnishing("transport_controls_slot"),
             Some(Rect::new(328.0, 820.0, 784.0, 64.0))
+        );
+    }
+
+    #[test]
+    fn furnishing_scroll_extent_uses_planned_descendants_beyond_viewport() {
+        let blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/lantern-leaf-reader-controls.toml"
+        ))
+        .unwrap();
+        let plan = layout(&blueprint, 1440.0, 700.0);
+        let viewport = plan.furnishing("inspector_furnishing").unwrap();
+        let content = plan
+            .furnishing_content_extent(&blueprint, "inspector_furnishing")
+            .unwrap();
+
+        assert!(content.height > viewport.height);
+        assert_eq!(content.x, viewport.x);
+        assert_eq!(content.y, viewport.y);
+        assert_eq!(content.width, viewport.width);
+        assert_eq!(
+            content.y + content.height,
+            plan.furnishing("annotation_controls").unwrap().y
+                + plan.furnishing("annotation_controls").unwrap().height
         );
     }
 

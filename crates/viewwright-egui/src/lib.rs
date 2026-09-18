@@ -5,7 +5,8 @@ use viewwright_layout::{layout, LayoutPlan, Rect as LayoutRect};
 use viewwright_model::{
     BorderPolicy, ChoicePresentation, CollectionPresentation, Color, CompositionChild, Density,
     ElementKind, FurnishingChild, FurnishingKind, Importance, OverflowPolicy, RegionRole,
-    ResolvedBlueprint, ResolvedFixtureContent, ResolvedFurnishing, ResolvedRegion, SurfaceRole,
+    ResolvedBlueprint, ResolvedFixtureContent, ResolvedFurnishing, ResolvedRegion, ResolvedVisual,
+    SurfaceRole,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -466,10 +467,10 @@ fn render_furnishing(
     let Some(furnishing) = b.furnishings.iter().find(|node| node.id == id) else {
         return;
     };
-    let Some(rect) = plan.furnishing(id) else {
+    let Some(layout_rect) = plan.furnishing(id) else {
         return;
     };
-    let rect = to_egui_rect(rect, origin);
+    let rect = to_egui_rect(layout_rect, origin);
     ui.scope_builder(
         UiBuilder::new()
             .id_salt(("furnishing", &furnishing.id))
@@ -488,24 +489,33 @@ fn render_furnishing(
                     density,
                     state,
                     region_anchor,
+                    false,
                 ),
                 OverflowPolicy::ScrollY => {
+                    let content_extent = plan
+                        .furnishing_content_extent(b, &furnishing.id)
+                        .unwrap_or(layout_rect);
                     ScrollArea::vertical()
                         .id_salt(("furnishing-scroll", &b.screen.id, &furnishing.id))
                         .hscroll(false)
                         .auto_shrink([false, false])
-                        .show(ui, |ui| {
+                        .show(ui, |content_ui| {
+                            content_ui
+                                .set_min_height(content_extent.height.max(layout_rect.height));
+                            let content_origin = content_ui.min_rect().min
+                                - egui::vec2(layout_rect.x, layout_rect.y);
                             render_furnishing_contents(
-                                ui,
+                                content_ui,
                                 furnishing,
                                 b,
                                 fixture,
                                 plan,
-                                origin,
+                                content_origin,
                                 activation,
                                 density,
                                 state,
                                 region_anchor,
+                                true,
                             );
                         });
                 }
@@ -526,6 +536,7 @@ fn render_furnishing_contents(
     density: DensityPolicy,
     state: &mut RenderState,
     region_anchor: egui::Id,
+    is_scroll_root: bool,
 ) {
     match furnishing.children.first() {
         Some(FurnishingChild::Furnishing(_)) => {
@@ -557,7 +568,9 @@ fn render_furnishing_contents(
                     .id_salt(("furnishing-leaf", &furnishing.id))
                     .max_rect(rect),
                 |ui| {
-                    ui.set_clip_rect(rect);
+                    if !is_scroll_root {
+                        ui.set_clip_rect(rect);
+                    }
                     let mut render_element_child = |element_id: &str, ui: &mut egui::Ui| {
                         if let Some(element) = b.elements.iter().find(|e| e.id == element_id) {
                             ui.scope(|element_ui| {
@@ -718,15 +731,34 @@ fn render_element(
                                 .unwrap_or(selected);
                             egui::ComboBox::from_id_salt(("viewwright-choice", &e.id))
                                 .selected_text(selected_label)
+                                .popup_style(choice_popup_style(b.visual))
                                 .show_ui(ui, |ui| {
-                                    for option in &config.options {
-                                        changed |= ui
-                                            .selectable_value(
-                                                selected,
-                                                option.id.clone(),
-                                                &option.label,
-                                            )
-                                            .changed();
+                                    let mut show_options = |ui: &mut egui::Ui| {
+                                        for option in &config.options {
+                                            changed |= ui
+                                                .selectable_value(
+                                                    selected,
+                                                    option.id.clone(),
+                                                    &option.label,
+                                                )
+                                                .changed();
+                                        }
+                                    };
+                                    if let Some(visual) = b.visual {
+                                        egui::Frame::new()
+                                            .fill(color32(visual.palette.surface_raised))
+                                            .stroke(match visual.border_policy {
+                                                BorderPolicy::None | BorderPolicy::Minimal => {
+                                                    Stroke::NONE
+                                                }
+                                                BorderPolicy::Defined => {
+                                                    Stroke::new(1.0, color32(visual.palette.border))
+                                                }
+                                            })
+                                            .inner_margin(egui::Margin::ZERO)
+                                            .show(ui, show_options);
+                                    } else {
+                                        show_options(ui);
                                     }
                                 });
                         }
@@ -1039,9 +1071,17 @@ fn to_egui_rect(rect: LayoutRect, origin: egui::Pos2) -> egui::Rect {
 
 fn apply_visuals(ui: &mut egui::Ui, b: &ResolvedBlueprint) {
     let Some(v) = &b.visual else { return };
-    let style = ui.style_mut();
+    apply_resolved_visuals(ui.style_mut(), *v);
+}
+
+fn apply_resolved_visuals(style: &mut egui::Style, visual: ResolvedVisual) {
+    let v = visual;
     style.visuals.override_text_color = Some(color32(v.palette.text));
     style.visuals.window_fill = color32(v.palette.canvas);
+    style.visuals.window_stroke = match v.border_policy {
+        BorderPolicy::None | BorderPolicy::Minimal => Stroke::NONE,
+        BorderPolicy::Defined => Stroke::new(1.0_f32, color32(v.palette.border)),
+    };
     style.visuals.panel_fill = color32(v.palette.canvas);
     style.visuals.extreme_bg_color = color32(v.palette.surface);
     style.visuals.faint_bg_color = color32(v.palette.surface);
@@ -1083,6 +1123,16 @@ fn apply_visuals(ui: &mut egui::Ui, b: &ResolvedBlueprint) {
         egui::TextStyle::Small,
         FontId::proportional(v.type_scale.caption as f32),
     );
+}
+
+fn choice_popup_style(visual: Option<ResolvedVisual>) -> egui::style::StyleModifier {
+    let Some(visual) = visual else {
+        return egui::style::StyleModifier::default();
+    };
+    egui::style::StyleModifier::new(move |style| {
+        apply_resolved_visuals(style, visual);
+        style.visuals.window_fill = color32(visual.palette.surface_raised);
+    })
 }
 
 fn apply_density(ui: &mut egui::Ui, policy: DensityPolicy) {
@@ -1287,11 +1337,26 @@ mod tests {
         state: &mut RenderState,
         events: Vec<egui::Event>,
     ) -> FullOutput {
+        accesskit_frame_at_size(
+            context,
+            blueprint,
+            fixture,
+            state,
+            egui::vec2(1440.0, 900.0),
+            events,
+        )
+    }
+
+    fn accesskit_frame_at_size(
+        context: &Context,
+        blueprint: &viewwright_model::ResolvedBlueprint,
+        fixture: &str,
+        state: &mut RenderState,
+        screen_size: egui::Vec2,
+        events: Vec<egui::Event>,
+    ) -> FullOutput {
         let raw_input = RawInput {
-            screen_rect: Some(egui::Rect::from_min_size(
-                egui::Pos2::ZERO,
-                egui::vec2(1440.0, 900.0),
-            )),
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, screen_size)),
             events,
             ..Default::default()
         };
@@ -2026,6 +2091,199 @@ mod tests {
         assert!(update(&selected).nodes.iter().any(|(_, node)| {
             node.role() == accesskit::Role::ComboBox && node.value() == Some("Source Serif")
         }));
+    }
+
+    #[test]
+    fn m42_select_popup_uses_authored_palette_without_mutating_host_style() {
+        let blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/lantern-leaf-reader-controls.toml"
+        ))
+        .unwrap();
+        let visual = blueprint.visual.unwrap();
+        let expected_popup_fill = super::color32(visual.palette.surface_raised);
+        let context = accesskit_context();
+        let host_theme = context.theme();
+        let host_style_before = context.style_of(host_theme).as_ref().clone();
+        let mut state = RenderState::default();
+        let initial = accesskit_frame(&context, &blueprint, "reading", &mut state);
+        let combo_bounds = update(&initial)
+            .nodes
+            .iter()
+            .find(|(_, node)| {
+                node.role() == accesskit::Role::ComboBox && node.value() == Some("Literata")
+            })
+            .and_then(|(_, node)| node.bounds())
+            .expect("font-family choice renders its closed ComboBox");
+        let pointer = egui::pos2(
+            ((combo_bounds.x0 + combo_bounds.x1) / 2.0) as f32,
+            ((combo_bounds.y0 + combo_bounds.y1) / 2.0) as f32,
+        );
+        accesskit_frame_with_events(
+            &context,
+            &blueprint,
+            "reading",
+            &mut state,
+            vec![
+                egui::Event::PointerMoved(pointer),
+                egui::Event::PointerButton {
+                    pos: pointer,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ],
+        );
+        accesskit_frame_with_events(
+            &context,
+            &blueprint,
+            "reading",
+            &mut state,
+            vec![
+                egui::Event::PointerMoved(pointer),
+                egui::Event::PointerButton {
+                    pos: pointer,
+                    button: egui::PointerButton::Primary,
+                    pressed: false,
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ],
+        );
+        let opened = accesskit_frame(&context, &blueprint, "reading", &mut state);
+
+        let popup_surface_found = opened.shapes.iter().any(|clipped| {
+            let egui::epaint::Shape::Rect(shape) = &clipped.shape else {
+                return false;
+            };
+            let rect = shape.rect;
+            let opacity = shape.fill.a() as u16;
+            let uses_raised_surface = opacity > 0
+                && shape.fill.r() as u16 == (expected_popup_fill.r() as u16 * opacity + 127) / 255
+                && shape.fill.g() as u16 == (expected_popup_fill.g() as u16 * opacity + 127) / 255
+                && shape.fill.b() as u16 == (expected_popup_fill.b() as u16 * opacity + 127) / 255;
+            uses_raised_surface
+                && rect.width() < 320.0
+                && rect.height() > 24.0
+                && rect.min.x >= combo_bounds.x0 as f32 - 8.0
+                && rect.min.x <= combo_bounds.x1 as f32 + 8.0
+                && rect.min.y >= combo_bounds.y1 as f32 - 2.0
+        });
+        assert!(
+            popup_surface_found,
+            "opened ComboBox popup should paint a raised surface from the authored palette"
+        );
+        assert_eq!(context.style_of(host_theme).as_ref(), &host_style_before);
+        assert_eq!(
+            context.style_of(host_theme).visuals.window_fill,
+            host_style_before.visuals.window_fill
+        );
+        assert_ne!(expected_popup_fill, Color32::WHITE);
+    }
+
+    #[test]
+    fn m42_furnishing_scroll_moves_descendants_inside_fixed_region_viewport() {
+        let blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/lantern-leaf-reader-controls.toml"
+        ))
+        .unwrap();
+        let screen_size = egui::vec2(1440.0, 700.0);
+        let plan = layout(&blueprint, screen_size.x, screen_size.y);
+        let scroll_viewport = plan.furnishing("inspector_furnishing").unwrap();
+        let content_extent = plan
+            .furnishing_content_extent(&blueprint, "inspector_furnishing")
+            .unwrap();
+        assert!(content_extent.height > scroll_viewport.height);
+
+        let context = accesskit_context();
+        let mut state = RenderState::default();
+        let before = accesskit_frame_at_size(
+            &context,
+            &blueprint,
+            "reading",
+            &mut state,
+            screen_size,
+            Vec::new(),
+        );
+        let before_update = update(&before);
+        let inspector_before = author_node(before_update, "inspector").1.bounds().unwrap();
+        let (lower_element_id, _) = author_node(before_update, "show_bookmarks");
+        let lower_group = plan.furnishing("annotation_controls").unwrap();
+        let viewport_bottom = (scroll_viewport.y + scroll_viewport.height) as f64;
+        assert!(
+            lower_group.y as f64 >= viewport_bottom,
+            "the lower control's authored furnishing should start below the initial viewport: {lower_group:?}, viewport={scroll_viewport:?}"
+        );
+        assert_parent(before_update, "inspector", "show_bookmarks");
+        let lower_before = rendered_node_bounds(
+            before_update,
+            accesskit::Role::CheckBox,
+            Some("Show Bookmarks"),
+        );
+        assert!(lower_before.y0 >= viewport_bottom);
+
+        let pointer = egui::pos2(
+            scroll_viewport.x + scroll_viewport.width / 2.0,
+            scroll_viewport.y + scroll_viewport.height / 2.0,
+        );
+        let wheel_input = || {
+            vec![
+                egui::Event::PointerMoved(pointer),
+                egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: egui::vec2(0.0, -360.0),
+                    phase: egui::TouchPhase::Move,
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ]
+        };
+        accesskit_frame_at_size(
+            &context,
+            &blueprint,
+            "reading",
+            &mut state,
+            screen_size,
+            wheel_input(),
+        );
+        accesskit_frame_at_size(
+            &context,
+            &blueprint,
+            "reading",
+            &mut state,
+            screen_size,
+            wheel_input(),
+        );
+        let after = accesskit_frame_at_size(
+            &context,
+            &blueprint,
+            "reading",
+            &mut state,
+            screen_size,
+            Vec::new(),
+        );
+        let after_update = update(&after);
+        let inspector_after = author_node(after_update, "inspector").1.bounds().unwrap();
+        let lower_after = rendered_node_bounds(
+            after_update,
+            accesskit::Role::CheckBox,
+            Some("Show Bookmarks"),
+        );
+        assert_eq!(inspector_after, inspector_before);
+        assert!(lower_after.y0 < lower_before.y0);
+        assert!(
+            lower_after.y0 < viewport_bottom && lower_after.y1 > scroll_viewport.y as f64,
+            "lower authored control should become visible in its unchanged viewport: {lower_after:?}, viewport={scroll_viewport:?}"
+        );
+        assert_parent(after_update, "inspector", "show_bookmarks");
+        let (after_element_id, element_node) = author_node(after_update, "show_bookmarks");
+        assert_eq!(after_element_id, lower_element_id);
+        let checkbox_id = after_update
+            .nodes
+            .iter()
+            .find(|(_, node)| {
+                node.role() == accesskit::Role::CheckBox && node.label() == Some("Show Bookmarks")
+            })
+            .map(|(id, _)| *id)
+            .unwrap();
+        assert!(element_node.children().contains(&checkbox_id));
     }
 
     #[test]
