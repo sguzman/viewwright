@@ -181,6 +181,8 @@ fn root_fill(ui: &Ui, blueprint: &ResolvedBlueprint) -> Color32 {
         .unwrap_or_else(|| ui.style().visuals.panel_fill)
 }
 
+// Keep the explicit render context visible at this established renderer boundary.
+#[allow(clippy::too_many_arguments)]
 fn render_composition(
     ui: &mut egui::Ui,
     id: &str,
@@ -252,6 +254,8 @@ fn render_composition(
     }
 }
 
+// Region rendering carries layout, fixture, interaction, and identity context explicitly.
+#[allow(clippy::too_many_arguments)]
 fn render_region(
     ui: &mut egui::Ui,
     r: &ResolvedRegion,
@@ -352,6 +356,8 @@ fn scroll_area_id(screen_id: &str, region_id: &str) -> egui::Id {
     egui::Id::new(("region-scroll", screen_id, region_id))
 }
 
+// Preserve the explicit traversal context rather than refactoring renderer behavior in M39.
+#[allow(clippy::too_many_arguments)]
 fn render_region_contents(
     ui: &mut egui::Ui,
     r: &ResolvedRegion,
@@ -380,6 +386,8 @@ fn is_command_region(role: RegionRole) -> bool {
     role == RegionRole::Commands
 }
 
+// Preserve the explicit traversal context rather than refactoring renderer behavior in M39.
+#[allow(clippy::too_many_arguments)]
 fn render_element(
     ui: &mut egui::Ui,
     e: &viewwright_model::ResolvedElement,
@@ -1054,7 +1062,7 @@ mod tests {
             .map(|(_, node)| node)
             .find(|node| {
                 node.role() == role
-                    && label.map_or(true, |label| {
+                    && label.is_none_or(|label| {
                         node.value() == Some(label) || node.label() == Some(label)
                     })
             })

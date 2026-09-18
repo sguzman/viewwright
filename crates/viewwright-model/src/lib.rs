@@ -687,7 +687,7 @@ fn logical_size(
     id: &str,
     errors: &mut Vec<String>,
 ) -> Option<u32> {
-    let Some(value) = value else { return None };
+    let value = value?;
     match value.strip_suffix("px").and_then(|n| n.parse().ok()) {
         Some(size) => Some(size),
         None => {
@@ -703,15 +703,12 @@ fn parse_color(value: &str) -> Option<Color> {
         .strip_prefix('#')
         .filter(|v| v.len() == 6)
         .and_then(|v| u32::from_str_radix(v, 16).ok());
-    match valid {
-        Some(v) => Some(Color {
-            r: (v >> 16) as u8,
-            g: (v >> 8) as u8,
-            b: v as u8,
-            a: 255,
-        }),
-        None => None,
-    }
+    valid.map(|v| Color {
+        r: (v >> 16) as u8,
+        g: (v >> 8) as u8,
+        b: v as u8,
+        a: 255,
+    })
 }
 fn validate_token_names<T>(tokens: &HashMap<String, T>, family: &str, errors: &mut Vec<String>) {
     let mut names: Vec<_> = tokens.keys().map(String::as_str).collect();
@@ -762,7 +759,7 @@ fn resolve_visual(
     tokens: &TokensSource,
     errors: &mut Vec<String>,
 ) -> Option<ResolvedVisual> {
-    let Some(v) = source else { return None };
+    let v = source?;
     let scale = match (
         tokens.r#type.display,
         tokens.r#type.heading,
@@ -992,12 +989,13 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
             .and_then(|g| spacing.get(g))
             .copied()
             .unwrap_or(0);
-        if c.gap.is_some() && !spacing.contains_key(c.gap.as_ref().unwrap()) {
-            errors.push(format!(
-                "composition '{}': missing spacing token '{}'",
-                c.id,
-                c.gap.as_ref().unwrap()
-            ));
+        if let Some(gap_token) = &c.gap {
+            if !spacing.contains_key(gap_token) {
+                errors.push(format!(
+                    "composition '{}': missing spacing token '{}'",
+                    c.id, gap_token
+                ));
+            }
         }
         if composition_kind == CompositionKind::Overlay {
             if c.gap.is_some() {
@@ -1053,12 +1051,13 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
             .and_then(|g| spacing.get(g))
             .copied()
             .unwrap_or(0);
-        if c.padding.is_some() && !spacing.contains_key(c.padding.as_ref().unwrap()) {
-            errors.push(format!(
-                "composition '{}': missing spacing token '{}'",
-                c.id,
-                c.padding.as_ref().unwrap()
-            ));
+        if let Some(padding_token) = &c.padding {
+            if !spacing.contains_key(padding_token) {
+                errors.push(format!(
+                    "composition '{}': missing spacing token '{}'",
+                    c.id, padding_token
+                ));
+            }
         }
         if children.len() < 2 {
             errors.push(format!(
@@ -1777,7 +1776,7 @@ mod tests {
 
     #[test]
     fn reachable_dominant_regions_and_elements_preserve_typed_identity() {
-        let direct = parse_and_resolve(&project()).unwrap();
+        let direct = parse_and_resolve(project()).unwrap();
         assert_eq!(
             direct.design.dominant,
             Some(DominantTarget::Region("projects".into()))
@@ -3549,10 +3548,7 @@ mod tests {
                 .as_str(),
             "reader.play_pause"
         );
-        assert_eq!(
-            pressure.command_state("reading", "play_pause").enabled,
-            true
-        );
+        assert!(pressure.command_state("reading", "play_pause").enabled);
         assert_eq!(
             pressure.command_state("empty", "play_pause"),
             ResolvedCommandState {
@@ -3591,9 +3587,9 @@ mod tests {
         let valid = base;
         let malformed_base = valid.replace("\naction='run.now'", "");
         assert!(
-            parse_and_resolve(&valid).is_ok(),
+            parse_and_resolve(valid).is_ok(),
             "valid action fixture failed: {:?}",
-            parse_and_resolve(&valid).unwrap_err()
+            parse_and_resolve(valid).unwrap_err()
         );
         for action in ["run", "", ".foo", "foo.", "foo..bar", "foo bar", "foo/$bar"] {
             let source =

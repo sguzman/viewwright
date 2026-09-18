@@ -167,7 +167,7 @@ pub fn compare(
     Ok(report)
 }
 
-fn author_id_index<'a>(nodes: &'a [Node]) -> HashMap<&'a str, Vec<&'a Node>> {
+fn author_id_index(nodes: &[Node]) -> HashMap<&str, Vec<&Node>> {
     let mut index: HashMap<&str, Vec<&Node>> = HashMap::new();
     for node in nodes {
         if let Some(author_id) = node

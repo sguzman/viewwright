@@ -2,25 +2,17 @@
 
 ## Pipeline
 
-ViewWright should have a one-way authoring pipeline with explicit stages.
+ViewWright has a one-way authoring pipeline with explicit stages. Its projections consume the resolved semantic blueprint; observation and comparison remain separate downstream evidence paths.
 
 ```text
-Authoring source (TOML)
-        ↓
-      parse
-        ↓
-Parsed source model
-        ↓
-     validate
-        ↓
-Validated source model
-        ↓
-     resolve
-        ↓
-Resolved semantic blueprint
-   ┌────┼──────────┬──────────────┐
-   ↓    ↓          ↓              ↓
- tree  ASCII      egui       expectation export
+TOML → parse / validate / resolve → ResolvedBlueprint
+                                      ├── semantic/debug projection
+                                      ├── ASCII
+                                      ├── concept
+                                      ├── LayoutPlan → egui → egui::FullOutput
+                                      │                           ↓ AccessKit
+                                      │                    ViewWitness Witness
+                                      └── ViewWrightExpectation ─────┴──> exact compare
 ```
 
 Projection code must not become an alternate source of semantic truth.
@@ -118,23 +110,10 @@ At steady state, the render thread should primarily:
 
 Parsing and resolution should occur on load/reload, not every frame.
 
-## Future ViewWitness bridge
+## Normative expectation and observed verification
 
-The bridge should translate a subset of normative ViewWright intent into expectations that can be compared against ViewWitness observations.
+`viewwright-expectation` projects the resolved blueprint and an explicit logical viewport into a typed normative `ViewWrightExpectation`. The egui backend exposes authored semantic identity through AccessKit; the pinned ViewWitness egui adapter can convert a real egui `FullOutput` into a descriptive `Witness`. `viewwright-compare` compares only the exact shared evidence represented by those two models.
 
-Examples:
+M38 proves this composition in tests against ordinary, overlay, and overflow specimens. Exact means no mismatches and no evidence gaps. This does not imply fuzzy comparison, a live observer/server, or continuous runtime verification.
 
-```text
-ViewWright intent:
-  dominant = project_collection
-  inspector importance = secondary
-  inspector preferred width = 320
-
-ViewWitness observation:
-  dominant = inspector
-  inspector observed width = 487
-```
-
-The comparison layer can then report divergence without requiring ViewWitness to understand the complete ViewWright authoring language.
-
-This bridge belongs at the boundary between projects, not inside their respective canonical models.
+The comparison boundary connects the projects without merging their canonical models or authority: ViewWright says what should exist; ViewWitness records what was observed.

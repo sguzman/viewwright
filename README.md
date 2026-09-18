@@ -27,7 +27,7 @@ ViewWright is the normative counterpart to [ViewWitness](https://github.com/sguz
 - **ViewWright specifies.** It describes the interface that should exist.
 - **ViewWitness observes.** It describes the interface that actually exists.
 
-They are separate projects with deliberately opposite authority. In time, ViewWright expectations and ViewWitness observations should be comparable without collapsing either model into the other.
+They are separate projects with deliberately opposite authority. ViewWright expresses normative intent; ViewWitness records descriptive runtime evidence. M38 implements and proves exact comparison between their respective models without collapsing either model or authority. This proof is test-only; it does not provide live observer/server capture or fuzzy comparison.
 
 ## Core principles
 
@@ -43,7 +43,7 @@ They are separate projects with deliberately opposite authority. In time, ViewWr
 
 ## What ViewWright owns
 
-ViewWright owns the UI blueprint schema, semantic UI vocabulary, composition primitives, design intent, design tokens, fixture descriptions, projections, backend contracts, the initial egui renderer, and eventually a bridge for exporting expectations to ViewWitness.
+ViewWright owns the UI blueprint schema, semantic UI vocabulary, composition primitives, design intent, design tokens, fixture descriptions, projections, backend contracts, the egui renderer, and normative expectation export. Its exact comparison with ViewWitness observations is implemented at the project boundary; neither project takes over the other's authority.
 
 It does **not** own application business logic, arbitrary 2D/3D graphics, runtime UI observation, GUI automation, or persistence for the host application.
 
@@ -367,7 +367,7 @@ M32 adds an authored region-level overflow policy with `clip` and `scroll_y`, de
 
 ## M33 — normative expectation export
 
-M33 adds the first machine-readable ViewWright-owned expectation projection. `viewwright-expectation` builds a typed expectation from a resolved blueprint and an explicit logical viewport, taking reachable-region geometry from `viewwright-layout`, and serializes that model deterministically as YAML with format version `0.1` and `epistemic: intended`. It preserves typed dominant identity, reachable region and element semantics, resolved overflow, authored labels, and command actions. Unused declarations are omitted; element bounds, fixture payloads, mutable runtime state, observation claims, and ViewWitness witness structures are intentionally absent. This is a one-way intended artifact only: comparison, tolerance, observation/runtime identity bridging, fixture expectations, and responsive variants remain deferred.
+M33 adds the first machine-readable ViewWright-owned expectation projection. `viewwright-expectation` builds a typed expectation from a resolved blueprint and an explicit logical viewport, taking reachable-region geometry from `viewwright-layout`, and serializes that model deterministically as YAML with format version `0.1` and `epistemic: intended`. It preserves typed dominant identity, reachable region and element semantics, resolved overflow, authored labels, and command actions. Unused declarations are omitted; element bounds, fixture payloads, mutable runtime state, observation claims, and ViewWitness witness structures are intentionally absent. At M33, comparison and observation/runtime identity bridging remained deferred; M35 later added exact typed comparison, and M38 proved it against real renderer output. Fixture-aware expectations and responsive variants remain deferred.
 
 ## M34 — authored observation identity bridge
 
@@ -432,4 +432,4 @@ The M38 integration proof composes the real ViewWright egui output, pinned ViewW
 - M36 — accepted
 - M37 — accepted
 - M38 — accepted
-- M39 — authority defined; implementation pending
+- M39 — implementation complete; Director audit pending

@@ -28,7 +28,7 @@ authoring                   auditing
 before implementation       after/during runtime
 ```
 
-The future bridge is comparison, not merger.
+The implemented bridge is comparison, not merger. M38 proves exact intended-versus-observed comparison while preserving ViewWright's normative authority and ViewWitness's descriptive authority.
 
 ## Canonical truth
 
@@ -50,8 +50,11 @@ semantic blueprint
     ├── concept specification
     ├── preview
     ├── egui renderer
-    └── ViewWitness expectations
+    ├── ViewWright normative expectation
+    └── egui → AccessKit → ViewWitness observed Witness
 ```
+
+ViewWright expectations and ViewWitness observations are compared at the project boundary; neither model absorbs the other.
 
 ASCII diagrams are useful and encouraged, but they are generated projections. They must never become a second independent source of truth.
 
@@ -102,7 +105,8 @@ ViewWright owns:
 - renderer contracts
 - initial egui projection
 - concept-generation specifications
-- eventual ViewWitness expectation export
+- normative ViewWright expectation export
+- exact comparison against ViewWitness observation evidence
 
 ## Non-goals
 

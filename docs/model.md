@@ -1,5 +1,7 @@
 # Blueprint Model
 
+> **Historical / non-authoritative:** This is an M0-era design sketch. Candidate vocabularies and future-tense ideas below are not necessarily part of the current accepted schema. Current behavior is established by the implementation, current README and architecture documentation, and accepted milestone authority. The historical content below is intentionally preserved as design provenance.
+
 This document records the initial conceptual model. It is deliberately smaller than a full UI language.
 
 ## Resolution stages
