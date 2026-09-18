@@ -454,4 +454,4 @@ The companion [M40 baseline findings](docs/v0.2/m40-lantern-leaf-baseline-findin
 - M37 — accepted
 - M38 — accepted
 - M39 — accepted
-- M40 — implementation complete; human/Director review pending
+- M40 — accepted

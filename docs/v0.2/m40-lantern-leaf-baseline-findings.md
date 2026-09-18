@@ -49,3 +49,21 @@ The preview executable was launched with the baseline in its specimen selector a
 The outer wide shell and major region sizing are expressible in accepted 0.1 language. The reader toolbar demonstrates fake-region inflation; settings and player furnishing otherwise flatten into region element order. Many pictured settings and playback affordances can only be explanatory strings or action labels. The current concept output further drops all fixture state. The specimen therefore exposes a recognizable architecture with substantial, explicit semantic and visual gaps; it is not a simplified substitute for the north star.
 
 No conclusion about which v0.2 schema should follow is pre-decided here. Human/Director visual QA remains pending.
+
+
+## Human visual QA
+
+Human QA at the M40 baseline accepted the specimen as an honest pressure baseline.
+
+Observed:
+
+- the overall Lantern Leaf shell is recognizable;
+- the center reading surface remains dominant;
+- the near-black palette is somewhat crushed in the current projection;
+- the fixed reader toolbar squeezes the chapter-position/status content at its right edge, producing clipped/wrapped text;
+- the flattened TTS command surface leaves the `Voice` control with too little horizontal allocation, causing its label to stack vertically at the far right;
+- aside from those limitations, the specimen is visually coherent enough for baseline acceptance.
+
+These observations are treated as v0.2 pressure evidence, not as permission to add Lantern Leaf-specific renderer hacks. The toolbar and TTS artifacts reinforce the already-recorded need for local semantic grouping, alignment, sizing, and furnishing-level layout below the major-region layer. The crushed-darkness observation reinforces the need to revisit richer visual roles during the visual-authorship stage.
+
+M40 does not attempt to repair these limitations because its purpose is to expose the honest v0.1 boundary.
