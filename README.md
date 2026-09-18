@@ -383,7 +383,11 @@ M36 rejects an exact `screen.id` collision with any authored region or element I
 
 ## M37 — egui / ViewWitness compatibility pressure
 
-M37 aligns the workspace on egui/eframe 0.36.2 and proves that an actual AccessKit-enabled ViewWright Project Browser `egui::FullOutput` converts directly through the pinned ViewWitness egui adapter into a valid 0.1 Witness with exact M34 author IDs. The adapter remains test-only in `viewwright-egui`; `viewwright-compare` stays model-only, and fixture-local collection IDs remain separate. No translator, capture service, paint/raster evidence, or M35 comparison behavior is added. Representative human visual QA is pending.
+M37 aligns the workspace on egui/eframe 0.36.2 and proves that an actual AccessKit-enabled ViewWright Project Browser `egui::FullOutput` converts directly through the pinned ViewWitness egui adapter into a valid 0.1 Witness with exact M34 author IDs. The adapter remains test-only in `viewwright-egui`; `viewwright-compare` stays model-only, and fixture-local collection IDs remain separate. Human QA accepted the migration after correcting egui 0.36 element-flow participation and authored button weak-fill styling. No translator, capture service, paint/raster evidence, or M35 comparison behavior was added.
+
+## M38 — real expectation/witness exact verification
+
+M38 promotes the verification chain from individually proven stages into one in-process end-to-end proof. For representative canonical screens, the same resolved blueprint and logical viewport must produce an M33 intended expectation and a real M37 ViewWitness Witness, then M35 must report an exact match with zero mismatches and zero evidence gaps. The proof remains test/dev-only: no observer server, network transport, CI gate, public verification API, schema change, comparator weakening, responsive authoring, or renderer behavior change is authorized.
 
 ## Status
 
@@ -424,4 +428,5 @@ M37 aligns the workspace on egui/eframe 0.36.2 and proves that an actual AccessK
 - M34 — accepted
 - M35 — accepted
 - M36 — accepted
-- M37 — implementation complete; Director audit pending
+- M37 — accepted
+- M38 — authority defined; implementation pending
