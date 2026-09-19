@@ -122,6 +122,15 @@ Target:
 
 ## Stage 5 — authored responsive variants
 
+### Promotion: M44
+
+M43 leaves the wide Lantern Leaf composition semantically stable enough to vary deliberately. The stronger remaining architectural pressure is now resize behavior: the current single topology can only compress fixed library/reader/inspector/TTS geometry as the window narrows. This directly satisfies the responsive-roadmap promotion condition.
+
+M44 is promoted ahead of broad visual-polish work because responsive intent changes topology and reachability, while the already-recorded crushed-darkness/typography pressure can be refined afterward without invalidating the responsive contract.
+
+M44 is deliberately width-only and deterministic: named `wide`, `compact`, and `narrow` variants cover all non-negative root viewport widths using half-open intervals. Variants select alternate composition roots and may sparsely override region geometry/furnishing roots. Height queries, container queries, CSS cascade/specificity, animation, and automatic responsive inference remain out of scope.
+
+
 This stage fulfills the existing mini-CSS-like ambition.
 
 Required north-star states:

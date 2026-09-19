@@ -424,6 +424,10 @@ M42 is the second ViewWright v0.2 language expansion earned by the furnished Lan
 
 M43 turns the Lantern Leaf reader itself into a truthful semantic pressure surface. Existing simple documents remain valid, while rich document fixture content may author locally identified eyebrow, heading, paragraph, quote, and divider blocks plus one representative spoken text range. Document block IDs are stable within their document fixture content but remain fixture-local rather than new M34 author IDs. The egui projection renders the block hierarchy and a restrained derived spoken-range highlight; fixture-aware concept/ASCII output preserves the same structure. Expectation format 0.2, M35 comparison semantics, ViewWitness, application TTS execution, literary font binding, broader visual roles, and responsive authoring remain unchanged.
 
+## M44 — authored responsive layout variants
+
+M44 promotes ViewWright's long-planned resize contract into the v0.2 implementation path. Responsive behavior becomes authored intent selected deterministically from root viewport width before LayoutPlan: named `wide`, `compact`, and `narrow` variants select alternate composition roots plus sparse region geometry/furnishing overrides. Breakpoint intervals are exhaustive and non-overlapping; there is no cascade, specificity, device sniffing, or backend-invented responsive topology. Semantic region/element IDs survive wherever those objects remain present, fixture content may be dormant in an intentionally absent variant, and the dominant target must remain reachable in every variant.
+
 ## Status
 
 - M0 — accepted
@@ -470,3 +474,4 @@ M43 turns the Lantern Leaf reader itself into a truthful semantic pressure surfa
 - M41 — accepted
 - M42 — accepted
 - M43 — accepted
+- M44 — authority defined; implementation pending

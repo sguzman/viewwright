@@ -12,7 +12,26 @@ The north-star concept currently supplies a strong wide desktop composition and 
 
 This does **not** make the illustrative syntax below canonical. The exact responsive grammar must still be earned from the Lantern Leaf pressure specimen and validated against the existing ViewWright identity, reachability, layout, expectation, and observation contracts.
 
-## Motivation
+## Promotion — M44
+
+This roadmap is now promoted as **M44 — Authored Responsive Layout Variants**.
+
+The accepted M43 Lantern Leaf specimen supplies the concrete pressure required by the promotion condition: the wide layout is semantically stable, while narrower windows currently have no authored alternative and therefore collapse by backend geometry alone.
+
+M44 commits the first responsive grammar:
+
+- root viewport **width only**;
+- named variants;
+- `min_width` inclusive and `max_width` exclusive;
+- exhaustive, non-overlapping coverage of all non-negative widths;
+- one explicit default variant for viewport-free projections;
+- alternate composition roots;
+- sparse region width/height/grow/furnishing overrides;
+- variant-local reachability;
+- cheap runtime selection before LayoutPlan.
+
+The broader roadmap remains useful for later height/container pressure, but the M44 authority documents supersede its illustrative syntax where they differ.
+
 
 Current specimens are often designed at generous desktop widths. That is useful for proving semantic structure, but window resizing is a first-class UI behavior: the same screen may need different geometry, ordering, density, or presentation when the available surface becomes narrower or shorter.
 
