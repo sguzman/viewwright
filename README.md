@@ -469,4 +469,4 @@ M43 turns the Lantern Leaf reader itself into a truthful semantic pressure surfa
 - M40 — accepted
 - M41 — accepted
 - M42 — accepted
-- M43 — implementation complete; human/Director review pending
+- M43 — accepted
