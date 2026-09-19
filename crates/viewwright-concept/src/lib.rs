@@ -1,24 +1,21 @@
 use viewwright_model::{
     CompositionChild, CompositionKind, FurnishingChild, OverflowPolicy, ResolvedBlueprint,
+    ResolvedFixtureContent, ResolvedViewportState,
 };
 
 pub fn render(b: &ResolvedBlueprint) -> String {
-    let root = b
-        .default_variant()
-        .map_or(b.root.as_str(), |variant| variant.root.as_str());
-    render_root(b, root, None)
+    render_state(b, b.default_viewport_state(), None)
 }
 
 pub fn render_at(b: &ResolvedBlueprint, width: f32, height: f32) -> String {
-    let root = b.active_root(width);
-    let mut output = render_root(b, root, Some((width, height)));
-    if let Some(variant) = b.responsive_variant(width) {
-        output.push_str(&format!("\nResponsive variant\n  id: {}\n", variant.id));
-    }
-    output
+    render_state(b, b.viewport_state(width), Some((width, height)))
 }
 
-fn render_root(b: &ResolvedBlueprint, root: &str, viewport: Option<(f32, f32)>) -> String {
+fn render_state(
+    b: &ResolvedBlueprint,
+    state: ResolvedViewportState<'_>,
+    viewport: Option<(f32, f32)>,
+) -> String {
     let mut out = format!(
         "ViewWright concept specification\n\nScreen\n  id: {}\n  purpose: {}\n  density: {:?}\n\n",
         b.screen.id, b.screen.purpose, b.screen.density
@@ -44,12 +41,18 @@ fn render_root(b: &ResolvedBlueprint, root: &str, viewport: Option<(f32, f32)>) 
             "Viewport\n  width: {width}\n  height: {height}\n\n"
         ));
     }
-    walk(root, b, &mut out, 2);
+    if let Some(variant) = state.variant_id() {
+        out.push_str(&format!("Responsive variant\n  id: {variant}\n\n"));
+    }
+    walk(state.active_root(), b, &state, &mut out, 2);
     if let Some(v) = &b.visual {
         out.push_str(&format!("\nPalette\n  canvas: {}\n  surface: {}\n  surface_raised: {}\n  text: {}\n  text_muted: {}\n  accent: {}\n  border: {}\n\nTypography\n  display: {}\n  heading: {}\n  body: {}\n  caption: {}\n\nSurface policy\n  border: {:?}\n  corner radius: {}\n", hex(v.palette.canvas), hex(v.palette.surface), hex(v.palette.surface_raised), hex(v.palette.text), hex(v.palette.text_muted), hex(v.palette.accent), hex(v.palette.border), v.type_scale.display, v.type_scale.heading, v.type_scale.body, v.type_scale.caption, v.border_policy, v.corner_radius));
     }
     out.push_str("\nImportant semantic elements\n");
     for e in &b.elements {
+        if !state.is_element_active(&e.id) {
+            continue;
+        }
         let mut attributes = Vec::new();
         if let Some(presentation) = e.presentation {
             attributes.push(format!("presentation {presentation:?}"));
@@ -99,13 +102,35 @@ fn render_root(b: &ResolvedBlueprint, root: &str, viewport: Option<(f32, f32)>) 
 /// Renders the structural concept specification plus typed representative values for one fixture.
 /// Returns `None` when the fixture does not exist on this blueprint.
 pub fn render_fixture(b: &ResolvedBlueprint, fixture_id: &str) -> Option<String> {
+    render_fixture_state(b, fixture_id, b.default_viewport_state())
+}
+
+pub fn render_fixture_at(
+    b: &ResolvedBlueprint,
+    fixture_id: &str,
+    width: f32,
+    height: f32,
+) -> Option<String> {
+    let mut output = render_fixture_state(b, fixture_id, b.viewport_state(width))?;
+    output.push_str(&format!("Viewport\n  width: {width}\n  height: {height}\n"));
+    Some(output)
+}
+
+fn render_fixture_state(
+    b: &ResolvedBlueprint,
+    fixture_id: &str,
+    state: ResolvedViewportState<'_>,
+) -> Option<String> {
     let fixture = b.fixtures.iter().find(|fixture| fixture.id == fixture_id)?;
-    let mut out = render(b);
+    let mut out = render_state(b, state.clone(), None);
     out.push_str(&format!(
         "\nRepresentative control values — fixture {}\n",
         fixture.id
     ));
     for content in &fixture.content {
+        if !state.is_element_active(content_element_id(content)) {
+            continue;
+        }
         match content {
             viewwright_model::ResolvedFixtureContent::Document {
                 element,
@@ -162,12 +187,56 @@ pub fn render_fixture(b: &ResolvedBlueprint, fixture_id: &str) -> Option<String>
                     out.push_str(&format!("  {} = {}{}\n", control.label, value, unit));
                 }
             }
+            viewwright_model::ResolvedFixtureContent::Text { element, text } => {
+                if let Some(control) = b.elements.iter().find(|control| control.id == *element) {
+                    out.push_str(&format!("  {} = {}\n", control.label, text));
+                }
+            }
+            viewwright_model::ResolvedFixtureContent::Properties {
+                element,
+                properties,
+            } => {
+                if let Some(control) = b.elements.iter().find(|control| control.id == *element) {
+                    out.push_str(&format!("  {}\n", control.label));
+                    for property in properties {
+                        out.push_str(&format!("    {} = {}\n", property.name, property.value));
+                    }
+                }
+            }
+            viewwright_model::ResolvedFixtureContent::Collection { element, items, .. } => {
+                if let Some(control) = b.elements.iter().find(|control| control.id == *element) {
+                    out.push_str(&format!("  {}\n", control.label));
+                    for item in items {
+                        out.push_str(&format!("    {}\n", item.label));
+                    }
+                }
+            }
             _ => {}
         }
     }
     Some(out)
 }
-fn walk(id: &str, b: &ResolvedBlueprint, out: &mut String, depth: usize) {
+fn content_element_id(content: &ResolvedFixtureContent) -> &str {
+    match content {
+        ResolvedFixtureContent::Collection { element, .. }
+        | ResolvedFixtureContent::Properties { element, .. }
+        | ResolvedFixtureContent::Text { element, .. }
+        | ResolvedFixtureContent::Tree { element, .. }
+        | ResolvedFixtureContent::Document { element, .. }
+        | ResolvedFixtureContent::Command { element, .. }
+        | ResolvedFixtureContent::Choice { element, .. }
+        | ResolvedFixtureContent::Boolean { element, .. }
+        | ResolvedFixtureContent::Scalar { element, .. } => element,
+    }
+}
+
+fn walk(
+    id: &str,
+    b: &ResolvedBlueprint,
+    state: &ResolvedViewportState<'_>,
+    out: &mut String,
+    depth: usize,
+) {
     let Some(c) = b.compositions.iter().find(|c| c.id == id) else {
         return;
     };
@@ -200,7 +269,13 @@ fn walk(id: &str, b: &ResolvedBlueprint, out: &mut String, depth: usize) {
                         layer
                     ));
                 }
-                walk(id, b, out, depth + if layer.is_some() { 4 } else { 2 });
+                walk(
+                    id,
+                    b,
+                    state,
+                    out,
+                    depth + if layer.is_some() { 4 } else { 2 },
+                );
             }
             CompositionChild::Region(id) => {
                 let r = b.regions.iter().find(|r| r.id == *id).unwrap();
@@ -210,11 +285,12 @@ fn walk(id: &str, b: &ResolvedBlueprint, out: &mut String, depth: usize) {
                     ""
                 };
                 if let Some(layer) = layer {
-                    let width = r
+                    let effective = state.effective_region(r);
+                    let width = effective
                         .width
                         .map(|width| format!("{width}px"))
                         .unwrap_or_else(|| "unspecified".into());
-                    let height = r
+                    let height = effective
                         .height
                         .map(|height| format!("{height}px"))
                         .unwrap_or_else(|| "unspecified".into());
@@ -226,36 +302,55 @@ fn walk(id: &str, b: &ResolvedBlueprint, out: &mut String, depth: usize) {
                         r.role,
                         r.surface,
                         r.importance,
-                        r.furnishing
-                            .as_deref()
+                        effective.furnishing
                             .map(|root| format!(", furnishing {root}"))
                             .unwrap_or_default(),
                         overflow
                     ));
                 } else {
+                    let effective = state.effective_region(r);
+                    let geometry = [
+                        effective.width.map(|value| format!("width {value}px")),
+                        effective.height.map(|value| format!("height {value}px")),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>();
                     out.push_str(&format!(
-                        "{}{} — role {}, {:?}, {:?}{}{}\n",
+                        "{}{} — role {}, {:?}, {:?}{}{}{}\n",
                         " ".repeat(depth + 2),
                         id,
                         r.role,
                         r.surface,
                         r.importance,
-                        r.furnishing
-                            .as_deref()
+                        if geometry.is_empty() {
+                            String::new()
+                        } else {
+                            format!(", {}", geometry.join(", "))
+                        },
+                        state
+                            .effective_region(r)
+                            .furnishing
                             .map(|root| format!(", furnishing {root}"))
                             .unwrap_or_default(),
                         overflow
                     ));
                 }
-                if let Some(root) = r.furnishing.as_deref() {
-                    walk_furnishing(root, b, out, depth + 4);
+                if let Some(root) = state.effective_region(r).furnishing {
+                    walk_furnishing(root, b, state, out, depth + 4);
                 }
             }
         }
     }
 }
 
-fn walk_furnishing(id: &str, b: &ResolvedBlueprint, out: &mut String, depth: usize) {
+fn walk_furnishing(
+    id: &str,
+    b: &ResolvedBlueprint,
+    state: &ResolvedViewportState<'_>,
+    out: &mut String,
+    depth: usize,
+) {
     let Some(furnishing) = b.furnishings.iter().find(|furnishing| furnishing.id == id) else {
         return;
     };
@@ -282,16 +377,18 @@ fn walk_furnishing(id: &str, b: &ResolvedBlueprint, out: &mut String, depth: usi
     ));
     for child in &furnishing.children {
         match child {
-            FurnishingChild::Furnishing(child) => walk_furnishing(child, b, out, depth + 2),
+            FurnishingChild::Furnishing(child) => walk_furnishing(child, b, state, out, depth + 2),
             FurnishingChild::Element(id) => {
-                if let Some(element) = b.elements.iter().find(|element| element.id == *id) {
-                    out.push_str(&format!(
-                        "{}element {} — {:?}: {}\n",
-                        " ".repeat(depth + 2),
-                        element.id,
-                        element.kind,
-                        element.label
-                    ));
+                if state.is_element_active(id) {
+                    if let Some(element) = b.elements.iter().find(|element| element.id == *id) {
+                        out.push_str(&format!(
+                            "{}element {} — {:?}: {}\n",
+                            " ".repeat(depth + 2),
+                            element.id,
+                            element.kind,
+                            element.label
+                        ));
+                    }
                 }
             }
         }
@@ -303,7 +400,7 @@ fn hex(c: viewwright_model::Color) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{render, render_fixture};
+    use super::{render, render_at, render_fixture, render_fixture_at};
     use viewwright_model::parse_and_resolve;
 
     #[test]
@@ -420,5 +517,50 @@ mod tests {
         ] {
             assert!(output.contains(expected), "missing {expected:?}:\n{output}");
         }
+    }
+
+    #[test]
+    fn m44_responsive_concept_filters_dormant_semantics_and_uses_effective_state() {
+        let blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/lantern-leaf-reader-responsive.toml"
+        ))
+        .unwrap();
+        let narrow = render_at(&blueprint, 800.0, 900.0);
+        assert!(narrow.contains("workspace_narrow"));
+        assert!(narrow.contains("reader_furnishing_narrow"));
+        assert!(narrow.contains("tts_furnishing_narrow"));
+        assert!(!narrow.contains("inspector — role"));
+        assert!(!narrow.contains("library — role"));
+        assert!(!narrow.contains("Font Family"));
+
+        let compact = render_at(&blueprint, 1100.0, 900.0);
+        assert!(compact.contains("library — role"));
+        assert!(compact.contains("reader — role"));
+        assert!(compact.contains("tts_player — role"));
+        assert!(compact.contains("210px"));
+        assert!(!compact.contains("inspector — role"));
+
+        let default = render(&blueprint);
+        let wide = render_at(&blueprint, 1440.0, 900.0);
+        for marker in [
+            "workspace",
+            "library — role",
+            "reader — role",
+            "inspector — role",
+        ] {
+            assert!(default.contains(marker));
+            assert!(wide.contains(marker));
+        }
+        let fixture = render_fixture_at(&blueprint, "reading", 800.0, 900.0).unwrap();
+        assert!(fixture.contains("The Mountain Path"));
+        assert!(fixture.contains("spoken:"));
+        assert!(fixture.contains("The Wandering Horizon"));
+        assert!(!fixture.contains("Font Family"));
+        assert!(!fixture.contains("Show Highlights"));
+        let compact_fixture = render_fixture_at(&blueprint, "reading", 1100.0, 900.0).unwrap();
+        assert!(compact_fixture.contains("Library navigation"));
+        assert!(!compact_fixture.contains("Font Family"));
+        let wide_fixture = render_fixture_at(&blueprint, "reading", 1440.0, 900.0).unwrap();
+        assert!(wide_fixture.contains("Font Family"));
     }
 }

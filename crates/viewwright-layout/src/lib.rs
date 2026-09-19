@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use viewwright_model::{
     Axis, CompositionChild, CompositionKind, FurnishingChild, FurnishingKind, OverflowPolicy,
-    ResolvedBlueprint, ResolvedRegion, ResolvedResponsiveVariant,
+    ResolvedBlueprint, ResolvedViewportState,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -115,19 +115,22 @@ pub fn layout(blueprint: &ResolvedBlueprint, width: f32, height: f32) -> LayoutP
     let viewport = Rect::new(0.0, 0.0, width.max(0.0), height.max(0.0));
     let mut plan = LayoutPlan {
         viewport,
-        active_variant: blueprint.responsive_variant(width).map(|v| v.id.clone()),
-        active_root: blueprint.active_root(width).to_owned(),
+        active_variant: blueprint
+            .viewport_state(width)
+            .variant_id()
+            .map(str::to_owned),
+        active_root: blueprint.viewport_state(width).active_root().to_owned(),
         compositions: HashMap::new(),
         regions: HashMap::new(),
         furnishings: HashMap::new(),
         region_furnishings: HashMap::new(),
     };
-    let variant = blueprint.responsive_variant(width);
+    let state = blueprint.viewport_state(width);
     let active_root = plan.active_root.clone();
-    layout_composition(blueprint, &mut plan, &active_root, viewport, variant);
+    layout_composition(blueprint, &mut plan, &active_root, viewport, &state);
     for region in &blueprint.regions {
-        let effective = effective_region(region, variant);
-        let furnishing = effective.furnishing.as_deref();
+        let effective = state.effective_region(region);
+        let furnishing = effective.furnishing;
         if let (Some(root), Some(rect)) = (furnishing, plan.region(&region.id)) {
             plan.region_furnishings
                 .insert(region.id.clone(), root.to_owned());
@@ -214,7 +217,7 @@ fn layout_composition(
     plan: &mut LayoutPlan,
     id: &str,
     rect: Rect,
-    variant: Option<&ResolvedResponsiveVariant>,
+    state: &ResolvedViewportState<'_>,
 ) {
     let Some(composition) = blueprint.compositions.iter().find(|c| c.id == id) else {
         return;
@@ -226,7 +229,7 @@ fn layout_composition(
             return;
         }
         if let CompositionChild::Composition(base) = &composition.children[0] {
-            layout_composition(blueprint, plan, base, inner, variant);
+            layout_composition(blueprint, plan, base, inner, state);
         }
         if let CompositionChild::Region(floating) = &composition.children[1] {
             if let Some(region) = blueprint
@@ -234,7 +237,7 @@ fn layout_composition(
                 .iter()
                 .find(|region| region.id == *floating)
             {
-                let effective = effective_region(region, variant);
+                let effective = state.effective_region(region);
                 let width = effective.width.unwrap_or(0) as f32;
                 let height = effective.height.unwrap_or(0) as f32;
                 plan.regions.insert(
@@ -256,12 +259,12 @@ fn layout_composition(
     let fixed: f32 = composition
         .children
         .iter()
-        .map(|child| fixed_size(blueprint, child, horizontal, variant))
+        .map(|child| fixed_size(blueprint, child, horizontal, state))
         .sum();
     let growth: f32 = composition
         .children
         .iter()
-        .map(|child| growth_weight(blueprint, child, horizontal, variant))
+        .map(|child| growth_weight(blueprint, child, horizontal, state))
         .sum();
     let remaining = if horizontal {
         (inner.width - total_gap - fixed).max(0.0)
@@ -270,9 +273,9 @@ fn layout_composition(
     };
     let mut cursor = if horizontal { inner.x } else { inner.y };
     for child in &composition.children {
-        let main = fixed_size(blueprint, child, horizontal, variant).max(0.0)
+        let main = fixed_size(blueprint, child, horizontal, state).max(0.0)
             + if growth > 0.0 {
-                remaining * growth_weight(blueprint, child, horizontal, variant) / growth
+                remaining * growth_weight(blueprint, child, horizontal, state) / growth
             } else {
                 0.0
             };
@@ -290,7 +293,7 @@ fn layout_composition(
                 plan.regions.insert(id.clone(), child_rect);
             }
             CompositionChild::Composition(id) => {
-                layout_composition(blueprint, plan, id, child_rect, variant);
+                layout_composition(blueprint, plan, id, child_rect, state);
             }
         }
     }
@@ -300,14 +303,14 @@ fn fixed_size(
     blueprint: &ResolvedBlueprint,
     child: &CompositionChild,
     horizontal: bool,
-    variant: Option<&ResolvedResponsiveVariant>,
+    state: &ResolvedViewportState<'_>,
 ) -> f32 {
     match child {
         CompositionChild::Region(id) => blueprint
             .regions
             .iter()
             .find(|r| r.id == *id)
-            .map(|r| effective_region(r, variant))
+            .map(|r| state.effective_region(r))
             .and_then(|r| if horizontal { r.width } else { r.height })
             .unwrap_or(0) as f32,
         CompositionChild::Composition(_) => 0.0,
@@ -318,14 +321,14 @@ fn growth_weight(
     blueprint: &ResolvedBlueprint,
     child: &CompositionChild,
     _horizontal: bool,
-    variant: Option<&ResolvedResponsiveVariant>,
+    state: &ResolvedViewportState<'_>,
 ) -> f32 {
     match child {
         CompositionChild::Region(id) => blueprint
             .regions
             .iter()
             .find(|r| r.id == *id)
-            .map(|r| effective_region(r, variant).grow)
+            .map(|r| state.effective_region(r).grow)
             .unwrap_or(0.0),
         CompositionChild::Composition(id) => blueprint
             .compositions
@@ -334,30 +337,6 @@ fn growth_weight(
             .map(|c| c.grow)
             .unwrap_or(0.0),
     }
-}
-
-fn effective_region(
-    region: &ResolvedRegion,
-    variant: Option<&ResolvedResponsiveVariant>,
-) -> ResolvedRegionEffective {
-    let override_ = variant.and_then(|variant| variant.regions.get(&region.id));
-    ResolvedRegionEffective {
-        width: override_.and_then(|value| value.width).or(region.width),
-        height: override_.and_then(|value| value.height).or(region.height),
-        grow: override_
-            .and_then(|value| value.grow)
-            .unwrap_or(region.grow),
-        furnishing: override_
-            .and_then(|value| value.furnishing.clone())
-            .or_else(|| region.furnishing.clone()),
-    }
-}
-
-struct ResolvedRegionEffective {
-    width: Option<u32>,
-    height: Option<u32>,
-    grow: f32,
-    furnishing: Option<String>,
 }
 
 #[cfg(test)]

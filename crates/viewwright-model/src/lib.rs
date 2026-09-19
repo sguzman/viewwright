@@ -1126,6 +1126,104 @@ impl ResolvedBlueprint {
             .iter()
             .find(|variant| variant.id == responsive.default)
     }
+
+    pub fn viewport_state(&self, width: f32) -> ResolvedViewportState<'_> {
+        let variant = self.responsive_variant(width);
+        ResolvedViewportState::new(self, variant)
+    }
+
+    pub fn default_viewport_state(&self) -> ResolvedViewportState<'_> {
+        ResolvedViewportState::new(self, self.default_variant())
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct EffectiveRegion<'a> {
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+    pub grow: f32,
+    pub furnishing: Option<&'a str>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ResolvedViewportState<'a> {
+    blueprint: &'a ResolvedBlueprint,
+    variant: Option<&'a ResolvedResponsiveVariant>,
+    active_root: &'a str,
+    active_compositions: HashSet<String>,
+    active_regions: HashSet<String>,
+    active_elements: HashSet<String>,
+}
+
+impl<'a> ResolvedViewportState<'a> {
+    fn new(
+        blueprint: &'a ResolvedBlueprint,
+        variant: Option<&'a ResolvedResponsiveVariant>,
+    ) -> Self {
+        let active_root = variant
+            .map(|variant| variant.root.as_str())
+            .unwrap_or(blueprint.root.as_str());
+        let (active_compositions, active_regions) =
+            active_topology(active_root, &blueprint.compositions);
+        let active_elements = blueprint
+            .elements
+            .iter()
+            .filter(|element| active_regions.contains(&element.region))
+            .map(|element| element.id.clone())
+            .collect();
+        Self {
+            blueprint,
+            variant,
+            active_root,
+            active_compositions,
+            active_regions,
+            active_elements,
+        }
+    }
+
+    pub fn variant_id(&self) -> Option<&str> {
+        self.variant.map(|variant| variant.id.as_str())
+    }
+
+    pub fn active_root(&self) -> &str {
+        self.active_root
+    }
+
+    pub fn is_composition_active(&self, id: &str) -> bool {
+        self.active_compositions.contains(id)
+    }
+
+    pub fn is_region_active(&self, id: &str) -> bool {
+        self.active_regions.contains(id)
+    }
+
+    pub fn is_element_active(&self, id: &str) -> bool {
+        self.active_elements.contains(id)
+    }
+
+    pub fn active_regions(&self) -> impl Iterator<Item = &str> {
+        self.active_regions.iter().map(String::as_str)
+    }
+
+    pub fn effective_region(&self, region: &'a ResolvedRegion) -> EffectiveRegion<'a> {
+        let override_ = self
+            .variant
+            .and_then(|variant| variant.regions.get(&region.id));
+        EffectiveRegion {
+            width: override_.and_then(|value| value.width).or(region.width),
+            height: override_.and_then(|value| value.height).or(region.height),
+            grow: override_
+                .and_then(|value| value.grow)
+                .unwrap_or(region.grow),
+            furnishing: override_
+                .and_then(|value| value.furnishing.as_deref())
+                .or(region.furnishing.as_deref()),
+        }
+    }
+
+    pub fn blueprint(&self) -> &'a ResolvedBlueprint {
+        self.blueprint
+    }
 }
 #[derive(Debug, Clone)]
 pub struct ResolvedScreen {
@@ -1961,6 +2059,84 @@ fn reachable_regions_for_root(root: &str, compositions: &[ResolvedComposition]) 
     regions
 }
 
+fn active_topology(
+    root: &str,
+    compositions: &[ResolvedComposition],
+) -> (HashSet<String>, HashSet<String>) {
+    let by_id: HashMap<_, _> = compositions
+        .iter()
+        .map(|composition| (composition.id.as_str(), composition))
+        .collect();
+    let mut active_compositions = HashSet::new();
+    let mut active_regions = HashSet::new();
+    let mut pending = vec![root.to_owned()];
+    while let Some(id) = pending.pop() {
+        if !active_compositions.insert(id.clone()) {
+            continue;
+        }
+        if let Some(composition) = by_id.get(id.as_str()) {
+            for child in &composition.children {
+                match child {
+                    CompositionChild::Composition(child) => pending.push(child.clone()),
+                    CompositionChild::Region(region) => {
+                        active_regions.insert(region.clone());
+                    }
+                }
+            }
+        }
+    }
+    (active_compositions, active_regions)
+}
+
+fn validate_variant_ownership(
+    root: &str,
+    variant_id: &str,
+    compositions: &[ResolvedComposition],
+    errors: &mut Vec<String>,
+) -> HashSet<String> {
+    let by_id: HashMap<_, _> = compositions
+        .iter()
+        .map(|composition| (composition.id.as_str(), composition))
+        .collect();
+    let mut parents: HashMap<String, String> = HashMap::new();
+    let mut reachable = HashSet::new();
+    let mut pending = vec![root.to_owned()];
+    while let Some(id) = pending.pop() {
+        if !reachable.insert(id.clone()) {
+            continue;
+        }
+        let Some(composition) = by_id.get(id.as_str()) else {
+            continue;
+        };
+        for child in &composition.children {
+            let child_id = match child {
+                CompositionChild::Composition(child) | CompositionChild::Region(child) => child,
+            };
+            if child_id == root {
+                errors.push(format!(
+                    "responsive variant '{}': root composition '{}' cannot be an active child",
+                    variant_id, root
+                ));
+            }
+            if let Some(previous) = parents.insert(child_id.clone(), composition.id.clone()) {
+                if previous != composition.id {
+                    errors.push(format!(
+                        "responsive variant '{}': active child '{}' has multiple composition parents '{}' and '{}'",
+                        variant_id, child_id, previous, composition.id
+                    ));
+                }
+            }
+            match child {
+                CompositionChild::Composition(_) => pending.push(child_id.clone()),
+                CompositionChild::Region(_) => {
+                    reachable.insert(child_id.clone());
+                }
+            }
+        }
+    }
+    reachable
+}
+
 #[allow(clippy::too_many_arguments)]
 fn resolve_responsive(
     source: Option<&ResponsiveSource>,
@@ -2006,7 +2182,13 @@ fn resolve_responsive(
                 variant.id
             ));
         }
-        let reachable = reachable_regions_for_root(&variant.root, compositions);
+        let reachable =
+            validate_variant_ownership(&variant.root, &variant.id, compositions, errors);
+        let reachable_regions: HashSet<_> = reachable
+            .iter()
+            .filter(|id| regions.iter().any(|region| region.id == **id))
+            .cloned()
+            .collect();
         let mut overrides = HashMap::new();
         for override_source in &variant.region {
             if !region_ids.contains(override_source.id.as_str()) {
@@ -2015,7 +2197,7 @@ fn resolve_responsive(
                     variant.id, override_source.id
                 ));
             }
-            if !reachable.contains(&override_source.id) {
+            if !reachable_regions.contains(&override_source.id) {
                 errors.push(format!(
                     "responsive variant '{}': override region '{}' is not reachable from root '{}'",
                     variant.id, override_source.id, variant.root
@@ -6030,5 +6212,38 @@ overflow = "scroll_y"
         assert_eq!(blueprint.responsive_variant(800.0).unwrap().id, "narrow");
         assert_eq!(blueprint.active_root(1100.0), "workspace_compact");
         assert_eq!(blueprint.active_root(800.0), "workspace_narrow");
+    }
+
+    #[test]
+    fn m44_allows_cross_variant_parent_changes_but_rejects_ambiguous_active_topology() {
+        let source = include_str!("../../../specimens/lantern-leaf-reader-responsive.toml");
+        assert!(parse_and_resolve(source).is_ok());
+        let ambiguous = source.replace(
+            "id = \"narrow\"\nroot = \"workspace_narrow\"",
+            "id = \"narrow\"\nroot = \"ambiguous_root\"",
+        ) + r#"
+
+[[composition]]
+id = "ambiguous_root"
+kind = "split"
+axis = "horizontal"
+children = ["left", "right"]
+
+[[composition]]
+id = "left"
+kind = "column"
+axis = "vertical"
+children = ["reader", "tts_player"]
+
+[[composition]]
+id = "right"
+kind = "column"
+axis = "vertical"
+children = ["reader", "tts_player"]
+"#;
+        let error = parse_and_resolve(&ambiguous).unwrap_err().to_string();
+        assert!(error.contains(
+            "responsive variant 'narrow': active child 'reader' has multiple composition parents"
+        ));
     }
 }
