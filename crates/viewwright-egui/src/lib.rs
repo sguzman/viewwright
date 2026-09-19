@@ -122,7 +122,7 @@ pub fn show(
                         let origin = ui.min_rect().min;
                         render_composition(
                             ui,
-                            &blueprint.root,
+                            plan.active_root(),
                             blueprint,
                             fixture,
                             &plan,
@@ -333,7 +333,7 @@ fn render_region(
                         .paint(egui_rect),
                 );
             }
-            let content = if r.furnishing.is_some() {
+            let content = if plan.region_furnishing(&r.id).is_some() {
                 egui_rect
             } else {
                 egui_rect.shrink(density.region_inset)
@@ -402,7 +402,7 @@ fn render_region_contents(
     state: &mut RenderState,
     parent_anchor: egui::Id,
 ) {
-    if let Some(root) = r.furnishing.as_deref() {
+    if let Some(root) = plan.region_furnishing(&r.id) {
         render_furnishing(
             ui,
             root,

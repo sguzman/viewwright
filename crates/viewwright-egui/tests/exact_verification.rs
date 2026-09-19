@@ -7,16 +7,26 @@ const WIDTH: f32 = 1440.0;
 const HEIGHT: f32 = 900.0;
 
 fn assert_real_render_exactly_matches_expectation(source: &str, fixture: &str, case: &str) {
+    assert_real_render_exactly_matches_expectation_at(source, fixture, case, WIDTH, HEIGHT);
+}
+
+fn assert_real_render_exactly_matches_expectation_at(
+    source: &str,
+    fixture: &str,
+    case: &str,
+    width: f32,
+    height: f32,
+) {
     let blueprint = parse_and_resolve(source)
         .unwrap_or_else(|error| panic!("{case}: source resolution failed: {error}"));
-    let expectation = viewwright_expectation::build_expectation(&blueprint, WIDTH, HEIGHT)
+    let expectation = viewwright_expectation::build_expectation(&blueprint, width, height)
         .unwrap_or_else(|error| panic!("{case}: expectation construction failed: {error}"));
 
     let context = Context::default();
     context.enable_accesskit();
     let mut output = context.run_ui(
         RawInput {
-            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(WIDTH, HEIGHT))),
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(width, height))),
             ..Default::default()
         },
         |ui| {
@@ -27,8 +37,8 @@ fn assert_real_render_exactly_matches_expectation(source: &str, fixture: &str, c
     let witness = witness_from_egui_output(
         &output,
         EguiCaptureContext::new(Viewport {
-            width: WIDTH,
-            height: HEIGHT,
+            width,
+            height,
             scale_factor: 1.0,
         }),
     )
@@ -96,6 +106,20 @@ fn lantern_leaf_baseline_exactly_matches_real_renderer_witness() {
         "reading",
         "M40 Lantern Leaf baseline / reading at 1440x900",
     );
+}
+
+#[test]
+fn lantern_leaf_responsive_variants_exactly_match_at_required_widths() {
+    let source = include_str!("../../../specimens/lantern-leaf-reader-responsive.toml");
+    for (width, variant) in [(1440.0, "wide"), (1100.0, "compact"), (800.0, "narrow")] {
+        assert_real_render_exactly_matches_expectation_at(
+            source,
+            "reading",
+            &format!("M44 Lantern Leaf responsive / {variant} at {width}x900"),
+            width,
+            900.0,
+        );
+    }
 }
 
 #[test]

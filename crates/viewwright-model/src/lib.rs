@@ -20,6 +20,8 @@ pub struct SourceBlueprint {
     pub tokens: TokensSource,
     pub visual: Option<VisualSource>,
     #[serde(default)]
+    pub responsive: Option<ResponsiveSource>,
+    #[serde(default)]
     pub region: Vec<RegionSource>,
     #[serde(default)]
     pub composition: Vec<CompositionSource>,
@@ -29,6 +31,34 @@ pub struct SourceBlueprint {
     pub element: Vec<ElementSource>,
     #[serde(default)]
     pub fixture: Vec<FixtureSource>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResponsiveSource {
+    pub default: String,
+    pub variant: Vec<ResponsiveVariantSource>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResponsiveVariantSource {
+    pub id: String,
+    pub root: String,
+    pub min_width: Option<u32>,
+    pub max_width: Option<u32>,
+    #[serde(default)]
+    pub region: Vec<ResponsiveRegionOverrideSource>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResponsiveRegionOverrideSource {
+    pub id: String,
+    pub width: Option<String>,
+    pub height: Option<String>,
+    pub grow: Option<f32>,
+    pub furnishing: Option<String>,
 }
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -1043,6 +1073,59 @@ pub struct ResolvedBlueprint {
     pub elements: Vec<ResolvedElement>,
     pub fixtures: Vec<ResolvedFixture>,
     pub visual: Option<ResolvedVisual>,
+    pub responsive: Option<ResolvedResponsive>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ResolvedResponsive {
+    pub default: String,
+    pub variants: Vec<ResolvedResponsiveVariant>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ResolvedResponsiveVariant {
+    pub id: String,
+    pub min_width: u32,
+    pub max_width: Option<u32>,
+    pub root: String,
+    pub regions: HashMap<String, ResolvedRegionOverride>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ResolvedRegionOverride {
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+    pub grow: Option<f32>,
+    pub furnishing: Option<String>,
+}
+
+impl ResolvedResponsive {
+    pub fn select(&self, width: f32) -> Option<&ResolvedResponsiveVariant> {
+        self.variants.iter().find(|variant| {
+            width >= variant.min_width as f32
+                && variant.max_width.is_none_or(|max| width < max as f32)
+        })
+    }
+}
+
+impl ResolvedBlueprint {
+    pub fn responsive_variant(&self, width: f32) -> Option<&ResolvedResponsiveVariant> {
+        self.responsive.as_ref()?.select(width)
+    }
+
+    pub fn active_root(&self, width: f32) -> &str {
+        self.responsive_variant(width)
+            .map(|variant| variant.root.as_str())
+            .unwrap_or(&self.root)
+    }
+
+    pub fn default_variant(&self) -> Option<&ResolvedResponsiveVariant> {
+        let responsive = self.responsive.as_ref()?;
+        responsive
+            .variants
+            .iter()
+            .find(|variant| variant.id == responsive.default)
+    }
 }
 #[derive(Debug, Clone)]
 pub struct ResolvedScreen {
@@ -1307,6 +1390,7 @@ fn logical_size(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn resolve_furnishings(
     source_regions: &[RegionSource],
     source_furnishings: &[FurnishingSource],
@@ -1314,6 +1398,7 @@ fn resolve_furnishings(
     elements: &[ResolvedElement],
     ids: &mut HashSet<String>,
     spacing: &HashMap<String, u32>,
+    responsive: bool,
     errors: &mut Vec<String>,
 ) -> Vec<ResolvedFurnishing> {
     let furnishing_ids: HashSet<_> = source_furnishings
@@ -1481,20 +1566,20 @@ fn resolve_furnishings(
         }
     }
     for (child, parents) in &furnishing_parents {
-        if parents.len() > 1 {
+        if !responsive && parents.len() > 1 {
             errors.push(format!(
                 "furnishing '{child}' has multiple furnishing parents: {}",
                 parents.join(" and ")
             ));
         }
-        if furnished_roots.contains_key(*child) {
+        if !responsive && furnished_roots.contains_key(*child) {
             errors.push(format!(
                 "furnishing root '{child}' cannot have a furnishing parent"
             ));
         }
     }
     for (child, parents) in &element_parents {
-        if parents.len() > 1 {
+        if !responsive && parents.len() > 1 {
             errors.push(format!(
                 "element '{child}' has multiple furnishing parents: {}",
                 parents.join(" and ")
@@ -1502,7 +1587,7 @@ fn resolve_furnishings(
         }
     }
     for (root, owners) in &furnished_roots {
-        if owners.len() > 1 {
+        if !responsive && owners.len() > 1 {
             errors.push(format!(
                 "furnishing root '{root}' is assigned to multiple regions: {}",
                 owners.join(" and ")
@@ -1619,6 +1704,10 @@ fn resolve_furnishings(
             }
         }
         stack.remove(id);
+    }
+
+    if responsive {
+        return resolved;
     }
 
     let mut furnishing_counts = HashMap::new();
@@ -1805,8 +1894,362 @@ fn surface(value: Option<&String>, id: &str, errors: &mut Vec<String>) -> Surfac
     }
 }
 
+fn collect_variant_furnishing_elements(
+    id: &str,
+    owner_region: &str,
+    furnishings: &HashMap<&str, &ResolvedFurnishing>,
+    elements: &HashMap<&str, &ResolvedElement>,
+    stack: &mut HashSet<String>,
+    counts: &mut HashMap<String, usize>,
+    errors: &mut Vec<String>,
+) {
+    if !stack.insert(id.to_owned()) {
+        return;
+    }
+    if let Some(furnishing) = furnishings.get(id) {
+        for child in &furnishing.children {
+            match child {
+                FurnishingChild::Furnishing(child) => collect_variant_furnishing_elements(
+                    child,
+                    owner_region,
+                    furnishings,
+                    elements,
+                    stack,
+                    counts,
+                    errors,
+                ),
+                FurnishingChild::Element(child) => {
+                    if let Some(element) = elements.get(child.as_str()) {
+                        if element.region != owner_region {
+                            errors.push(format!(
+                                "responsive furnishing '{}' in region '{}' contains element '{}' owned by region '{}'",
+                                furnishing.id, owner_region, child, element.region
+                            ));
+                        }
+                        *counts.entry(child.clone()).or_default() += 1;
+                    }
+                }
+            }
+        }
+    }
+    stack.remove(id);
+}
+
+fn reachable_regions_for_root(root: &str, compositions: &[ResolvedComposition]) -> HashSet<String> {
+    let by_id: HashMap<_, _> = compositions
+        .iter()
+        .map(|composition| (composition.id.as_str(), composition))
+        .collect();
+    let mut regions = HashSet::new();
+    let mut seen = HashSet::new();
+    let mut pending = vec![root.to_owned()];
+    while let Some(id) = pending.pop() {
+        if !seen.insert(id.clone()) {
+            continue;
+        }
+        if let Some(composition) = by_id.get(id.as_str()) {
+            for child in &composition.children {
+                match child {
+                    CompositionChild::Composition(child) => pending.push(child.clone()),
+                    CompositionChild::Region(region) => {
+                        regions.insert(region.clone());
+                    }
+                }
+            }
+        }
+    }
+    regions
+}
+
+#[allow(clippy::too_many_arguments)]
+fn resolve_responsive(
+    source: Option<&ResponsiveSource>,
+    screen_root: &str,
+    dominant: Option<&str>,
+    composition_ids: &HashSet<&str>,
+    compositions: &[ResolvedComposition],
+    regions: &[ResolvedRegion],
+    elements: &[ResolvedElement],
+    furnishings: &[ResolvedFurnishing],
+    errors: &mut Vec<String>,
+) -> (Option<ResolvedResponsive>, HashSet<String>) {
+    let Some(source) = source else {
+        return (None, reachable_regions_for_root(screen_root, compositions));
+    };
+    if source.variant.len() < 2 {
+        errors.push("responsive: requires at least two variants".into());
+    }
+    let mut ids = HashSet::new();
+    let mut resolved = Vec::with_capacity(source.variant.len());
+    let region_ids: HashSet<_> = regions.iter().map(|region| region.id.as_str()).collect();
+    let furnishing_ids: HashSet<_> = furnishings
+        .iter()
+        .map(|furnishing| furnishing.id.as_str())
+        .collect();
+    for variant in &source.variant {
+        validate_nonblank_id(&variant.id, "responsive.variant.id", errors);
+        if !ids.insert(variant.id.clone()) {
+            errors.push(format!("responsive: duplicate variant id '{}'", variant.id));
+        }
+        if !composition_ids.contains(variant.root.as_str()) {
+            errors.push(format!(
+                "responsive variant '{}': missing root composition '{}'",
+                variant.id, variant.root
+            ));
+        }
+        if variant
+            .max_width
+            .is_some_and(|max| variant.min_width.unwrap_or(0) >= max)
+        {
+            errors.push(format!(
+                "responsive variant '{}': interval must be non-empty",
+                variant.id
+            ));
+        }
+        let reachable = reachable_regions_for_root(&variant.root, compositions);
+        let mut overrides = HashMap::new();
+        for override_source in &variant.region {
+            if !region_ids.contains(override_source.id.as_str()) {
+                errors.push(format!(
+                    "responsive variant '{}': override references missing region '{}'",
+                    variant.id, override_source.id
+                ));
+            }
+            if !reachable.contains(&override_source.id) {
+                errors.push(format!(
+                    "responsive variant '{}': override region '{}' is not reachable from root '{}'",
+                    variant.id, override_source.id, variant.root
+                ));
+            }
+            if override_source.width.is_none()
+                && override_source.height.is_none()
+                && override_source.grow.is_none()
+                && override_source.furnishing.is_none()
+            {
+                errors.push(format!(
+                    "responsive variant '{}': region override '{}' must specify at least one field",
+                    variant.id, override_source.id
+                ));
+            }
+            if overrides.contains_key(&override_source.id) {
+                errors.push(format!(
+                    "responsive variant '{}': duplicate region override '{}'",
+                    variant.id, override_source.id
+                ));
+            }
+            let width = override_source.width.as_ref().and_then(|value| {
+                let parsed = logical_size(
+                    Some(value),
+                    "responsive region width",
+                    &override_source.id,
+                    errors,
+                );
+                if parsed == Some(0) {
+                    errors.push(format!(
+                        "responsive variant '{}': region '{}' width must be positive",
+                        variant.id, override_source.id
+                    ));
+                }
+                parsed
+            });
+            let height = override_source.height.as_ref().and_then(|value| {
+                let parsed = logical_size(
+                    Some(value),
+                    "responsive region height",
+                    &override_source.id,
+                    errors,
+                );
+                if parsed == Some(0) {
+                    errors.push(format!(
+                        "responsive variant '{}': region '{}' height must be positive",
+                        variant.id, override_source.id
+                    ));
+                }
+                parsed
+            });
+            let grow = override_source.grow.map(|grow| {
+                if !grow.is_finite() || grow < 0.0 {
+                    errors.push(format!(
+                        "responsive variant '{}': region '{}' grow must be finite and non-negative",
+                        variant.id, override_source.id
+                    ));
+                }
+                if grow.is_finite() && grow >= 0.0 {
+                    grow
+                } else {
+                    0.0
+                }
+            });
+            if let Some(furnishing) = &override_source.furnishing {
+                if !furnishing_ids.contains(furnishing.as_str()) {
+                    errors.push(format!(
+                        "responsive variant '{}': region '{}' references missing furnishing '{}'",
+                        variant.id, override_source.id, furnishing
+                    ));
+                }
+            }
+            overrides.insert(
+                override_source.id.clone(),
+                ResolvedRegionOverride {
+                    width,
+                    height,
+                    grow,
+                    furnishing: override_source.furnishing.clone(),
+                },
+            );
+        }
+        resolved.push(ResolvedResponsiveVariant {
+            id: variant.id.clone(),
+            min_width: variant.min_width.unwrap_or(0),
+            max_width: variant.max_width,
+            root: variant.root.clone(),
+            regions: overrides,
+        });
+    }
+    let mut ordered: Vec<_> = resolved.iter().collect();
+    ordered.sort_by_key(|variant| (variant.min_width, variant.max_width));
+    let mut cursor = 0_u32;
+    for variant in &ordered {
+        if variant.min_width != cursor {
+            errors.push(format!(
+                "responsive: interval coverage gap or overlap before variant '{}' at {}px",
+                variant.id, variant.min_width
+            ));
+        }
+        if let Some(max) = variant.max_width {
+            cursor = max;
+        } else {
+            if variant.id
+                != ordered
+                    .last()
+                    .map(|last| last.id.as_str())
+                    .unwrap_or_default()
+            {
+                errors.push(format!(
+                    "responsive: unbounded variant '{}' must be final",
+                    variant.id
+                ));
+            }
+            cursor = u32::MAX;
+        }
+    }
+    if ordered
+        .last()
+        .is_none_or(|variant| variant.max_width.is_some())
+    {
+        errors.push("responsive: intervals must cover through unbounded infinity".into());
+    }
+    let default = resolved.iter().find(|variant| variant.id == source.default);
+    if default.is_none() {
+        errors.push(format!(
+            "responsive.default: unknown variant '{}'",
+            source.default
+        ));
+    } else if default.is_some_and(|variant| variant.root != screen_root) {
+        errors.push(format!(
+            "responsive.default: variant '{}' root must equal screen.root '{}'",
+            source.default, screen_root
+        ));
+    }
+    let mut union = HashSet::new();
+    for variant in &resolved {
+        let reachable = reachable_regions_for_root(&variant.root, compositions);
+        if let Some(dominant) = dominant {
+            let dominant_region = regions
+                .iter()
+                .find(|region| region.id == dominant)
+                .map(|region| region.id.as_str())
+                .or_else(|| {
+                    elements
+                        .iter()
+                        .find(|element| element.id == dominant)
+                        .map(|element| element.region.as_str())
+                });
+            if let Some(region) = dominant_region {
+                if !reachable.contains(region) {
+                    errors.push(format!(
+                        "responsive variant '{}': dominant target '{}' is not reachable",
+                        variant.id, dominant
+                    ));
+                }
+            }
+        }
+        union.extend(reachable);
+    }
+    let furnishing_by_id: HashMap<_, _> = furnishings
+        .iter()
+        .map(|furnishing| (furnishing.id.as_str(), furnishing))
+        .collect();
+    let element_by_id: HashMap<_, _> = elements
+        .iter()
+        .map(|element| (element.id.as_str(), element))
+        .collect();
+    let region_by_id: HashMap<_, _> = regions
+        .iter()
+        .map(|region| (region.id.as_str(), region))
+        .collect();
+    let mut furnishing_owner: HashMap<String, String> = HashMap::new();
+    for variant in &resolved {
+        for region_id in reachable_regions_for_root(&variant.root, compositions) {
+            let Some(region) = region_by_id.get(region_id.as_str()) else {
+                continue;
+            };
+            let furnishing = variant
+                .regions
+                .get(region_id.as_str())
+                .and_then(|override_| override_.furnishing.as_deref())
+                .or(region.furnishing.as_deref());
+            let Some(furnishing) = furnishing else {
+                continue;
+            };
+            let previous = furnishing_owner.insert(furnishing.to_owned(), region_id.clone());
+            if let Some(previous) = previous {
+                if previous != region_id {
+                    errors.push(format!(
+                        "furnishing root '{}' is assigned to regions '{}' and '{}' across responsive variants",
+                        furnishing, previous, region_id
+                    ));
+                }
+            }
+            if !furnishing_by_id.contains_key(furnishing) {
+                continue;
+            }
+            let mut counts = HashMap::new();
+            collect_variant_furnishing_elements(
+                furnishing,
+                region_id.as_str(),
+                &furnishing_by_id,
+                &element_by_id,
+                &mut HashSet::new(),
+                &mut counts,
+                errors,
+            );
+            for element in elements
+                .iter()
+                .filter(|element| element.region == region_id)
+            {
+                let count = counts.get(&element.id).copied().unwrap_or(0);
+                if count != 1 {
+                    errors.push(format!(
+                        "responsive variant '{}': furnished region '{}' element '{}' must be reachable exactly once (found {count})",
+                        variant.id, region_id, element.id
+                    ));
+                }
+            }
+        }
+    }
+    (
+        Some(ResolvedResponsive {
+            default: source.default.clone(),
+            variants: resolved,
+        }),
+        union,
+    )
+}
+
 pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintError> {
     let mut errors = Vec::new();
+    let responsive_enabled = source.responsive.is_some();
     let mut ids = HashSet::new();
     validate_token_names(&source.tokens.spacing, "tokens.spacing", &mut errors);
     validate_token_names(&source.tokens.corners, "tokens.corners", &mut errors);
@@ -2073,6 +2516,7 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
         &elements,
         &mut ids,
         spacing,
+        source.responsive.is_some(),
         &mut errors,
     );
     let root = match source.screen.root.as_deref() {
@@ -2086,6 +2530,17 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
         }
         Some(root) => Some(root.to_owned()),
     };
+    let (responsive, responsive_reachable_regions) = resolve_responsive(
+        source.responsive.as_ref(),
+        root.as_deref().unwrap_or_default(),
+        source.design.dominant.as_deref(),
+        &composition_ids,
+        &compositions,
+        &regions,
+        &elements,
+        &furnishings,
+        &mut errors,
+    );
 
     let mut owners: HashMap<&str, &str> = HashMap::new();
     for composition in &compositions {
@@ -2103,7 +2558,7 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
                 continue;
             }
             if let Some(first_parent) = owners.get(child_id) {
-                if *first_parent != composition.id {
+                if !responsive_enabled && *first_parent != composition.id {
                     errors.push(format!(
                         "{} '{}' has multiple composition parents: '{}' and '{}'",
                         child_kind, child_id, first_parent, composition.id
@@ -2112,7 +2567,8 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
             } else {
                 owners.insert(child_id, composition.id.as_str());
             }
-            if matches!(child, CompositionChild::Composition(id) if Some(id.as_str()) == root.as_deref())
+            if !responsive_enabled
+                && matches!(child, CompositionChild::Composition(id) if Some(id.as_str()) == root.as_deref())
             {
                 errors.push(format!(
                     "composition '{}': root composition '{}' cannot be a child",
@@ -2181,6 +2637,11 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
             }
         }
     }
+    let fixture_reachable_regions = if responsive_enabled {
+        &responsive_reachable_regions
+    } else {
+        &reachable_regions
+    };
     let mut resolved_fixtures = Vec::new();
     for f in &source.fixture {
         add_id(&mut ids, &mut errors, &f.id, "fixture");
@@ -2207,7 +2668,7 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
                 ));
                 continue;
             };
-            if root.is_some() && !reachable_regions.contains(element.region.as_str()) {
+            if root.is_some() && !fixture_reachable_regions.contains(element.region.as_str()) {
                 errors.push(format!(
                     "fixture '{}': content target '{}' is not reachable because owning region '{}' is outside screen.root '{}'",
                     f.id,
@@ -2589,6 +3050,7 @@ pub fn resolve(source: SourceBlueprint) -> Result<ResolvedBlueprint, BlueprintEr
         elements,
         fixtures: resolved_fixtures,
         visual,
+        responsive,
     })
 }
 
@@ -5553,5 +6015,20 @@ overflow = "scroll_y"
             ),
             "unknown field `role`",
         );
+    }
+
+    #[test]
+    fn m44_responsive_specimen_selects_exhaustive_authored_variants() {
+        let blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/lantern-leaf-reader-responsive.toml"
+        ))
+        .expect("responsive specimen must resolve");
+        let responsive = blueprint.responsive.as_ref().expect("responsive model");
+        assert_eq!(responsive.variants.len(), 3);
+        assert_eq!(blueprint.responsive_variant(1440.0).unwrap().id, "wide");
+        assert_eq!(blueprint.responsive_variant(1100.0).unwrap().id, "compact");
+        assert_eq!(blueprint.responsive_variant(800.0).unwrap().id, "narrow");
+        assert_eq!(blueprint.active_root(1100.0), "workspace_compact");
+        assert_eq!(blueprint.active_root(800.0), "workspace_narrow");
     }
 }

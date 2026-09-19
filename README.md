@@ -474,4 +474,4 @@ M44 promotes ViewWright's long-planned resize contract into the v0.2 implementat
 - M41 — accepted
 - M42 — accepted
 - M43 — accepted
-- M44 — authority defined; implementation pending
+- M44 — implementation complete; director audit pending

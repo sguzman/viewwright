@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use viewwright_model::{
     Axis, CompositionChild, CompositionKind, FurnishingChild, FurnishingKind, OverflowPolicy,
-    ResolvedBlueprint,
+    ResolvedBlueprint, ResolvedRegion, ResolvedResponsiveVariant,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -35,9 +35,12 @@ impl Rect {
 #[derive(Debug, Clone, PartialEq)]
 pub struct LayoutPlan {
     pub viewport: Rect,
+    active_variant: Option<String>,
+    active_root: String,
     compositions: HashMap<String, Rect>,
     regions: HashMap<String, Rect>,
     furnishings: HashMap<String, Rect>,
+    region_furnishings: HashMap<String, String>,
 }
 
 impl LayoutPlan {
@@ -51,6 +54,18 @@ impl LayoutPlan {
 
     pub fn furnishing(&self, id: &str) -> Option<Rect> {
         self.furnishings.get(id).copied()
+    }
+
+    pub fn variant_id(&self) -> Option<&str> {
+        self.active_variant.as_deref()
+    }
+
+    pub fn active_root(&self) -> &str {
+        &self.active_root
+    }
+
+    pub fn region_furnishing(&self, id: &str) -> Option<&str> {
+        self.region_furnishings.get(id).map(String::as_str)
     }
 
     /// Returns the planned scroll content bounds for one furnishing subtree.
@@ -100,13 +115,22 @@ pub fn layout(blueprint: &ResolvedBlueprint, width: f32, height: f32) -> LayoutP
     let viewport = Rect::new(0.0, 0.0, width.max(0.0), height.max(0.0));
     let mut plan = LayoutPlan {
         viewport,
+        active_variant: blueprint.responsive_variant(width).map(|v| v.id.clone()),
+        active_root: blueprint.active_root(width).to_owned(),
         compositions: HashMap::new(),
         regions: HashMap::new(),
         furnishings: HashMap::new(),
+        region_furnishings: HashMap::new(),
     };
-    layout_composition(blueprint, &mut plan, &blueprint.root, viewport);
+    let variant = blueprint.responsive_variant(width);
+    let active_root = plan.active_root.clone();
+    layout_composition(blueprint, &mut plan, &active_root, viewport, variant);
     for region in &blueprint.regions {
-        if let (Some(root), Some(rect)) = (region.furnishing.as_deref(), plan.region(&region.id)) {
+        let effective = effective_region(region, variant);
+        let furnishing = effective.furnishing.as_deref();
+        if let (Some(root), Some(rect)) = (furnishing, plan.region(&region.id)) {
+            plan.region_furnishings
+                .insert(region.id.clone(), root.to_owned());
             layout_furnishing(blueprint, &mut plan, root, rect);
         }
     }
@@ -185,7 +209,13 @@ fn layout_furnishing(blueprint: &ResolvedBlueprint, plan: &mut LayoutPlan, id: &
     }
 }
 
-fn layout_composition(blueprint: &ResolvedBlueprint, plan: &mut LayoutPlan, id: &str, rect: Rect) {
+fn layout_composition(
+    blueprint: &ResolvedBlueprint,
+    plan: &mut LayoutPlan,
+    id: &str,
+    rect: Rect,
+    variant: Option<&ResolvedResponsiveVariant>,
+) {
     let Some(composition) = blueprint.compositions.iter().find(|c| c.id == id) else {
         return;
     };
@@ -196,7 +226,7 @@ fn layout_composition(blueprint: &ResolvedBlueprint, plan: &mut LayoutPlan, id: 
             return;
         }
         if let CompositionChild::Composition(base) = &composition.children[0] {
-            layout_composition(blueprint, plan, base, inner);
+            layout_composition(blueprint, plan, base, inner, variant);
         }
         if let CompositionChild::Region(floating) = &composition.children[1] {
             if let Some(region) = blueprint
@@ -204,8 +234,9 @@ fn layout_composition(blueprint: &ResolvedBlueprint, plan: &mut LayoutPlan, id: 
                 .iter()
                 .find(|region| region.id == *floating)
             {
-                let width = region.width.unwrap_or(0) as f32;
-                let height = region.height.unwrap_or(0) as f32;
+                let effective = effective_region(region, variant);
+                let width = effective.width.unwrap_or(0) as f32;
+                let height = effective.height.unwrap_or(0) as f32;
                 plan.regions.insert(
                     floating.clone(),
                     Rect::new(
@@ -225,12 +256,12 @@ fn layout_composition(blueprint: &ResolvedBlueprint, plan: &mut LayoutPlan, id: 
     let fixed: f32 = composition
         .children
         .iter()
-        .map(|child| fixed_size(blueprint, child, horizontal))
+        .map(|child| fixed_size(blueprint, child, horizontal, variant))
         .sum();
     let growth: f32 = composition
         .children
         .iter()
-        .map(|child| growth_weight(blueprint, child, horizontal))
+        .map(|child| growth_weight(blueprint, child, horizontal, variant))
         .sum();
     let remaining = if horizontal {
         (inner.width - total_gap - fixed).max(0.0)
@@ -239,9 +270,9 @@ fn layout_composition(blueprint: &ResolvedBlueprint, plan: &mut LayoutPlan, id: 
     };
     let mut cursor = if horizontal { inner.x } else { inner.y };
     for child in &composition.children {
-        let main = fixed_size(blueprint, child, horizontal).max(0.0)
+        let main = fixed_size(blueprint, child, horizontal, variant).max(0.0)
             + if growth > 0.0 {
-                remaining * growth_weight(blueprint, child, horizontal) / growth
+                remaining * growth_weight(blueprint, child, horizontal, variant) / growth
             } else {
                 0.0
             };
@@ -259,18 +290,24 @@ fn layout_composition(blueprint: &ResolvedBlueprint, plan: &mut LayoutPlan, id: 
                 plan.regions.insert(id.clone(), child_rect);
             }
             CompositionChild::Composition(id) => {
-                layout_composition(blueprint, plan, id, child_rect);
+                layout_composition(blueprint, plan, id, child_rect, variant);
             }
         }
     }
 }
 
-fn fixed_size(blueprint: &ResolvedBlueprint, child: &CompositionChild, horizontal: bool) -> f32 {
+fn fixed_size(
+    blueprint: &ResolvedBlueprint,
+    child: &CompositionChild,
+    horizontal: bool,
+    variant: Option<&ResolvedResponsiveVariant>,
+) -> f32 {
     match child {
         CompositionChild::Region(id) => blueprint
             .regions
             .iter()
             .find(|r| r.id == *id)
+            .map(|r| effective_region(r, variant))
             .and_then(|r| if horizontal { r.width } else { r.height })
             .unwrap_or(0) as f32,
         CompositionChild::Composition(_) => 0.0,
@@ -281,13 +318,14 @@ fn growth_weight(
     blueprint: &ResolvedBlueprint,
     child: &CompositionChild,
     _horizontal: bool,
+    variant: Option<&ResolvedResponsiveVariant>,
 ) -> f32 {
     match child {
         CompositionChild::Region(id) => blueprint
             .regions
             .iter()
             .find(|r| r.id == *id)
-            .map(|r| r.grow)
+            .map(|r| effective_region(r, variant).grow)
             .unwrap_or(0.0),
         CompositionChild::Composition(id) => blueprint
             .compositions
@@ -296,6 +334,30 @@ fn growth_weight(
             .map(|c| c.grow)
             .unwrap_or(0.0),
     }
+}
+
+fn effective_region(
+    region: &ResolvedRegion,
+    variant: Option<&ResolvedResponsiveVariant>,
+) -> ResolvedRegionEffective {
+    let override_ = variant.and_then(|variant| variant.regions.get(&region.id));
+    ResolvedRegionEffective {
+        width: override_.and_then(|value| value.width).or(region.width),
+        height: override_.and_then(|value| value.height).or(region.height),
+        grow: override_
+            .and_then(|value| value.grow)
+            .unwrap_or(region.grow),
+        furnishing: override_
+            .and_then(|value| value.furnishing.clone())
+            .or_else(|| region.furnishing.clone()),
+    }
+}
+
+struct ResolvedRegionEffective {
+    width: Option<u32>,
+    height: Option<u32>,
+    grow: f32,
+    furnishing: Option<String>,
 }
 
 #[cfg(test)]
@@ -452,6 +514,30 @@ padding = "pad"
         assert_eq!(
             plan.region("bottom"),
             Some(Rect::new(5.0, 365.0, 490.0, 30.0))
+        );
+    }
+
+    #[test]
+    fn responsive_plan_contains_only_active_variant_rectangles() {
+        let blueprint = parse_and_resolve(include_str!(
+            "../../../specimens/lantern-leaf-reader-responsive.toml"
+        ))
+        .unwrap();
+        let wide = layout(&blueprint, 1440.0, 900.0);
+        let compact = layout(&blueprint, 1100.0, 900.0);
+        let narrow = layout(&blueprint, 800.0, 900.0);
+        assert_eq!(wide.variant_id(), Some("wide"));
+        assert_eq!(compact.variant_id(), Some("compact"));
+        assert_eq!(narrow.variant_id(), Some("narrow"));
+        assert!(wide.region("inspector").is_some());
+        assert!(compact.region("inspector").is_none());
+        assert!(narrow.region("library").is_none());
+        assert_eq!(compact.region("library").unwrap().width, 210.0);
+        assert_eq!(narrow.region("tts_player").unwrap().height, 320.0);
+        assert_eq!(wide.region_furnishing("reader"), Some("reader_furnishing"));
+        assert_eq!(
+            narrow.region_furnishing("reader"),
+            Some("reader_furnishing_narrow")
         );
     }
 

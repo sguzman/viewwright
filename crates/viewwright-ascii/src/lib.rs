@@ -4,8 +4,27 @@ use viewwright_model::{
 };
 
 pub fn render(b: &ResolvedBlueprint) -> String {
+    let root = b
+        .default_variant()
+        .map_or(b.root.as_str(), |variant| variant.root.as_str());
+    render_root(b, root, None)
+}
+
+pub fn render_at(b: &ResolvedBlueprint, width: f32, height: f32) -> String {
+    let root = b.active_root(width);
+    let mut output = render_root(b, root, Some((width, height)));
+    if let Some(variant) = b.responsive_variant(width) {
+        output.push_str(&format!("responsive variant {}\n", variant.id));
+    }
+    output
+}
+
+fn render_root(b: &ResolvedBlueprint, root: &str, viewport: Option<(f32, f32)>) -> String {
     let mut out = format!("ViewWright: {} — {}\n", b.screen.id, b.screen.purpose);
-    walk(&b.root, b, &mut out, 0);
+    if let Some((width, height)) = viewport {
+        out.push_str(&format!("viewport {width}x{height}\n"));
+    }
+    walk(root, b, &mut out, 0);
     out
 }
 

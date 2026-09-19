@@ -27,6 +27,10 @@ fn main() -> eframe::Result<()> {
             "../../../specimens/lantern-leaf-reader-document.toml"
         ))
         .expect("Lantern Leaf rich document specimen must be valid"),
+        parse_and_resolve(include_str!(
+            "../../../specimens/lantern-leaf-reader-responsive.toml"
+        ))
+        .expect("Lantern Leaf responsive specimen must be valid"),
         parse_and_resolve(include_str!("../../../specimens/dependency-workbench.toml"))
             .expect("dependency workbench specimen must be valid"),
         parse_and_resolve(include_str!(
@@ -108,6 +112,10 @@ impl eframe::App for App {
         egui::Panel::top("preview-host").show(ui, |ui| {
             ui.heading("ViewWright Preview");
             ui.label(&self.blueprints[self.screen].screen.purpose);
+            let b = &self.blueprints[self.screen];
+            if let Some(variant) = b.responsive_variant(ui.available_width()) {
+                ui.label(format!("Responsive variant: {}", variant.id));
+            }
             if let Some(audit) = viewwright_audit::audit(&self.blueprints[self.screen]) {
                 ui.collapsing(
                     format!("Visual audit: {} warning(s)", audit.findings.len()),

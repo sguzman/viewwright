@@ -3,6 +3,22 @@ use viewwright_model::{
 };
 
 pub fn render(b: &ResolvedBlueprint) -> String {
+    let root = b
+        .default_variant()
+        .map_or(b.root.as_str(), |variant| variant.root.as_str());
+    render_root(b, root, None)
+}
+
+pub fn render_at(b: &ResolvedBlueprint, width: f32, height: f32) -> String {
+    let root = b.active_root(width);
+    let mut output = render_root(b, root, Some((width, height)));
+    if let Some(variant) = b.responsive_variant(width) {
+        output.push_str(&format!("\nResponsive variant\n  id: {}\n", variant.id));
+    }
+    output
+}
+
+fn render_root(b: &ResolvedBlueprint, root: &str, viewport: Option<(f32, f32)>) -> String {
     let mut out = format!(
         "ViewWright concept specification\n\nScreen\n  id: {}\n  purpose: {}\n  density: {:?}\n\n",
         b.screen.id, b.screen.purpose, b.screen.density
@@ -23,7 +39,12 @@ pub fn render(b: &ResolvedBlueprint) -> String {
             .map(|target| target.id())
             .unwrap_or("unspecified")
     ));
-    walk(&b.root, b, &mut out, 2);
+    if let Some((width, height)) = viewport {
+        out.push_str(&format!(
+            "Viewport\n  width: {width}\n  height: {height}\n\n"
+        ));
+    }
+    walk(root, b, &mut out, 2);
     if let Some(v) = &b.visual {
         out.push_str(&format!("\nPalette\n  canvas: {}\n  surface: {}\n  surface_raised: {}\n  text: {}\n  text_muted: {}\n  accent: {}\n  border: {}\n\nTypography\n  display: {}\n  heading: {}\n  body: {}\n  caption: {}\n\nSurface policy\n  border: {:?}\n  corner radius: {}\n", hex(v.palette.canvas), hex(v.palette.surface), hex(v.palette.surface_raised), hex(v.palette.text), hex(v.palette.text_muted), hex(v.palette.accent), hex(v.palette.border), v.type_scale.display, v.type_scale.heading, v.type_scale.body, v.type_scale.caption, v.border_policy, v.corner_radius));
     }

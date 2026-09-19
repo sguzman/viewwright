@@ -157,7 +157,7 @@ pub fn build_expectation(
     let mut ordered_region_ids = Vec::new();
     reachable_regions(
         blueprint,
-        &blueprint.root,
+        plan.active_root(),
         &mut HashSet::new(),
         &mut ordered_region_ids,
     );
