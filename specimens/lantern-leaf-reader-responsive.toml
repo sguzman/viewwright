@@ -1,5 +1,5 @@
 [screen]
-id = "lantern_leaf_reader_document"
+id = "lantern_leaf_reader_responsive"
 purpose = "Read and listen to a richly structured chapter with representative speech state"
 density = "comfortable"
 root = "workspace"
