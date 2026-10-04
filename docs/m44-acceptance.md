@@ -96,23 +96,41 @@ Required intent:
 
 The reader remains design.dominant in all states.
 
-## Live resize human QA
+## Headless responsive QA
 
-Human resizes the same preview window across both exact breakpoints.
+Routine M44 acceptance MUST run without a visible native window and without touching the operator's interactive desktop.
 
-Verify:
+Use a real headless `egui::Context` with synthetic `RawInput` frames to exercise the same resolved responsive specimen through a resize sequence spanning both breakpoints.
 
-- >=1260 displays wide;
-- below 1260 switches compact deliberately;
-- below 960 switches narrow deliberately;
-- exactly 1260 is wide;
-- exactly 960 is compact;
-- resizing back restores stable semantic UI;
-- no stale/duplicated regions;
-- no accidental fixed-column squeeze masquerading as responsive behavior;
-- narrow reader/TTS remain usable;
-- existing M42 popup/scroll fixes survive;
-- M43 rich document remains readable.
+Required sequence includes at minimum:
+
+- wide at 1440×900;
+- compact at 1100×900;
+- narrow at 800×900;
+- compact again;
+- wide again;
+- exact-boundary frames at 1260 and 960;
+- immediately-adjacent fractional frames on both sides of each breakpoint.
+
+The headless QA bundle must prove:
+
+- selected variant changes at the authored boundaries;
+- active root and active semantic region/element set agree with the selected variant;
+- surviving M34 author IDs remain stable across frames;
+- intentionally absent IDs disappear and reappear without duplicates or stale nodes;
+- renderer-local M42 control state survives hide/reappear when ordinary reset semantics do not apply;
+- narrow reader and TTS use their authored alternate furnishings rather than wide structures crushed into the viewport;
+- all active region/furnishing rectangles stay within their intended viewport/parent geometry;
+- paint clipping does not leak product content into unrelated host/outside geometry;
+- M42 popup/scroll renderer regressions remain green;
+- M43 rich document/spoken-range renderer remains present and readable by existing structural/paint assertions;
+- expectation 0.2 → real FullOutput → ViewWitness → M35 remains exact at representative wide/compact/narrow widths.
+
+A deterministic text/JSON QA report should be emitted for Director audit. Offscreen raster captures may also be generated if the chosen test backend supports them without creating a visible window, but pixels are not required for M44 acceptance when the semantic/layout/paint evidence is complete.
+
+Human live-resize QA is NOT required for M44 acceptance.
+
+Interactive preview may be used only if the human explicitly opts in after implementation for subjective product judgment.
 
 ## Regression
 

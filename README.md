@@ -428,6 +428,16 @@ M43 turns the Lantern Leaf reader itself into a truthful semantic pressure surfa
 
 M44 promotes ViewWright's long-planned resize contract into the v0.2 implementation path. Responsive behavior becomes authored intent selected deterministically from root viewport width before LayoutPlan: named `wide`, `compact`, and `narrow` variants select alternate composition roots plus sparse region geometry/furnishing overrides. Breakpoint intervals are exhaustive and non-overlapping; there is no cascade, specificity, device sniffing, or backend-invented responsive topology. Semantic region/element IDs survive wherever those objects remain present, fixture content may be dormant in an intentionally absent variant, and the dominant target must remain reachable in every variant.
 
+## QA execution policy
+
+ViewWright development must not commandeer the operator's interactive desktop.
+
+Routine automated QA uses headless `egui::Context` execution, synthetic input, `egui::FullOutput`, ViewWitness/AccessKit evidence, paint/clipping assertions, and offscreen artifacts when useful. It must not launch visible native preview windows, steal focus, move the pointer, capture the operator's keyboard, resize operator windows, or otherwise interfere with the live desktop.
+
+Interactive/native preview is opt-in only and requires explicit human authorization for that specific QA session. If a verification requirement cannot be satisfied headlessly or in an isolated non-interactive environment, the worker must stop and report the limitation instead of using the operator's desktop.
+
+Human review is reserved for genuinely subjective product judgment, not routine click/scroll/resize regression work. See `docs/qa-execution-policy.md`.
+
 ## Status
 
 - M0 — accepted

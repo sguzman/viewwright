@@ -23,7 +23,8 @@ Required:
 - ViewWitness unchanged;
 - new Lantern Leaf specimen has wide/compact/narrow states;
 - exact verification passes at all three representative widths;
-- human live-resize QA passes exact 960/1260 boundaries;
+- automated headless resize/exploration QA passes wide/compact/narrow transitions, exact 960/1260 boundaries, adjacent fractional widths, identity/state reappearance, geometry/clipping invariants, and emits a deterministic QA report;
+- no visible native window or operator-desktop control is used during routine acceptance QA;
 - no height/container queries;
 - no visual-schema expansion;
 - no M45.

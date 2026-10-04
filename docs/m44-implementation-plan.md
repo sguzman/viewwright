@@ -134,13 +134,11 @@ All existing semantic element IDs remain.
 
 ## 10. Preview
 
-Register responsive specimen.
-
-Show the active responsive variant in preview-host chrome for human QA.
+Register the responsive specimen and keep the active responsive-variant label available for optional interactive inspection.
 
 Do not inject that label into product AccessKit author identity.
 
-Live resizing should switch variants automatically.
+Do NOT launch a native preview as part of routine automated M44 QA. Interactive preview is opt-in only under the project QA execution policy.
 
 ## 11. Tests
 
@@ -195,13 +193,19 @@ Require all:
 
 Keep all prior exact cases green.
 
-## 13. Human resize QA
+## 13. Headless responsive exploration QA
 
-Run one responsive preview and resize live.
+Build/use a headless QA harness around a real `egui::Context`.
 
-Human verifies both sides and exact boundaries of 960 and 1260.
+Drive synthetic frames through wide → compact → narrow → compact → wide plus exact and adjacent breakpoint widths.
 
-Check no stale nodes/duplicate surfaces and preserve M42/M43 fixes.
+The harness must inspect real `FullOutput`/AccessKit/paint/layout evidence and emit a deterministic Director-readable QA report.
+
+No visible native window, focus grab, pointer movement, keyboard capture, or operator-window resize is permitted.
+
+The harness should automatically fail on stale/duplicate semantic IDs, wrong active variant/root, invalid active geometry, clip leakage, responsive furnishing mismatch, lost state across hide/reappear, or exact-verification failure.
+
+If a required check cannot be performed headlessly, stop and report the limitation rather than falling back to the live desktop.
 
 ## 14. Checks
 
