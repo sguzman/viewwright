@@ -1,0 +1,213 @@
+[screen]
+id = "ephemeris_calendar_workbench"
+purpose = "Review dense calendars, scheduled work, and event details"
+density = "dense"
+root = "workspace"
+
+[design]
+character = ["structured", "high_information_density", "quiet", "legible"]
+dominant = "agenda"
+avoid = ["oversized_cards", "decorative_chrome", "crushed_event_labels"]
+
+[tokens.spacing]
+sm = 6
+md = 10
+lg = 16
+
+[tokens.corners]
+medium = 6
+
+[tokens.color]
+canvas = "#F3F5F5"
+surface = "#FFFFFF"
+surface_raised = "#E8EEF0"
+text = "#18252E"
+text_muted = "#677780"
+accent = "#226E9B"
+border = "#CAD5DA"
+
+[tokens.type]
+display = 24
+heading = 17
+body = 13
+caption = 11
+
+[visual]
+canvas = "canvas"
+surface = "surface"
+surface_raised = "surface_raised"
+text = "text"
+text_muted = "text_muted"
+accent = "accent"
+border = "border"
+corner = "medium"
+border_policy = "minimal"
+
+[[region]]
+id = "toolbar"
+role = "commands"
+importance = "secondary"
+surface = "raised"
+height = "48px"
+
+[[region]]
+id = "calendars"
+role = "navigation"
+importance = "secondary"
+surface = "panel"
+width = "230px"
+
+[[region]]
+id = "agenda"
+role = "primary_content"
+importance = "primary"
+surface = "canvas"
+grow = 1
+overflow = "scroll_y"
+
+[[region]]
+id = "event_inspector"
+role = "inspector"
+importance = "secondary"
+surface = "panel"
+width = "290px"
+
+[[region]]
+id = "sync_status"
+role = "status"
+importance = "tertiary"
+surface = "raised"
+height = "32px"
+
+[[composition]]
+id = "workspace"
+kind = "column"
+axis = "vertical"
+children = ["toolbar", "body", "sync_status"]
+gap = "sm"
+padding = "md"
+
+[[composition]]
+id = "body"
+kind = "split"
+axis = "horizontal"
+children = ["calendars", "agenda", "event_inspector"]
+gap = "md"
+grow = 1
+
+[[element]]
+id = "update_sources"
+region = "toolbar"
+kind = "command"
+importance = "secondary"
+label = "Update Taria sources"
+action = "ephemeris.sources.refresh"
+
+[[element]]
+id = "today"
+region = "toolbar"
+kind = "command"
+importance = "primary"
+label = "Today"
+action = "ephemeris.view.today"
+
+[[element]]
+id = "search"
+region = "calendars"
+kind = "search"
+importance = "secondary"
+label = "Search calendar events"
+
+[[element]]
+id = "calendar_list"
+region = "calendars"
+kind = "collection"
+importance = "primary"
+label = "Visible calendars"
+presentation = "list"
+
+[[element]]
+id = "agenda_entries"
+region = "agenda"
+kind = "collection"
+importance = "primary"
+label = "Illustrative agenda"
+presentation = "list"
+
+[[element]]
+id = "event_details"
+region = "event_inspector"
+kind = "property_sheet"
+importance = "secondary"
+label = "Selected event"
+
+[[element]]
+id = "source_health"
+region = "sync_status"
+kind = "status"
+importance = "tertiary"
+label = "Source health"
+
+[[fixture]]
+id = "busy_day"
+state = "populated"
+
+[[fixture.content]]
+element = "calendar_list"
+items = [
+  { id = "personal", label = "Personal calendar" },
+  { id = "softwarium", label = "Softwarium" },
+  { id = "taria", label = "Taria temporal data" },
+]
+selected = "softwarium"
+
+[[fixture.content]]
+element = "agenda_entries"
+items = [
+  { id = "e1", label = "08:00–09:00 · Planning" },
+  { id = "e2", label = "09:30–10:15 · Repo audit" },
+  { id = "e3", label = "11:00–12:00 · Integration tests" },
+  { id = "e4", label = "13:00–14:30 · Documentation sprint" },
+  { id = "e5", label = "15:00–16:00 · Release review" },
+]
+selected = "e3"
+
+[[fixture.content]]
+element = "event_details"
+properties = [
+  { name = "Event", value = "Integration tests" },
+  { name = "Calendar", value = "Softwarium" },
+  { name = "Start", value = "11:00" },
+  { name = "End", value = "12:00" },
+  { name = "Status", value = "Scheduled" },
+]
+
+[[fixture.content]]
+element = "source_health"
+text = "All demo calendars available · illustrative fixture"
+
+[[fixture]]
+id = "clear_day"
+state = "empty"
+
+[[fixture.content]]
+element = "calendar_list"
+items = [
+  { id = "personal", label = "Personal calendar" },
+  { id = "softwarium", label = "Softwarium" },
+]
+selected = "personal"
+
+[[fixture.content]]
+element = "agenda_entries"
+items = []
+
+[[fixture.content]]
+element = "event_details"
+properties = [
+  { name = "Selected event", value = "None" },
+]
+
+[[fixture.content]]
+element = "source_health"
+text = "No scheduled events in demo fixture"
