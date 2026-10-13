@@ -148,3 +148,26 @@ fn lantern_leaf_rich_document_exactly_matches_real_renderer_witness() {
         "M43 Lantern Leaf rich document / reading at 1440x900",
     );
 }
+
+#[test]
+fn project_demo_gallery_examples_exactly_match_real_renderer_witness() {
+    for (source, fixture, name) in [
+        (
+            include_str!("../../../demos/chatarium/session-observability.toml"),
+            "healthy",
+            "Chatarium session observability",
+        ),
+        (
+            include_str!("../../../demos/ephemeris/calendar-workbench.toml"),
+            "busy_day",
+            "Ephemeris calendar workbench",
+        ),
+        (
+            include_str!("../../../demos/starbyte/emulation-library.toml"),
+            "game_ready",
+            "Starbyte emulation library",
+        ),
+    ] {
+        assert_real_render_exactly_matches_expectation(source, fixture, name);
+    }
+}
