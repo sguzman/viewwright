@@ -1,5 +1,10 @@
 # ViewWright v0.2 definition of done
 
+This document records the historical Lantern Leaf north-star definition of done.
+That product-specific direction is now superseded by the multi-project demo gallery
+(`docs/demo-gallery.md`). The semantic/verification requirements below remain useful
+as regression evidence, but are not the active release gate.
+
 v0.2 is not complete merely because more widget kinds exist.
 
 The release is complete when ViewWright can honestly author the durable design intent of the Lantern Leaf north star.
@@ -45,7 +50,7 @@ At exact breakpoints:
 - all variants validate;
 - LayoutPlan is backend-independent;
 - semantic identity survives where applicable;
-- human live-resize QA confirms the authored behavior rather than accidental compression.
+- headless multi-frame synthetic resize QA confirms the authored behavior rather than accidental compression (see docs/qa-execution-policy.md).
 
 ## Concept-art fidelity
 
