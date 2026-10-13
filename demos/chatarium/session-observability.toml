@@ -1,0 +1,233 @@
+[screen]
+id = "chatarium_session_observability"
+purpose = "Explore a local chat session, delivery lifecycle, and latency evidence"
+density = "dense"
+root = "workspace"
+
+[design]
+character = ["technical", "clear_provenance", "status_first", "legible"]
+dominant = "transcript"
+avoid = ["mirrored_account_history", "duplicate_status_lights", "clutter"]
+
+[tokens.spacing]
+sm = 8
+md = 12
+lg = 18
+
+[tokens.corners]
+medium = 7
+
+[tokens.color]
+canvas = "#121719"
+surface = "#182124"
+surface_raised = "#253136"
+text = "#F1F5F4"
+text_muted = "#A8B7B8"
+accent = "#65D5B8"
+border = "#3C4B4E"
+
+[tokens.type]
+display = 25
+heading = 18
+body = 13
+caption = 11
+
+[visual]
+canvas = "canvas"
+surface = "surface"
+surface_raised = "surface_raised"
+text = "text"
+text_muted = "text_muted"
+accent = "accent"
+border = "border"
+corner = "medium"
+border_policy = "minimal"
+
+[[region]]
+id = "commands"
+role = "commands"
+importance = "secondary"
+surface = "raised"
+height = "50px"
+
+[[region]]
+id = "history"
+role = "navigation"
+importance = "secondary"
+surface = "panel"
+width = "255px"
+
+[[region]]
+id = "transcript"
+role = "primary_content"
+importance = "primary"
+surface = "panel"
+grow = 1
+overflow = "scroll_y"
+
+[[region]]
+id = "telemetry"
+role = "inspector"
+importance = "secondary"
+surface = "raised"
+width = "300px"
+
+[[region]]
+id = "status"
+role = "status"
+importance = "tertiary"
+surface = "raised"
+height = "36px"
+
+[[composition]]
+id = "workspace"
+kind = "column"
+axis = "vertical"
+children = ["commands", "body", "status"]
+gap = "sm"
+padding = "md"
+
+[[composition]]
+id = "body"
+kind = "split"
+axis = "horizontal"
+children = ["history", "transcript", "telemetry"]
+gap = "md"
+grow = 1
+
+[[element]]
+id = "new_chat"
+region = "commands"
+kind = "command"
+importance = "primary"
+label = "New local chat"
+action = "chatarium.chat.new"
+
+[[element]]
+id = "retry_failed"
+region = "commands"
+kind = "command"
+importance = "secondary"
+label = "Retry failed messages"
+action = "chatarium.delivery.retry"
+
+[[element]]
+id = "history_search"
+region = "history"
+kind = "search"
+importance = "secondary"
+label = "Find local conversations"
+
+[[element]]
+id = "conversation_list"
+region = "history"
+kind = "collection"
+importance = "primary"
+label = "Local conversations"
+presentation = "list"
+
+[[element]]
+id = "message_list"
+region = "transcript"
+kind = "collection"
+importance = "primary"
+label = "Conversation and delivery events"
+presentation = "list"
+
+[[element]]
+id = "delivery_metrics"
+region = "telemetry"
+kind = "property_sheet"
+importance = "secondary"
+label = "Delivery telemetry"
+
+[[element]]
+id = "delivery_status"
+region = "telemetry"
+kind = "status"
+importance = "secondary"
+label = "Delivery phase"
+
+[[element]]
+id = "connection_status"
+region = "status"
+kind = "status"
+importance = "tertiary"
+label = "Local transport status"
+
+[[fixture]]
+id = "healthy"
+state = "connected"
+
+[[fixture.content]]
+element = "conversation_list"
+items = [
+  { id = "softwarium", label = "Softwarium · local" },
+  { id = "ephemeris", label = "Ephemeris review · local" },
+  { id = "starbyte", label = "Starbyte QA · local" },
+]
+selected = "softwarium"
+
+[[fixture.content]]
+element = "message_list"
+items = [
+  { id = "m1", label = "You · sent · 0.1s" },
+  { id = "m2", label = "Model · received · 0.4s" },
+  { id = "m3", label = "Model · responded · 2.8s" },
+]
+selected = "m3"
+
+[[fixture.content]]
+element = "delivery_metrics"
+properties = [
+  { name = "Session messages", value = "26" },
+  { name = "Median response", value = "2.8 s" },
+  { name = "Failed sends", value = "0" },
+  { name = "Active MCP tools", value = "5" },
+]
+
+[[fixture.content]]
+element = "delivery_status"
+text = "Ready for next message"
+
+[[fixture.content]]
+element = "connection_status"
+text = "Local session · connected · illustrative fixture"
+
+[[fixture]]
+id = "degraded"
+state = "retrying"
+
+[[fixture.content]]
+element = "conversation_list"
+items = [
+  { id = "softwarium", label = "Softwarium · local" },
+  { id = "ephemeris", label = "Ephemeris review · local" },
+]
+selected = "softwarium"
+
+[[fixture.content]]
+element = "message_list"
+items = [
+  { id = "m1", label = "You · sent · 0.0s" },
+  { id = "m2", label = "Send timeout · 14.2s · retry queued" },
+  { id = "m3", label = "Retry attempt 2 · pending delivery" },
+]
+selected = "m3"
+
+[[fixture.content]]
+element = "delivery_metrics"
+properties = [
+  { name = "Session messages", value = "26" },
+  { name = "Pending response", value = "14.2 s" },
+  { name = "Retry count", value = "2" },
+  { name = "Active MCP tools", value = "5" },
+]
+
+[[fixture.content]]
+element = "delivery_status"
+text = "Warning: delivery retry in progress"
+
+[[fixture.content]]
+element = "connection_status"
+text = "Unstable transport · mock scenario"
