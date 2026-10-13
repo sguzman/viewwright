@@ -1,0 +1,236 @@
+[screen]
+id = "starbyte_emulation_library"
+purpose = "Browse local games, inspect runtime state, and preview game-specific cheats"
+density = "comfortable"
+root = "workspace"
+
+[design]
+character = ["gaming", "technical", "clear_feedback", "offline_first"]
+dominant = "games"
+avoid = ["unexplained_empty_cheats", "hidden_input_mapping", "decorative_noise"]
+
+[tokens.spacing]
+sm = 8
+md = 12
+lg = 18
+
+[tokens.corners]
+medium = 8
+
+[tokens.color]
+canvas = "#111426"
+surface = "#1A2033"
+surface_raised = "#262F49"
+text = "#F1F3FC"
+text_muted = "#AFB9D4"
+accent = "#87A9FF"
+border = "#414B68"
+
+[tokens.type]
+display = 26
+heading = 18
+body = 14
+caption = 11
+
+[visual]
+canvas = "canvas"
+surface = "surface"
+surface_raised = "surface_raised"
+text = "text"
+text_muted = "text_muted"
+accent = "accent"
+border = "border"
+corner = "medium"
+border_policy = "minimal"
+
+[[region]]
+id = "toolbar"
+role = "commands"
+importance = "secondary"
+surface = "raised"
+height = "48px"
+
+[[region]]
+id = "systems"
+role = "navigation"
+importance = "secondary"
+surface = "panel"
+width = "210px"
+
+[[region]]
+id = "games"
+role = "primary_content"
+importance = "primary"
+surface = "panel"
+grow = 1
+overflow = "scroll_y"
+
+[[region]]
+id = "details"
+role = "inspector"
+importance = "secondary"
+surface = "raised"
+width = "310px"
+
+[[region]]
+id = "runtime"
+role = "status"
+importance = "tertiary"
+surface = "raised"
+height = "34px"
+
+[[composition]]
+id = "workspace"
+kind = "column"
+axis = "vertical"
+children = ["toolbar", "body", "runtime"]
+gap = "sm"
+padding = "md"
+
+[[composition]]
+id = "body"
+kind = "split"
+axis = "horizontal"
+children = ["systems", "games", "details"]
+gap = "md"
+grow = 1
+
+[[element]]
+id = "launch"
+region = "toolbar"
+kind = "command"
+importance = "primary"
+label = "Launch selected game"
+action = "starbyte.game.launch"
+
+[[element]]
+id = "controller"
+region = "toolbar"
+kind = "command"
+importance = "secondary"
+label = "Controller mapping"
+action = "starbyte.input.map"
+
+[[element]]
+id = "game_search"
+region = "systems"
+kind = "search"
+importance = "secondary"
+label = "Find local game"
+
+[[element]]
+id = "system_list"
+region = "systems"
+kind = "collection"
+importance = "secondary"
+label = "Systems"
+presentation = "list"
+
+[[element]]
+id = "game_gallery"
+region = "games"
+kind = "collection"
+importance = "primary"
+label = "Game gallery"
+presentation = "adaptive_cards"
+
+[[element]]
+id = "game_info"
+region = "details"
+kind = "property_sheet"
+importance = "secondary"
+label = "Selected game"
+
+[[element]]
+id = "cheat_list"
+region = "details"
+kind = "collection"
+importance = "secondary"
+label = "Available cheats"
+presentation = "list"
+
+[[element]]
+id = "emulator_status"
+region = "runtime"
+kind = "status"
+importance = "tertiary"
+label = "Emulation state"
+
+[[fixture]]
+id = "game_ready"
+state = "ready"
+
+[[fixture.content]]
+element = "system_list"
+items = [
+  { id = "snes", label = "Super Nintendo" },
+  { id = "gba", label = "Game Boy Advance" },
+  { id = "nes", label = "Nintendo Entertainment System" },
+]
+selected = "snes"
+
+[[fixture.content]]
+element = "game_gallery"
+items = [
+  { id = "smw", label = "Super Mario World" },
+  { id = "zelda", label = "The Legend of Zelda" },
+  { id = "metroid", label = "Super Metroid" },
+]
+selected = "smw"
+
+[[fixture.content]]
+element = "game_info"
+properties = [
+  { name = "Selected", value = "Super Mario World" },
+  { name = "System", value = "SNES" },
+  { name = "Save", value = "Available" },
+  { name = "Controller", value = "Mapped" },
+  { name = "Cheat source", value = "Filesystem · Cheatarium" },
+]
+
+[[fixture.content]]
+element = "cheat_list"
+items = [
+  { id = "lives", label = "99 lives" },
+  { id = "coins", label = "99 coins" },
+]
+
+[[fixture.content]]
+element = "emulator_status"
+text = "Ready to launch · illustrative fixture"
+
+[[fixture]]
+id = "no_matching_cheats"
+state = "missing_cheats"
+
+[[fixture.content]]
+element = "system_list"
+items = [
+  { id = "snes", label = "Super Nintendo" },
+  { id = "gba", label = "Game Boy Advance" },
+]
+selected = "gba"
+
+[[fixture.content]]
+element = "game_gallery"
+items = [
+  { id = "unknown", label = "Imported game without cover art" },
+]
+selected = "unknown"
+
+[[fixture.content]]
+element = "game_info"
+properties = [
+  { name = "Selected", value = "Imported game" },
+  { name = "System", value = "GBA" },
+  { name = "Cheat source", value = "Cheatarium · no verified match" },
+  { name = "Controller", value = "Mapped" },
+]
+
+[[fixture.content]]
+element = "cheat_list"
+items = []
+
+[[fixture.content]]
+element = "emulator_status"
+text = "Game available · no matching cheats in demo fixture"
