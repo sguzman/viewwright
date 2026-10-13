@@ -311,6 +311,57 @@ mod tests {
     }
 
     #[test]
+    fn project_demos_have_different_composition_architectures() {
+        use viewwright_model::CompositionChild;
+
+        fn children(blueprint: &viewwright_model::ResolvedBlueprint, composition_id: &str) -> Vec<String> {
+            let composition = blueprint
+                .compositions
+                .iter()
+                .find(|composition| composition.id == composition_id)
+                .expect("expected composition");
+            composition
+                .children
+                .iter()
+                .map(|child| match child {
+                    CompositionChild::Region(id) | CompositionChild::Composition(id) => id.clone(),
+                })
+                .collect()
+        }
+
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../demos");
+        let (demos, errors) = load_demos(&[path]);
+        assert!(errors.is_empty(), "demo load errors: {errors:#?}");
+
+        let find = |id: &str| {
+            &demos
+                .iter()
+                .find(|demo| demo.blueprint.screen.id == id)
+                .expect("missing project demo")
+                .blueprint
+        };
+        let chat = find("chatarium_session_observability");
+        let calendar = find("ephemeris_calendar_workbench");
+        let game = find("starbyte_emulation_library");
+
+        assert_eq!(children(chat, &chat.root), ["commands", "body", "telemetry", "status"]);
+        assert_eq!(children(chat, "body"), ["history", "transcript"]);
+        assert_eq!(
+            children(calendar, &calendar.root),
+            ["toolbar", "calendars", "week_board", "event_inspector", "sync_status"]
+        );
+        assert_eq!(
+            children(calendar, "week_board"),
+            ["day_mon", "day_tue", "day_wed", "day_thu", "day_fri"]
+        );
+        assert_eq!(
+            children(game, &game.root),
+            ["toolbar", "systems", "games", "game_information", "runtime"]
+        );
+        assert_eq!(children(game, "game_information"), ["details", "cheats"]);
+    }
+
+    #[test]
     fn repository_demo_packs_parse_and_have_unique_ids() {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../demos");
         let (demos, errors) = load_demos(&[path]);
