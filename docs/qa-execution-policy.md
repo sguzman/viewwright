@@ -20,6 +20,18 @@ If a verification requirement cannot be completed without doing one of those thi
 
 It must not silently fall back to desktop automation.
 
+## GitHub Actions as the routine verification gate
+
+The repository's `.github/workflows/ci.yml` runs the Rust workspace checks on
+`main` pushes, pull requests, and explicit manual dispatch. The test job is headless,
+so it must not start the native preview or interact with a logged-in desktop.
+Failures belong to the development agents to investigate and repair.
+
+The baseline CI workflow covers formatting, compilation, Clippy, rustdoc, and
+the existing real egui → ViewWitness exact-verification tests. The M44 multi-frame
+responsive exploration suite is not implemented yet and must be added before M44
+acceptance. CI green alone is not sufficient to claim all M44 conditions were verified.
+
 ## Default QA substrate
 
 Prefer, in order:
