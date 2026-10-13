@@ -23,7 +23,9 @@ fn demo_sources() -> Vec<PathBuf> {
                 }
             },
             "--help" | "-h" => {
-                println!("ViewWright demo gallery\nUsage: viewwright-preview [--demos PATH]...\n\nWithout arguments, loads ./demos recursively.\nEach --demos path may be a TOML file or a directory.\nBlueprints remain fixtures/designs, not live application backends.");
+                println!(
+                    "ViewWright demo gallery\nUsage: viewwright-preview [--demos PATH]...\n\nWithout arguments, loads ./demos recursively.\nEach --demos path may be a TOML file or a directory.\nBlueprints remain fixtures/designs, not live application backends."
+                );
                 std::process::exit(0);
             }
             _ => {
@@ -77,7 +79,9 @@ fn collect_toml_files(path: &Path, files: &mut Vec<PathBuf>, errors: &mut Vec<St
                     continue;
                 }
                 let child = entry.path();
-                if child.is_dir() || child.extension().is_some_and(|extension| extension == "toml") {
+                if child.is_dir()
+                    || child.extension().is_some_and(|extension| extension == "toml")
+                {
                     collect_toml_files(&child, files, errors);
                 }
             }
@@ -228,7 +232,9 @@ impl eframe::App for App {
                     ));
                 }
             } else {
-                ui.label("No valid demos loaded. Pass --demos PATH or add TOML files under ./demos.");
+                ui.label(
+                    "No valid demos loaded. Pass --demos PATH or add TOML files under ./demos.",
+                );
             }
         });
         if self.demos.is_empty() {
@@ -249,7 +255,10 @@ impl eframe::App for App {
                         if !demo.title.to_lowercase().contains(&search) {
                             continue;
                         }
-                        if ui.selectable_label(i == self.screen, &demo.title).clicked() {
+                        if ui
+                            .selectable_label(i == self.screen, &demo.title)
+                            .clicked()
+                        {
                             selected_screen = Some(i);
                         }
                     }
@@ -257,7 +266,12 @@ impl eframe::App for App {
             });
             ui.horizontal_wrapped(|ui| {
                 ui.label("State:");
-                for (i, fixture) in self.demos[self.screen].blueprint.fixtures.iter().enumerate() {
+                for (i, fixture) in self.demos[self.screen]
+                    .blueprint
+                    .fixtures
+                    .iter()
+                    .enumerate()
+                {
                     if ui.selectable_label(i == self.fixture, &fixture.id).clicked() {
                         selected_fixture = Some(i);
                     }
@@ -314,7 +328,10 @@ mod tests {
     fn project_demos_have_different_composition_architectures() {
         use viewwright_model::CompositionChild;
 
-        fn children(blueprint: &viewwright_model::ResolvedBlueprint, composition_id: &str) -> Vec<String> {
+        fn children(
+            blueprint: &viewwright_model::ResolvedBlueprint,
+            composition_id: &str,
+        ) -> Vec<String> {
             let composition = blueprint
                 .compositions
                 .iter()
@@ -344,7 +361,10 @@ mod tests {
         let calendar = find("ephemeris_calendar_workbench");
         let game = find("starbyte_emulation_library");
 
-        assert_eq!(children(chat, &chat.root), ["commands", "body", "telemetry", "status"]);
+        assert_eq!(
+            children(chat, &chat.root),
+            ["commands", "body", "telemetry", "status"]
+        );
         assert_eq!(children(chat, "body"), ["history", "transcript"]);
         assert_eq!(
             children(calendar, &calendar.root),
