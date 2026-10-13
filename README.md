@@ -1,5 +1,21 @@
 # 🟩 ViewWright
 
+**Current focus: reusable demo dashboards and GUIs for multiple projects, with headless CI.**
+
+A ViewWright blueprint is a toolkit-independent UI design, not a finished application.
+The preview now loads project-specific TOML demo packs from the filesystem: it discovers
+`./demos` by default, or takes repeatable `--demos PATH` arguments pointing to
+other project repositories. Current demo packs include Chatarium, Ephemeris, and Starbyte.
+See [the demo gallery guide](docs/demo-gallery.md).
+
+GitHub Actions runs headless Rust tests and ViewWitness exact verification on pushed
+changes. The full M44 responsive exploration harness is still outstanding. Routine
+manual human QA is forbidden; see [the QA policy](docs/qa-execution-policy.md).
+
+Lantern Leaf is **historical regression material**, not the active development north
+star. Old milestone descriptions remain for auditability; future schema development
+should be justified by multiple real project demo requirements.
+
 **Design the interface before implementing the widgets.**
 
 ViewWright is a declarative UI-authoring system for expressing what an interface **should be** before committing that design to a concrete GUI toolkit.
@@ -47,7 +63,7 @@ ViewWright owns the UI blueprint schema, semantic UI vocabulary, composition pri
 
 It does **not** own application business logic, arbitrary 2D/3D graphics, runtime UI observation, GUI automation, or persistence for the host application.
 
-## v0.2 trajectory — Lantern Leaf north star
+## Historical v0.2 trajectory — Lantern Leaf reference
 
 ViewWright 0.1.0 is a completed foundation, not the end of the project. The next development trajectory is explicitly driven by Lantern Leaf's archived EPUB + TTS reader concept in `sguzman/lantern-leaf/docs/concept-art/epub-tts-reader/`.
 
