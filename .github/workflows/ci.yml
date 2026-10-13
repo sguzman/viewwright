@@ -1,0 +1,66 @@
+name: ViewWright headless QA
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: viewwright-qa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CARGO_TERM_COLOR: always
+      RUST_BACKTRACE: 1
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libasound2-dev libxkbcommon-dev libxkbcommon-x11-dev \
+            libwayland-dev libx11-dev libxcursor-dev libxi-dev \
+            libxrandr-dev libgl1-mesa-dev
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Rust formatting
+        run: cargo fmt --all --check
+
+      - name: Compile all targets
+        run: cargo check --workspace --all-targets --locked
+
+      - name: Rust lint
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Headless tests and exact verification
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --workspace --locked -- --nocapture 2>&1 | tee qa-report.txt
+
+      - name: Documentation warnings
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --workspace --no-deps --locked
+
+      - name: Save QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: viewwright-qa-report
+          path: qa-report.txt
+          if-no-files-found: ignore
