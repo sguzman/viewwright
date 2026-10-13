@@ -1,13 +1,13 @@
 [screen]
 id = "ephemeris_calendar_workbench"
-purpose = "Review dense calendars, scheduled work, and event details"
+purpose = "Review a dense five-day calendar board with cross-day event context"
 density = "dense"
 root = "workspace"
 
 [design]
 character = ["structured", "high_information_density", "quiet", "legible"]
-dominant = "agenda"
-avoid = ["oversized_cards", "decorative_chrome", "crushed_event_labels"]
+dominant = "day_wed"
+avoid = ["three_column_inspector_shell", "oversized_cards", "decorative_chrome", "crushed_event_labels"]
 
 [tokens.spacing]
 sm = 6
@@ -43,25 +43,58 @@ border = "border"
 corner = "medium"
 border_policy = "minimal"
 
+
 [[region]]
 id = "toolbar"
 role = "commands"
 importance = "secondary"
 surface = "raised"
-height = "48px"
+height = "52px"
 
 [[region]]
 id = "calendars"
 role = "navigation"
 importance = "secondary"
 surface = "panel"
-width = "230px"
+height = "75px"
 
 [[region]]
-id = "agenda"
+id = "day_mon"
+role = "primary_content"
+importance = "secondary"
+surface = "panel"
+grow = 1
+overflow = "scroll_y"
+
+[[region]]
+id = "day_tue"
+role = "primary_content"
+importance = "secondary"
+surface = "panel"
+grow = 1
+overflow = "scroll_y"
+
+[[region]]
+id = "day_wed"
 role = "primary_content"
 importance = "primary"
 surface = "canvas"
+grow = 2
+overflow = "scroll_y"
+
+[[region]]
+id = "day_thu"
+role = "primary_content"
+importance = "secondary"
+surface = "panel"
+grow = 1
+overflow = "scroll_y"
+
+[[region]]
+id = "day_fri"
+role = "primary_content"
+importance = "secondary"
+surface = "panel"
 grow = 1
 overflow = "scroll_y"
 
@@ -69,39 +102,39 @@ overflow = "scroll_y"
 id = "event_inspector"
 role = "inspector"
 importance = "secondary"
-surface = "panel"
-width = "290px"
+surface = "raised"
+height = "155px"
 
 [[region]]
 id = "sync_status"
 role = "status"
 importance = "tertiary"
 surface = "raised"
-height = "32px"
+height = "30px"
 
 [[composition]]
 id = "workspace"
 kind = "column"
 axis = "vertical"
-children = ["toolbar", "body", "sync_status"]
+children = ["toolbar", "calendars", "week_board", "event_inspector", "sync_status"]
 gap = "sm"
 padding = "md"
 
 [[composition]]
-id = "body"
-kind = "split"
+id = "week_board"
+kind = "row"
 axis = "horizontal"
-children = ["calendars", "agenda", "event_inspector"]
-gap = "md"
+children = ["day_mon", "day_tue", "day_wed", "day_thu", "day_fri"]
+gap = "sm"
 grow = 1
 
 [[element]]
-id = "update_sources"
+id = "previous_week"
 region = "toolbar"
 kind = "command"
 importance = "secondary"
-label = "Update Taria sources"
-action = "ephemeris.sources.refresh"
+label = "Previous week"
+action = "ephemeris.view.previous_week"
 
 [[element]]
 id = "today"
@@ -112,26 +145,67 @@ label = "Today"
 action = "ephemeris.view.today"
 
 [[element]]
-id = "search"
-region = "calendars"
-kind = "search"
+id = "next_week"
+region = "toolbar"
+kind = "command"
 importance = "secondary"
-label = "Search calendar events"
+label = "Next week"
+action = "ephemeris.view.next_week"
+
+[[element]]
+id = "update_sources"
+region = "toolbar"
+kind = "command"
+importance = "secondary"
+label = "Update Taria sources"
+action = "ephemeris.sources.refresh"
 
 [[element]]
 id = "calendar_list"
 region = "calendars"
 kind = "collection"
-importance = "primary"
+importance = "secondary"
 label = "Visible calendars"
+presentation = "adaptive_cards"
+
+[[element]]
+id = "monday_events"
+region = "day_mon"
+kind = "collection"
+importance = "primary"
+label = "Monday | 12 Oct"
 presentation = "list"
 
 [[element]]
-id = "agenda_entries"
-region = "agenda"
+id = "tuesday_events"
+region = "day_tue"
 kind = "collection"
 importance = "primary"
-label = "Illustrative agenda"
+label = "Tuesday | 13 Oct"
+presentation = "list"
+
+[[element]]
+id = "wednesday_events"
+region = "day_wed"
+kind = "collection"
+importance = "primary"
+label = "Wednesday | 14 Oct"
+presentation = "list"
+
+[[element]]
+id = "thursday_events"
+region = "day_thu"
+kind = "collection"
+importance = "primary"
+label = "Thursday | 15 Oct"
+presentation = "list"
+
+[[element]]
+id = "friday_events"
+region = "day_fri"
+kind = "collection"
+importance = "primary"
+label = "Friday | 16 Oct"
 presentation = "list"
 
 [[element]]
@@ -139,75 +213,121 @@ id = "event_details"
 region = "event_inspector"
 kind = "property_sheet"
 importance = "secondary"
-label = "Selected event"
+label = "Selected event details"
 
 [[element]]
 id = "source_health"
 region = "sync_status"
 kind = "status"
 importance = "tertiary"
-label = "Source health"
+label = "Temporal source health"
 
 [[fixture]]
 id = "busy_day"
-state = "populated"
+state = "populated_week"
 
 [[fixture.content]]
 element = "calendar_list"
 items = [
-  { id = "personal", label = "Personal calendar" },
+  { id = "personal", label = "Personal" },
   { id = "softwarium", label = "Softwarium" },
-  { id = "taria", label = "Taria temporal data" },
+  { id = "taria", label = "Taria temporal resources" },
 ]
 selected = "softwarium"
 
 [[fixture.content]]
-element = "agenda_entries"
+element = "monday_events"
 items = [
-  { id = "e1", label = "08:00–09:00 · Planning" },
-  { id = "e2", label = "09:30–10:15 · Repo audit" },
-  { id = "e3", label = "11:00–12:00 · Integration tests" },
-  { id = "e4", label = "13:00–14:30 · Documentation sprint" },
-  { id = "e5", label = "15:00–16:00 · Release review" },
+  { id = "m1", label = "08:00 Planning" },
+  { id = "m2", label = "13:30 Docs review" },
 ]
-selected = "e3"
+
+[[fixture.content]]
+element = "tuesday_events"
+items = [
+  { id = "t1", label = "09:00 Repo audit" },
+  { id = "t2", label = "15:00 QA triage" },
+]
+
+[[fixture.content]]
+element = "wednesday_events"
+items = [
+  { id = "w1", label = "08:30 Check-in" },
+  { id = "w2", label = "11:00 Integration tests" },
+  { id = "w3", label = "14:00 Coding block" },
+  { id = "w4", label = "17:00 Release review" },
+]
+selected = "w2"
+
+[[fixture.content]]
+element = "thursday_events"
+items = [
+  { id = "th1", label = "10:30 Architecture" },
+  { id = "th2", label = "16:00 Maintenance" },
+]
+
+[[fixture.content]]
+element = "friday_events"
+items = [
+  { id = "f1", label = "12:00 Weekly review" },
+  { id = "f2", label = "14:30 Roadmap" },
+]
 
 [[fixture.content]]
 element = "event_details"
 properties = [
-  { name = "Event", value = "Integration tests" },
-  { name = "Calendar", value = "Softwarium" },
+  { name = "Selected", value = "Integration tests" },
+  { name = "Day", value = "Wednesday 14 Oct" },
   { name = "Start", value = "11:00" },
   { name = "End", value = "12:00" },
-  { name = "Status", value = "Scheduled" },
+  { name = "Calendar", value = "Softwarium" },
 ]
 
 [[fixture.content]]
 element = "source_health"
-text = "All demo calendars available · illustrative fixture"
+text = "3 calendars active · sample week only"
 
 [[fixture]]
 id = "clear_day"
-state = "empty"
+state = "sparse_week"
 
 [[fixture.content]]
 element = "calendar_list"
 items = [
-  { id = "personal", label = "Personal calendar" },
+  { id = "personal", label = "Personal" },
   { id = "softwarium", label = "Softwarium" },
 ]
 selected = "personal"
 
 [[fixture.content]]
-element = "agenda_entries"
+element = "monday_events"
+items = []
+
+[[fixture.content]]
+element = "tuesday_events"
+items = []
+
+[[fixture.content]]
+element = "wednesday_events"
+items = [
+  { id = "w1", label = "10:00 Planning" },
+]
+
+[[fixture.content]]
+element = "thursday_events"
+items = []
+
+[[fixture.content]]
+element = "friday_events"
 items = []
 
 [[fixture.content]]
 element = "event_details"
 properties = [
-  { name = "Selected event", value = "None" },
+  { name = "Selected", value = "None" },
+  { name = "Week", value = "Sparse" },
 ]
 
 [[fixture.content]]
 element = "source_health"
-text = "No scheduled events in demo fixture"
+text = "2 calendars active · illustrative week"
