@@ -1,13 +1,13 @@
 [screen]
 id = "starbyte_emulation_library"
-purpose = "Browse local games, inspect runtime state, and preview game-specific cheats"
+purpose = "Browse an expansive game shelf with system tabs and a game-specific bottom drawer"
 density = "comfortable"
 root = "workspace"
 
 [design]
-character = ["gaming", "technical", "clear_feedback", "offline_first"]
+character = ["game_shelf_first", "media_gallery", "immediate_launch", "offline_first"]
 dominant = "games"
-avoid = ["unexplained_empty_cheats", "hidden_input_mapping", "decorative_noise"]
+avoid = ["three_column_inspector_shell", "unexplained_empty_cheats", "hidden_input_mapping", "decorative_noise"]
 
 [tokens.spacing]
 sm = 8
@@ -54,8 +54,8 @@ height = "48px"
 id = "systems"
 role = "navigation"
 importance = "secondary"
-surface = "panel"
-width = "210px"
+surface = "raised"
+height = "85px"
 
 [[region]]
 id = "games"
@@ -70,7 +70,7 @@ id = "details"
 role = "inspector"
 importance = "secondary"
 surface = "raised"
-width = "310px"
+grow = 1
 
 [[region]]
 id = "runtime"
@@ -79,21 +79,28 @@ importance = "tertiary"
 surface = "raised"
 height = "34px"
 
+[[region]]
+id = "cheats"
+role = "inspector"
+importance = "secondary"
+surface = "raised"
+grow = 1
+
 [[composition]]
 id = "workspace"
 kind = "column"
 axis = "vertical"
-children = ["toolbar", "body", "runtime"]
+children = ["toolbar", "systems", "games", "game_information", "runtime"]
 gap = "sm"
 padding = "md"
 
 [[composition]]
-id = "body"
-kind = "split"
+id = "game_information"
+kind = "row"
 axis = "horizontal"
-children = ["systems", "games", "details"]
+children = ["details", "cheats"]
 gap = "md"
-grow = 1
+height = "200px"
 
 [[element]]
 id = "launch"
@@ -123,8 +130,8 @@ id = "system_list"
 region = "systems"
 kind = "collection"
 importance = "secondary"
-label = "Systems"
-presentation = "list"
+label = "System selector"
+presentation = "adaptive_cards"
 
 [[element]]
 id = "game_gallery"
@@ -143,7 +150,7 @@ label = "Selected game"
 
 [[element]]
 id = "cheat_list"
-region = "details"
+region = "cheats"
 kind = "collection"
 importance = "secondary"
 label = "Available cheats"
