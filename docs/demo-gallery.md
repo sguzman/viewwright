@@ -28,14 +28,25 @@ The preview shows the source path and exposes fixture-state selection for each l
 Invalid files are reported in stderr and in the gallery instead of preventing valid demos
 from loading. Duplicate `screen.id` values across loaded roots are rejected.
 
-The built-in demo library currently includes:
+The built-in demo library now deliberately uses three different application
+compositions rather than one generic three-column dashboard shell:
 
-- `demos/chatarium/session-observability.toml`: local conversations, delivery lifecycle,
-  session latency, and a degraded-connection scenario.
-- `demos/ephemeris/calendar-workbench.toml`: dense agenda, calendar selection, event
-  details, and a clear-day scenario.
-- `demos/starbyte/emulation-library.toml`: game gallery, controller affordance,
-  filesystem-cheat visibility, and a missing-cheats scenario.
+- `demos/chatarium/session-observability.toml`: two-column conversation workspace,
+  with an inline lower diagnostics zone for transport metrics and connection state.
+  The transcript is the dominant surface; healthy/degraded fixture states are separate.
+- `demos/ephemeris/calendar-workbench.toml`: horizontal five-day week board below
+  date/calendar controls, plus a full-width selected-event details strip.
+  Wednesday is visually emphasized; the busy/sparse week fixtures are illustrative.
+  **This is not yet a true hour-scaled calendar grid**: that requires a new semantic
+  temporal-layout primitive and real event geometry.
+- `demos/starbyte/emulation-library.toml`: full-width game shelf with a system
+  selector ribbon and a bottom details/cheats drawer. Ready/missing-cheats
+  fixtures are separate. **This is not yet a cover-art gallery or emulator view**:
+  the existing `adaptive_cards` presentation does not own game-cover/media semantics.
+
+These separate shapes are regression expectations, not three interchangeable skins.
+The gallery's Rust tests check their top-level and nested composition structures,
+while headless ViewWitness tests cover each demo's rendered semantic identity.
 
 Historical specimens remain available with `--demos specimens` or
 `--demos examples`. They remain source and test fixtures, not default gallery content.
