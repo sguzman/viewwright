@@ -16,7 +16,7 @@ From the repository root:
 
     cargo run -p viewwright-preview
 
-This discovers all \`.toml\` files recursively under \`./demos\`.
+This discovers all `.toml` files recursively under `./demos`.
 
 Point at files or directories from other projects without copying them into ViewWright:
 
@@ -26,31 +26,31 @@ Point at files or directories from other projects without copying them into View
 Each path is scanned at startup. Restart the preview after editing or adding TOML files.
 The preview shows the source path and exposes fixture-state selection for each loaded demo.
 Invalid files are reported in stderr and in the gallery instead of preventing valid demos
-from loading. Duplicate \`screen.id\` values across loaded roots are rejected.
+from loading. Duplicate `screen.id` values across loaded roots are rejected.
 
 The built-in demo library currently includes:
 
-- \`demos/chatarium/session-observability.toml\`: local conversations, delivery lifecycle,
+- `demos/chatarium/session-observability.toml`: local conversations, delivery lifecycle,
   session latency, and a degraded-connection scenario.
-- \`demos/ephemeris/calendar-workbench.toml\`: dense agenda, calendar selection, event
+- `demos/ephemeris/calendar-workbench.toml`: dense agenda, calendar selection, event
   details, and a clear-day scenario.
-- \`demos/starbyte/emulation-library.toml\`: game gallery, controller affordance,
+- `demos/starbyte/emulation-library.toml`: game gallery, controller affordance,
   filesystem-cheat visibility, and a missing-cheats scenario.
 
-Historical specimens remain available with \`--demos specimens\` or
-\`--demos examples\`. They remain source and test fixtures, not default gallery content.
+Historical specimens remain available with `--demos specimens` or
+`--demos examples`. They remain source and test fixtures, not default gallery content.
 
 ## Author a new project GUI
 
-1. Create \`demos/<project>/<screen>.toml\` or an equivalent directory in the project's own repo.
-2. Give \`[screen].id\` a stable, globally distinct identifier across selected demo roots.
+1. Create `demos/<project>/<screen>.toml` or an equivalent directory in the project's own repo.
+2. Give `[screen].id` a stable, globally distinct identifier across selected demo roots.
 3. Describe semantic regions, composition, elements, visual tokens, and design intent.
-4. Add \`[[fixture]]\` states for realistic and adverse scenarios (empty, failed, loading,
+4. Add `[[fixture]]` states for realistic and adverse scenarios (empty, failed, loading,
    disconnected, dense, etc.).
-5. Launch the gallery with \`--demos\` pointing to that directory. Select the demo and
+5. Launch the gallery with `--demos` pointing to that directory. Select the demo and
    fixture in the gallery.
 
-Use the existing \`specimens/dependency-workbench.toml\` or built-in demo files as
+Use the existing `specimens/dependency-workbench.toml` or built-in demo files as
 schema references. A gallery demo is self-contained; no host process must be running.
 
 ## Quality assurance
