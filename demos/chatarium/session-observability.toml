@@ -5,9 +5,9 @@ density = "dense"
 root = "workspace"
 
 [design]
-character = ["technical", "clear_provenance", "status_first", "legible"]
+character = ["conversation_first", "transparent_message_delivery", "reading_rhythm", "legible"]
 dominant = "transcript"
-avoid = ["mirrored_account_history", "duplicate_status_lights", "clutter"]
+avoid = ["three_column_dashboard", "mirrored_account_history", "duplicate_status_lights", "clutter"]
 
 [tokens.spacing]
 sm = 8
@@ -67,10 +67,10 @@ overflow = "scroll_y"
 
 [[region]]
 id = "telemetry"
-role = "inspector"
+role = "status"
 importance = "secondary"
 surface = "raised"
-width = "300px"
+height = "175px"
 
 [[region]]
 id = "status"
@@ -83,7 +83,7 @@ height = "36px"
 id = "workspace"
 kind = "column"
 axis = "vertical"
-children = ["commands", "body", "status"]
+children = ["commands", "body", "telemetry", "status"]
 gap = "sm"
 padding = "md"
 
@@ -91,7 +91,7 @@ padding = "md"
 id = "body"
 kind = "split"
 axis = "horizontal"
-children = ["history", "transcript", "telemetry"]
+children = ["history", "transcript"]
 gap = "md"
 grow = 1
 
@@ -139,14 +139,14 @@ id = "delivery_metrics"
 region = "telemetry"
 kind = "property_sheet"
 importance = "secondary"
-label = "Delivery telemetry"
+label = "Delivery metrics below conversation"
 
 [[element]]
 id = "delivery_status"
 region = "telemetry"
 kind = "status"
 importance = "secondary"
-label = "Delivery phase"
+label = "Current delivery state"
 
 [[element]]
 id = "connection_status"
